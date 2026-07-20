@@ -1,0 +1,108 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isActive() {
+      return signedIn()
+        && currentUser().data.active == true;
+    }
+
+    function isAdmin() {
+      return isActive()
+        && currentUser().data.role == 'admin';
+    }
+
+    function validType(type) {
+      return type in ['programacao', 'cancelamento'];
+    }
+
+    function validPriority(priority) {
+      return priority in ['urgente', 'alta', 'normal', 'baixa'];
+    }
+
+    function validStatus(status) {
+      return status in ['nova', 'analise', 'aguardando', 'concluida'];
+    }
+
+    function validRequestData(data) {
+      return validType(data.type)
+        && validPriority(data.priority)
+        && validStatus(data.status)
+        && data.clientName is string
+        && data.clientName.size() > 0
+        && data.clientName.size() <= 120
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 140
+        && data.description is string
+        && data.description.size() > 0
+        && data.description.size() <= 3000;
+    }
+
+    function validAttachmentData(data) {
+      return data.requestId is string
+        && data.requestId.size() > 0
+        && data.ownerUid is string
+        && data.ownerUid.size() > 0
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 180
+        && data.contentType in ['image/jpeg', 'image/png', 'text/plain']
+        && data.size is int
+        && data.size > 0
+        && data.size <= 716800
+        && data.data is bytes
+        && data.data.size() <= 716800;
+    }
+
+    match /users/{userId} {
+      allow read: if isActive() && (request.auth.uid == userId || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /requests/{requestId} {
+      allow read: if isAdmin()
+        || (isActive() && resource.data.requesterUid == request.auth.uid);
+
+      allow create: if isActive()
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.requesterEmail == request.auth.token.email
+        && request.resource.data.status == 'nova'
+        && validRequestData(request.resource.data);
+
+      allow update: if isAdmin() && validRequestData(request.resource.data);
+
+      allow update: if isActive()
+        && resource.data.requesterUid == request.auth.uid
+        && resource.data.status == 'nova'
+        && request.resource.data.status == 'nova'
+        && request.resource.data.requesterUid == resource.data.requesterUid
+        && request.resource.data.requesterEmail == resource.data.requesterEmail
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validRequestData(request.resource.data);
+
+      allow delete: if isAdmin();
+    }
+
+    match /requestAttachments/{attachmentId} {
+      allow read: if isAdmin()
+        || (isActive() && resource.data.ownerUid == request.auth.uid);
+
+      allow create: if validAttachmentData(request.resource.data)
+        && (isAdmin()
+          || (isActive() && request.resource.data.ownerUid == request.auth.uid));
+
+      allow update: if false;
+
+      allow delete: if isAdmin()
+        || (isActive() && resource.data.ownerUid == request.auth.uid);
+    }
+  }
+}

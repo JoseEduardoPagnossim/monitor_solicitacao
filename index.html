@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Kanban interno para solicitações de programação e cancelamento.">
+  <title>Painel de Solicitações</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=9.0.0">
+</head>
+<body>
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <section id="login-view" class="login-view">
+    <div class="login-visual">
+      <div class="brand-mark">PS</div>
+      <div>
+        <span class="eyebrow">CONTROLE INTERNO</span>
+        <h1>Solicitações organizadas, prioridades visíveis.</h1>
+        <p>Centralize pedidos de programação e cancelamento, acompanhe o tempo em aberto e não deixe nenhuma demanda se perder.</p>
+      </div>
+      <div class="login-features">
+        <div><strong>Kanban</strong><span>Status em tempo real</span></div>
+        <div><strong>Tempo</strong><span>Mais antigos em destaque</span></div>
+        <div><strong>Acesso</strong><span>Identificação por usuário</span></div>
+      </div>
+    </div>
+
+    <div class="login-panel">
+      <form id="login-form" class="auth-card" autocomplete="on">
+        <div class="auth-header">
+          <span class="mobile-logo">PS</span>
+          <h2>Entrar no painel</h2>
+          <p>Use o e-mail e a senha cadastrados pelo administrador.</p>
+        </div>
+
+        <label class="field">
+          <span>E-mail</span>
+          <input id="login-email" name="email" type="email" placeholder="nome@empresa.com.br" autocomplete="email" required>
+        </label>
+
+        <label class="field">
+          <span>Senha</span>
+          <div class="password-wrap">
+            <input id="login-password" name="password" type="password" placeholder="Sua senha" autocomplete="current-password" required>
+            <button id="toggle-password" class="icon-button inside-input" type="button" aria-label="Mostrar senha">👁</button>
+          </div>
+        </label>
+
+        <div class="auth-options">
+          <label class="checkbox-label"><input id="remember-email" type="checkbox"> Lembrar e-mail</label>
+          <button id="forgot-password" class="link-button" type="button">Esqueci minha senha</button>
+        </div>
+
+        <button id="login-button" class="button button-primary button-full" type="submit">
+          <span>Entrar</span>
+        </button>
+        <p id="login-error" class="form-error" hidden></p>
+      </form>
+    </div>
+  </section>
+
+  <div id="app-view" class="app-view" hidden>
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark small">PS</div>
+        <div>
+          <strong>Painel</strong>
+          <span>Solicitações</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="Navegação principal">
+        <button class="nav-item active" data-view="kanban">
+          <span class="nav-icon">▦</span> Kanban
+        </button>
+        <button class="nav-item" data-filter-type="programacao">
+          <span class="nav-icon">⌘</span> Programação
+        </button>
+        <button class="nav-item" data-filter-type="cancelamento">
+          <span class="nav-icon">⊘</span> Cancelamentos
+        </button>
+        <div class="nav-divider" aria-hidden="true"></div>
+        <button id="help-button" class="nav-item" data-view="help" type="button">
+          <span class="nav-icon">?</span> Ajuda
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-card">
+          <div id="user-avatar" class="avatar">U</div>
+          <div class="user-details">
+            <strong id="user-name">Usuário</strong>
+            <span id="user-role">Solicitante</span>
+          </div>
+          <button id="logout-button" class="icon-button" title="Sair" aria-label="Sair">↪</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <button id="mobile-menu-button" class="icon-button mobile-menu" type="button" aria-label="Abrir menu">☰</button>
+          <span class="eyebrow">VISÃO GERAL</span>
+          <h1>Solicitações</h1>
+          <p id="welcome-message">Acompanhe as demandas da equipe em tempo real.</p>
+        </div>
+        <div class="topbar-actions">
+          <button id="top-help-button" class="button button-secondary" type="button" title="Abrir ajuda">? Ajuda</button>
+          <button id="refresh-button" class="button button-secondary" type="button" title="Atualizar">↻ Atualizar</button>
+          <button id="new-request-button" class="button button-primary" type="button">+ Nova solicitação</button>
+        </div>
+      </header>
+
+      <section class="metrics-grid" aria-label="Indicadores">
+        <article class="metric-card">
+          <div class="metric-icon blue">▣</div>
+          <div><span>Em aberto</span><strong id="metric-open">0</strong></div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-icon amber">◷</div>
+          <div><span>Mais antiga</span><strong id="metric-oldest">—</strong></div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-icon purple">⌘</div>
+          <div><span>Programações</span><strong id="metric-programming">0</strong></div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-icon green">✓</div>
+          <div><span>Concluídas</span><strong id="metric-done">0</strong></div>
+        </article>
+      </section>
+
+      <section class="toolbar">
+        <div class="search-box">
+          <span>⌕</span>
+          <input id="search-input" type="search" placeholder="Buscar cliente, assunto ou solicitante...">
+        </div>
+        <select id="type-filter" class="select-control" aria-label="Filtrar por tipo">
+          <option value="all">Todos os tipos</option>
+          <option value="programacao">Programação</option>
+          <option value="cancelamento">Cancelamento</option>
+        </select>
+        <select id="priority-filter" class="select-control" aria-label="Filtrar por prioridade">
+          <option value="all">Todas as prioridades</option>
+          <option value="urgente">Urgente</option>
+          <option value="alta">Alta</option>
+          <option value="normal">Normal</option>
+          <option value="baixa">Baixa</option>
+        </select>
+        <select id="requester-filter" class="select-control admin-only" aria-label="Filtrar por solicitante">
+          <option value="all">Todos os solicitantes</option>
+        </select>
+        <button id="clear-filters" class="link-button" type="button">Limpar filtros</button>
+      </section>
+
+      <section id="kanban-board" class="kanban-board" aria-label="Quadro Kanban">
+        <div class="kanban-column" data-status="nova">
+          <header><div><span class="status-dot new"></span><h2>Novas</h2></div><span class="column-count" data-count="nova">0</span></header>
+          <div class="column-body" data-dropzone="nova"></div>
+        </div>
+        <div class="kanban-column" data-status="analise">
+          <header><div><span class="status-dot analysis"></span><h2>Em análise</h2></div><span class="column-count" data-count="analise">0</span></header>
+          <div class="column-body" data-dropzone="analise"></div>
+        </div>
+        <div class="kanban-column" data-status="aguardando">
+          <header><div><span class="status-dot waiting"></span><h2>Aguardando</h2></div><span class="column-count" data-count="aguardando">0</span></header>
+          <div class="column-body" data-dropzone="aguardando"></div>
+        </div>
+        <div class="kanban-column" data-status="concluida">
+          <header><div><span class="status-dot done"></span><h2>Concluídas</h2></div><span class="column-count" data-count="concluida">0</span></header>
+          <div class="column-body" data-dropzone="concluida"></div>
+        </div>
+      </section>
+
+      <div id="empty-state" class="empty-state" hidden>
+        <div>▦</div>
+        <h2>Nenhuma solicitação encontrada</h2>
+        <p>Crie uma nova solicitação ou altere os filtros aplicados.</p>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="request-dialog" class="modal">
+    <form id="request-form" method="dialog" class="modal-content">
+      <div class="modal-header">
+        <div>
+          <span class="eyebrow">REGISTRO DE DEMANDA</span>
+          <h2 id="request-modal-title">Nova solicitação</h2>
+        </div>
+        <button class="icon-button close-modal" type="button" aria-label="Fechar">×</button>
+      </div>
+
+      <input id="request-id" type="hidden">
+      <div class="form-grid">
+        <label class="field">
+          <span>Tipo da solicitação *</span>
+          <select id="request-type" required>
+            <option value="programacao">Solicitação de programação</option>
+            <option value="cancelamento">Chamado para cancelamento</option>
+          </select>
+        </label>
+        <label id="priority-field" class="field">
+          <span>Prioridade *</span>
+          <select id="request-priority" required>
+            <option value="normal">Normal</option>
+            <option value="alta">Alta</option>
+            <option value="urgente">Urgente</option>
+            <option value="baixa">Baixa</option>
+          </select>
+        </label>
+
+        <section id="programming-fields" class="dynamic-section form-span-2" aria-label="Dados da solicitação de programação">
+          <div class="form-section-heading">
+            <div>
+              <span class="eyebrow">INFORMAÇÕES DO CLIENTE</span>
+              <h3>Cliente e solicitante</h3>
+            </div>
+          </div>
+          <div class="form-grid nested-grid">
+            <label class="field">
+              <span>Razão Social *</span>
+              <input id="request-client" type="text" maxlength="120" placeholder="Razão social ou nome fantasia" required>
+            </label>
+            <label class="field">
+              <span>CPF/CNPJ</span>
+              <input id="request-client-code" class="cpf-cnpj-input" type="text" maxlength="18" placeholder="CPF ou CNPJ" data-validation-message="request-client-code-error" aria-describedby="request-client-code-error">
+              <small id="request-client-code-error" class="field-validation-message" hidden></small>
+            </label>
+            <label class="field">
+              <span>Solicitante *</span>
+              <input id="request-contact-name" type="text" maxlength="120" placeholder="Nome de quem solicitou" required>
+            </label>
+            <label class="field">
+              <span>Cargo *</span>
+              <input id="request-contact-role" type="text" maxlength="100" placeholder="Cargo ou função" required>
+            </label>
+            <label class="field">
+              <span>E-mail *</span>
+              <input id="request-contact-email" type="email" maxlength="160" placeholder="nome@empresa.com.br" required>
+            </label>
+            <label class="field">
+              <span>Telefone *</span>
+              <input id="request-contact-phone" class="phone-input" type="tel" inputmode="numeric" maxlength="15" placeholder="(00) 00000-0000" data-validation-message="request-contact-phone-error" aria-describedby="request-contact-phone-error" required>
+              <small id="request-contact-phone-error" class="field-validation-message" hidden></small>
+            </label>
+          </div>
+
+          <div class="form-section-heading demand-heading">
+            <div>
+              <span class="eyebrow">DESCRIÇÃO DA DEMANDA</span>
+              <h3>Detalhamento da solicitação</h3>
+            </div>
+          </div>
+          <div class="form-grid nested-grid">
+            <label class="field form-span-2">
+              <span>Título *</span>
+              <input id="request-title" type="text" maxlength="140" placeholder="Resumo objetivo da solicitação" required>
+            </label>
+            <label class="field form-span-2">
+              <span>Descrição da solicitação *</span>
+              <textarea id="request-description" rows="4" maxlength="3000" placeholder="Descreva de forma objetiva o que está sendo solicitado." required></textarea>
+            </label>
+            <label class="field form-span-2">
+              <span>Comportamento atual (O que acontece hoje?) *</span>
+              <textarea id="request-current-behavior" rows="4" maxlength="3000" placeholder="Explique o comportamento atual do sistema ou processo." required></textarea>
+            </label>
+            <label class="field form-span-2">
+              <span>Comportamento esperado (O que deveria acontecer?) *</span>
+              <textarea id="request-expected-behavior" rows="4" maxlength="3000" placeholder="Explique como deveria funcionar após a alteração." required></textarea>
+            </label>
+            <label class="field form-span-2">
+              <span>Justificativa (Por que isso é importante? Qual o impacto/incômodo?) *</span>
+              <textarea id="request-justification" rows="4" maxlength="3000" placeholder="Informe o impacto para o cliente e a importância da solicitação." required></textarea>
+            </label>
+            <label class="field form-span-2">
+              <span>Link do vídeo (opcional)</span>
+              <input id="request-link" type="url" maxlength="500" placeholder="https://...">
+            </label>
+            <div class="field form-span-2 attachment-field">
+              <span>Anexos (opcional)</span>
+              <div id="attachment-picker" class="attachment-picker">
+                <label class="button button-secondary attachment-picker-button" for="request-attachments">＋ Selecionar anexos</label>
+                <input id="request-attachments" type="file" accept=".jpeg,.jpg,.png,.txt,image/jpeg,image/png,text/plain" multiple hidden>
+                <div class="attachment-picker-help">
+                  <strong>Até 2 arquivos</strong>
+                  <small>Formatos JPEG, JPG, PNG ou TXT. Máximo de 5 MB por arquivo.</small>
+                </div>
+              </div>
+              <div id="attachment-list" class="attachment-list" aria-live="polite"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="cancellation-fields" class="dynamic-section form-span-2" aria-label="Clientes para cancelamento" hidden>
+          <div class="form-section-heading cancellation-heading">
+            <div>
+              <span class="eyebrow">CHAMADO PARA CANCELAMENTO</span>
+              <h3>Cadastro do cliente</h3>
+              <p>Estes campos são únicos e permanecem fixos. Preencha um cliente e clique em <strong>Adicionar cliente à lista</strong>. Depois, preencha o próximo.</p>
+            </div>
+          </div>
+
+          <div id="cancellation-entry" class="cancellation-entry cancellation-entry-fixed">
+            <div class="fixed-entry-label">
+              <span>1</span>
+              <div>
+                <strong>Preencha os dados</strong>
+                <small>Somente a listagem abaixo será aumentada.</small>
+              </div>
+            </div>
+            <div class="form-grid nested-grid">
+              <label class="field">
+                <span>CPF/CNPJ *</span>
+                <input id="cancellation-cnpj-input" class="cpf-cnpj-input" type="text" maxlength="18" placeholder="CPF ou CNPJ" autocomplete="off" data-validation-message="cancellation-cnpj-error" aria-describedby="cancellation-cnpj-error">
+                <small id="cancellation-cnpj-error" class="field-validation-message" hidden></small>
+              </label>
+              <label class="field">
+                <span>Razão Social *</span>
+                <input id="cancellation-client-name-input" type="text" maxlength="120" placeholder="Razão social ou nome fantasia" autocomplete="off">
+              </label>
+              <label class="field form-span-2">
+                <span>Motivo *</span>
+                <textarea id="cancellation-reason-input" rows="3" maxlength="3000" placeholder="Informe o motivo do cancelamento"></textarea>
+              </label>
+              <div class="form-span-2 cancellation-entry-actions">
+                <button id="add-cancellation-item" class="button button-primary" type="button">Adicionar cliente à lista ↓</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="cancellation-list-heading">
+            <div>
+              <span class="eyebrow">CLIENTES ADICIONADOS</span>
+              <h3>Lista de cancelamentos</h3>
+              <p>Aqui aparecem somente os clientes já adicionados.</p>
+            </div>
+            <span id="cancellation-list-count" class="cancellation-list-count">0 clientes</span>
+          </div>
+          <div id="cancellation-list" class="cancellation-list"></div>
+        </section>
+
+        <label id="status-field" class="field admin-only">
+          <span>Status</span>
+          <select id="request-status">
+            <option value="nova">Nova</option>
+            <option value="analise">Em análise</option>
+            <option value="aguardando">Aguardando</option>
+            <option value="concluida">Concluída</option>
+          </select>
+        </label>
+        <label id="assignee-field" class="field admin-only">
+          <span>Responsável</span>
+          <select id="request-assignee">
+            <option value="">Não atribuído</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="request-audit" class="request-audit" hidden></div>
+      <p id="request-error" class="form-error" hidden></p>
+      <div class="modal-actions">
+        <div class="modal-actions-left admin-only">
+          <button id="copy-request-button" class="button button-copy" type="button" hidden>⧉ Copiar dados</button>
+          <button id="delete-request-button" class="button button-danger admin-only" type="button" hidden>Excluir</button>
+        </div>
+        <div class="modal-actions-right">
+          <button class="button button-secondary close-modal" type="button">Cancelar</button>
+          <button id="save-request-button" class="button button-primary" type="submit">Salvar solicitação</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+
+  <dialog id="help-dialog" class="modal help-modal">
+    <div class="modal-content help-modal-content">
+      <div class="modal-header help-modal-header">
+        <div>
+          <span class="eyebrow">CENTRAL DE AJUDA</span>
+          <h2>Como utilizar o Painel de Solicitações</h2>
+          <p>Consulte as orientações antes de registrar uma demanda para garantir que as informações cheguem completas ao responsável.</p>
+        </div>
+        <button class="icon-button close-help-modal" type="button" aria-label="Fechar ajuda">×</button>
+      </div>
+
+      <div class="help-layout">
+        <nav class="help-menu" aria-label="Tópicos da ajuda">
+          <button class="help-tab active" type="button" data-help-target="help-overview">
+            <span class="help-tab-icon">⌂</span>
+            <span><strong>Visão geral</strong><small>Fluxo básico do painel</small></span>
+          </button>
+          <button class="help-tab" type="button" data-help-target="help-programming">
+            <span class="help-tab-icon">⌘</span>
+            <span><strong>Programação</strong><small>Como preencher a demanda</small></span>
+          </button>
+          <button class="help-tab" type="button" data-help-target="help-cancellation">
+            <span class="help-tab-icon">⊘</span>
+            <span><strong>Cancelamento</strong><small>Como montar a lista</small></span>
+          </button>
+          <button class="help-tab" type="button" data-help-target="help-kanban">
+            <span class="help-tab-icon">▦</span>
+            <span><strong>Kanban e ações</strong><small>Status, filtros e cópia</small></span>
+          </button>
+        </nav>
+
+        <div class="help-content">
+          <section id="help-overview" class="help-section active">
+            <div class="help-section-title">
+              <span class="help-section-number">01</span>
+              <div><span class="eyebrow">COMECE POR AQUI</span><h3>Fluxo geral de uma solicitação</h3></div>
+            </div>
+
+            <div class="help-steps">
+              <article class="help-step"><span>1</span><div><strong>Clique em Nova solicitação</strong><p>Abra o formulário pelo botão azul no canto superior direito.</p></div></article>
+              <article class="help-step"><span>2</span><div><strong>Escolha o tipo correto</strong><p>Use Programação para melhorias do sistema e Cancelamento para clientes que solicitaram encerramento.</p></div></article>
+              <article class="help-step"><span>3</span><div><strong>Preencha informações objetivas</strong><p>Descreva fatos, exemplos e impactos. Evite textos genéricos como “cliente quer uma melhoria”.</p></div></article>
+              <article class="help-step"><span>4</span><div><strong>Salve e acompanhe</strong><p>A demanda ficará no Kanban e poderá ser acompanhada conforme o status.</p></div></article>
+            </div>
+
+            <div class="help-notice">
+              <strong>Regra principal</strong>
+              <p>Antes de salvar, confirme se outra pessoa conseguirá entender a solicitação sem precisar perguntar novamente ao técnico.</p>
+            </div>
+
+            <div class="help-card-grid">
+              <article class="help-info-card"><span class="help-card-icon blue">◷</span><div><strong>Tempo em aberto</strong><p>As solicitações mais antigas recebem destaque para facilitar a priorização.</p></div></article>
+              <article class="help-info-card"><span class="help-card-icon purple">▦</span><div><strong>Acompanhamento</strong><p>Cada coluna representa uma etapa do atendimento da demanda.</p></div></article>
+              <article class="help-info-card"><span class="help-card-icon green">✓</span><div><strong>Conclusão</strong><p>Quando finalizada, a solicitação permanece registrada no histórico do painel.</p></div></article>
+            </div>
+          </section>
+
+          <section id="help-programming" class="help-section">
+            <div class="help-section-title">
+              <span class="help-section-number">02</span>
+              <div><span class="eyebrow">SOLICITAÇÃO DE PROGRAMAÇÃO</span><h3>Como preencher cada campo</h3></div>
+            </div>
+
+            <div class="help-form-block">
+              <div class="help-form-block-title"><span>1</span><div><strong>Informações do cliente</strong><small>Identifique corretamente quem está solicitando.</small></div></div>
+              <div class="help-field-list">
+                <div><strong>Prioridade</strong><p>Selecione conforme o impacto real. Use Urgente somente quando a operação estiver parada ou houver risco imediato.</p></div>
+                <div><strong>Razão Social</strong><p>Informe o nome empresarial ou nome fantasia pelo qual o cliente é reconhecido.</p></div>
+                <div><strong>CPF/CNPJ</strong><p>Informe um documento válido para facilitar a localização do cadastro.</p></div>
+                <div><strong>Solicitante</strong><p>Nome da pessoa do cliente que pediu a melhoria.</p></div>
+                <div><strong>Cargo</strong><p>Função do solicitante na empresa, como proprietário, financeiro, faturista ou contador.</p></div>
+                <div><strong>E-mail e telefone</strong><p>Dados de contato do solicitante. Revise antes de salvar.</p></div>
+              </div>
+            </div>
+
+            <div class="help-form-block">
+              <div class="help-form-block-title"><span>2</span><div><strong>Descrição da demanda</strong><small>Explique o cenário com começo, problema e resultado desejado.</small></div></div>
+              <div class="help-field-list single-column">
+                <div><strong>Título</strong><p>Use um resumo curto e específico. Exemplo: “Adicionar filtro por responsável no relatório de pedidos”.</p></div>
+                <div><strong>Descrição da solicitação</strong><p>Explique o que o cliente está pedindo, em qual módulo ou tela e em qual rotina a necessidade aparece.</p></div>
+                <div><strong>Comportamento atual</strong><p>Descreva exatamente o que acontece hoje. Informe passos, mensagens, limitações ou resultado apresentado pelo sistema.</p></div>
+                <div><strong>Comportamento esperado</strong><p>Explique como o cliente espera que a função se comporte. Evite apenas escrever “que funcione corretamente”.</p></div>
+                <div><strong>Justificativa</strong><p>Informe o impacto da situação: retrabalho, perda de tempo, erro operacional, risco fiscal, dificuldade de controle ou outro incômodo.</p></div>
+                <div><strong>Link do vídeo</strong><p>Campo opcional. Cole um link que mostre o cenário completo e confirme se o acesso está liberado.</p></div>
+                <div><strong>Anexos</strong><p>Campo opcional. É possível anexar até dois arquivos nos formatos JPEG, JPG, PNG ou TXT, com até 5 MB cada.</p></div>
+              </div>
+            </div>
+
+            <div class="help-example">
+              <span class="help-example-label">EXEMPLO DE UMA BOA DESCRIÇÃO</span>
+              <p><strong>Atual:</strong> Ao excluir uma ordem de produção, o sistema informa que as movimentações serão removidas, porém o saldo do item permanece alterado.</p>
+              <p><strong>Esperado:</strong> Ao excluir a ordem, o sistema deve estornar as movimentações ou impedir a exclusão enquanto houver estoque movimentado.</p>
+              <p><strong>Justificativa:</strong> O cliente precisa realizar ajustes manuais e pode manter o estoque incorreto sem perceber.</p>
+            </div>
+          </section>
+
+          <section id="help-cancellation" class="help-section">
+            <div class="help-section-title">
+              <span class="help-section-number">03</span>
+              <div><span class="eyebrow">CHAMADO PARA CANCELAMENTO</span><h3>Como adicionar um ou vários clientes</h3></div>
+            </div>
+
+            <div class="help-cancellation-flow">
+              <article><span>1</span><div><strong>Preencha os campos fixos</strong><p>Digite CPF/CNPJ, Razão Social e Motivo do primeiro cliente.</p></div></article>
+              <div class="help-flow-arrow">↓</div>
+              <article><span>2</span><div><strong>Clique em Adicionar cliente à lista</strong><p>O cliente será incluído na tabela abaixo e os campos ficarão livres para o próximo cadastro.</p></div></article>
+              <div class="help-flow-arrow">↓</div>
+              <article><span>3</span><div><strong>Repita quando necessário</strong><p>Cadastre um ou mais clientes usando sempre os mesmos campos fixos.</p></div></article>
+              <div class="help-flow-arrow">↓</div>
+              <article><span>4</span><div><strong>Revise e salve</strong><p>Confira a lista, remova algum item incorreto e depois clique em Salvar solicitação.</p></div></article>
+            </div>
+
+            <div class="help-form-block">
+              <div class="help-form-block-title"><span>✓</span><div><strong>O que informar em cada campo</strong><small>Dados mínimos para o responsável localizar e entender o cancelamento.</small></div></div>
+              <div class="help-field-list">
+                <div><strong>CPF/CNPJ</strong><p>Documento válido da pessoa ou empresa que está solicitando o cancelamento.</p></div>
+                <div><strong>Razão Social</strong><p>Nome da empresa conforme o cadastro do cliente.</p></div>
+                <div class="help-field-wide"><strong>Motivo</strong><p>Registre o motivo informado pelo cliente de maneira objetiva. Exemplo: encerramento da empresa, troca de sistema, custo, insatisfação ou ausência de uso.</p></div>
+              </div>
+            </div>
+
+            <div class="help-warning">
+              <strong>Atenção</strong>
+              <p>Preencher os campos não adiciona o cliente automaticamente. É obrigatório clicar em <strong>Adicionar cliente à lista</strong> antes de salvar.</p>
+            </div>
+          </section>
+
+          <section id="help-kanban" class="help-section">
+            <div class="help-section-title">
+              <span class="help-section-number">04</span>
+              <div><span class="eyebrow">ACOMPANHAMENTO</span><h3>Kanban, filtros e ações</h3></div>
+            </div>
+
+            <div class="help-status-grid">
+              <article><span class="status-dot new"></span><div><strong>Nova</strong><p>Solicitação cadastrada e ainda não iniciada.</p></div></article>
+              <article><span class="status-dot analysis"></span><div><strong>Em análise</strong><p>Demanda sendo avaliada pelo responsável.</p></div></article>
+              <article><span class="status-dot waiting"></span><div><strong>Aguardando</strong><p>Existe uma dependência, retorno ou informação pendente.</p></div></article>
+              <article><span class="status-dot done"></span><div><strong>Concluída</strong><p>Solicitação finalizada e mantida no histórico.</p></div></article>
+            </div>
+
+            <div class="help-form-block">
+              <div class="help-field-list single-column">
+                <div><strong>Busca e filtros</strong><p>Use a busca por cliente, título ou solicitante. Também é possível filtrar por tipo, prioridade e usuário.</p></div>
+                <div><strong>Responsável</strong><p>O administrador pode atribuir a demanda para um usuário cadastrado.</p></div>
+                <div><strong>Mover no Kanban</strong><p>O administrador pode arrastar o cartão entre as colunas para atualizar o status.</p></div>
+                <div><strong>Botão Copiar dados</strong><p>Disponível para o administrador. Em Programação, copia o formulário formatado; em Cancelamento, copia a listagem completa dos clientes.</p></div>
+                <div><strong>Editar e excluir</strong><p>O solicitante pode editar uma demanda própria enquanto ela estiver em Nova. A exclusão de solicitações é permitida exclusivamente para usuários com perfil Administrador.</p></div>
+              </div>
+            </div>
+
+            <div class="help-notice">
+              <strong>Dica de acompanhamento</strong>
+              <p>Comece pelas solicitações destacadas como mais antigas e verifique regularmente a coluna Aguardando.</p>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="modal-actions help-modal-actions">
+        <span>Estas orientações podem ser consultadas a qualquer momento pelo menu <strong>Ajuda</strong>.</span>
+        <button class="button button-primary close-help-modal" type="button">Entendi</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="delete-confirm-dialog" class="modal modal-small confirm-dialog">
+    <div class="modal-content confirm-dialog-content">
+      <div class="confirm-dialog-icon" aria-hidden="true">!</div>
+      <div class="confirm-dialog-copy">
+        <span class="eyebrow">CONFIRMAÇÃO DE EXCLUSÃO</span>
+        <h2>Excluir esta solicitação?</h2>
+        <p id="delete-confirm-message">Esta ação removerá permanentemente a solicitação e seus anexos.</p>
+      </div>
+      <div class="confirm-dialog-warning">
+        <strong>Esta ação não poderá ser desfeita.</strong>
+        <span>Confirme apenas quando tiver certeza de que o registro não será mais necessário.</span>
+      </div>
+      <div class="modal-actions modal-actions-end confirm-dialog-actions">
+        <button class="button button-secondary close-delete-confirm" type="button">Manter solicitação</button>
+        <button id="confirm-delete-button" class="button button-danger" type="button">Excluir permanentemente</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="reset-dialog" class="modal modal-small">
+    <form id="reset-form" method="dialog" class="modal-content">
+      <div class="modal-header">
+        <div><span class="eyebrow">RECUPERAÇÃO</span><h2>Redefinir senha</h2></div>
+        <button class="icon-button close-reset-modal" type="button" aria-label="Fechar">×</button>
+      </div>
+      <p class="modal-help">Informe seu e-mail para receber o link de redefinição de senha.</p>
+      <label class="field">
+        <span>E-mail</span>
+        <input id="reset-email" type="email" required>
+      </label>
+      <p id="reset-error" class="form-error" hidden></p>
+      <div class="modal-actions modal-actions-end">
+        <button class="button button-secondary close-reset-modal" type="button">Cancelar</button>
+        <button class="button button-primary" type="submit">Enviar link</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js?v=9.0.0"></script>
+</body>
+</html>
