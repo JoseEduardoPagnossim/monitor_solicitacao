@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=9.0.0">
+  <link rel="stylesheet" href="styles.css?v=10.0.0">
 </head>
 <body>
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
@@ -59,6 +59,45 @@
         </button>
         <p id="login-error" class="form-error" hidden></p>
       </form>
+
+      <form id="invite-registration-form" class="auth-card" autocomplete="on" hidden>
+        <div class="auth-header">
+          <span class="mobile-logo">PS</span>
+          <span class="eyebrow">CONVITE DE ACESSO</span>
+          <h2>Concluir cadastro</h2>
+          <p>Confira seus dados e crie uma senha para acessar o painel.</p>
+        </div>
+
+        <div id="invite-loading" class="invite-loading">Validando convite...</div>
+        <div id="invite-registration-fields" hidden>
+          <label class="field">
+            <span>Nome</span>
+            <input id="invite-registration-name" type="text" readonly>
+          </label>
+          <label class="field">
+            <span>E-mail</span>
+            <input id="invite-registration-email" type="email" readonly>
+          </label>
+          <div class="invite-role-summary">
+            <span>Perfil de acesso</span>
+            <strong id="invite-registration-role">Solicitante</strong>
+          </div>
+          <label class="field">
+            <span>Crie uma senha</span>
+            <div class="password-wrap">
+              <input id="invite-registration-password" type="password" minlength="6" autocomplete="new-password" placeholder="Mínimo de 6 caracteres" required>
+              <button class="icon-button inside-input toggle-invite-password" type="button" aria-label="Mostrar senha">👁</button>
+            </div>
+          </label>
+          <label class="field">
+            <span>Confirme a senha</span>
+            <input id="invite-registration-confirm-password" type="password" minlength="6" autocomplete="new-password" placeholder="Digite novamente" required>
+          </label>
+          <button id="invite-registration-button" class="button button-primary button-full" type="submit">Criar acesso</button>
+        </div>
+        <p id="invite-registration-error" class="form-error" hidden></p>
+        <button id="back-to-login-button" class="link-button invite-back-button" type="button">Voltar para o login</button>
+      </form>
     </div>
   </section>
 
@@ -82,6 +121,9 @@
         <button class="nav-item" data-filter-type="cancelamento">
           <span class="nav-icon">⊘</span> Cancelamentos
         </button>
+        <button id="users-nav-button" class="nav-item admin-only" data-view="users" type="button">
+          <span class="nav-icon">♙</span> Usuários
+        </button>
         <div class="nav-divider" aria-hidden="true"></div>
         <button id="help-button" class="nav-item" data-view="help" type="button">
           <span class="nav-icon">?</span> Ajuda
@@ -101,6 +143,7 @@
     </aside>
 
     <main class="main-content">
+      <section id="kanban-view" class="app-section">
       <header class="topbar">
         <div>
           <button id="mobile-menu-button" class="icon-button mobile-menu" type="button" aria-label="Abrir menu">☰</button>
@@ -181,6 +224,59 @@
         <h2>Nenhuma solicitação encontrada</h2>
         <p>Crie uma nova solicitação ou altere os filtros aplicados.</p>
       </div>
+      </section>
+
+      <section id="users-view" class="app-section" hidden>
+        <header class="topbar">
+          <div>
+            <button class="icon-button mobile-menu users-mobile-menu" type="button" aria-label="Abrir menu">☰</button>
+            <span class="eyebrow">ADMINISTRAÇÃO</span>
+            <h1>Usuários</h1>
+            <p>Convide colaboradores, ajuste perfis e controle quem pode acessar o painel.</p>
+          </div>
+          <div class="topbar-actions">
+            <button id="refresh-users-button" class="button button-secondary" type="button">↻ Atualizar</button>
+            <button id="new-user-invite-button" class="button button-primary" type="button">+ Convidar usuário</button>
+          </div>
+        </header>
+
+        <section class="metrics-grid user-metrics-grid" aria-label="Indicadores de usuários">
+          <article class="metric-card"><div class="metric-icon blue">♙</div><div><span>Usuários ativos</span><strong id="metric-active-users">0</strong></div></article>
+          <article class="metric-card"><div class="metric-icon purple">◆</div><div><span>Administradores</span><strong id="metric-admin-users">0</strong></div></article>
+          <article class="metric-card"><div class="metric-icon amber">✉</div><div><span>Convites pendentes</span><strong id="metric-pending-invites">0</strong></div></article>
+          <article class="metric-card"><div class="metric-icon gray">⊘</div><div><span>Usuários inativos</span><strong id="metric-inactive-users">0</strong></div></article>
+        </section>
+
+        <section class="toolbar users-toolbar">
+          <div class="search-box">
+            <span>⌕</span>
+            <input id="user-search-input" type="search" placeholder="Buscar por nome ou e-mail...">
+          </div>
+          <select id="user-status-filter" class="select-control" aria-label="Filtrar usuários por situação">
+            <option value="all">Todas as situações</option>
+            <option value="active">Ativos</option>
+            <option value="inactive">Inativos</option>
+            <option value="pending">Convites pendentes</option>
+          </select>
+          <select id="user-role-filter" class="select-control" aria-label="Filtrar usuários por perfil">
+            <option value="all">Todos os perfis</option>
+            <option value="admin">Administradores</option>
+            <option value="solicitante">Solicitantes</option>
+          </select>
+        </section>
+
+        <section class="users-panel">
+          <div class="users-table-wrap">
+            <table class="users-table">
+              <thead><tr><th>Usuário</th><th>Perfil</th><th>Situação</th><th>Cadastro</th><th>Ações</th></tr></thead>
+              <tbody id="users-table-body"></tbody>
+            </table>
+          </div>
+          <div id="users-empty-state" class="users-empty-state" hidden>
+            <div>♙</div><h2>Nenhum usuário encontrado</h2><p>Altere os filtros ou crie um novo convite.</p>
+          </div>
+        </section>
+      </section>
     </main>
   </div>
 
@@ -376,6 +472,70 @@
   </dialog>
 
 
+  <dialog id="user-invite-dialog" class="modal modal-small user-dialog">
+    <form id="user-invite-form" method="dialog" class="modal-content">
+      <div class="modal-header">
+        <div><span class="eyebrow">NOVO ACESSO</span><h2>Convidar usuário</h2></div>
+        <button class="icon-button close-user-invite-modal" type="button" aria-label="Fechar">×</button>
+      </div>
+      <div id="user-invite-form-fields">
+        <p class="modal-help">O colaborador receberá um link para criar a própria senha. O convite será válido por 7 dias.</p>
+        <label class="field"><span>Nome completo *</span><input id="user-invite-name" type="text" maxlength="120" required></label>
+        <label class="field"><span>E-mail *</span><input id="user-invite-email" type="email" maxlength="160" placeholder="nome@empresa.com.br" required></label>
+        <label class="field"><span>Perfil *</span><select id="user-invite-role" required><option value="solicitante">Solicitante</option><option value="admin">Administrador</option></select></label>
+        <p id="user-invite-error" class="form-error" hidden></p>
+        <div class="modal-actions modal-actions-end">
+          <button class="button button-secondary close-user-invite-modal" type="button">Cancelar</button>
+          <button id="create-user-invite-button" class="button button-primary" type="submit">Gerar convite</button>
+        </div>
+      </div>
+      <div id="user-invite-result" class="invite-result" hidden>
+        <div class="invite-success-icon">✓</div>
+        <h3>Convite criado</h3>
+        <p>Copie o link abaixo e envie ao colaborador.</p>
+        <label class="field"><span>Link de convite</span><input id="user-invite-link" type="text" readonly></label>
+        <div class="invite-expiration">Válido até <strong id="user-invite-expiration">—</strong></div>
+        <div class="modal-actions modal-actions-end">
+          <button class="button button-secondary close-user-invite-modal" type="button">Fechar</button>
+          <button id="copy-user-invite-link" class="button button-primary" type="button">⧉ Copiar link</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="edit-user-dialog" class="modal modal-small user-dialog">
+    <form id="edit-user-form" method="dialog" class="modal-content">
+      <div class="modal-header">
+        <div><span class="eyebrow">PERFIL DE ACESSO</span><h2>Editar usuário</h2></div>
+        <button class="icon-button close-edit-user-modal" type="button" aria-label="Fechar">×</button>
+      </div>
+      <input id="edit-user-id" type="hidden">
+      <label class="field"><span>Nome completo *</span><input id="edit-user-name" type="text" maxlength="120" required></label>
+      <label class="field"><span>E-mail</span><input id="edit-user-email" type="email" readonly></label>
+      <label class="field"><span>Perfil *</span><select id="edit-user-role" required><option value="solicitante">Solicitante</option><option value="admin">Administrador</option></select></label>
+      <p id="edit-user-self-note" class="user-self-note" hidden>Seu próprio perfil precisa permanecer ativo como Administrador.</p>
+      <p id="edit-user-error" class="form-error" hidden></p>
+      <div class="modal-actions modal-actions-end">
+        <button class="button button-secondary close-edit-user-modal" type="button">Cancelar</button>
+        <button id="save-user-button" class="button button-primary" type="submit">Salvar alterações</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="user-status-dialog" class="modal modal-small confirm-dialog">
+    <div class="modal-content confirm-dialog-content">
+      <div id="user-status-dialog-icon" class="confirm-dialog-icon" aria-hidden="true">!</div>
+      <div class="confirm-dialog-copy"><span class="eyebrow">CONTROLE DE ACESSO</span><h2 id="user-status-dialog-title">Desativar usuário?</h2><p id="user-status-dialog-message"></p></div>
+      <div class="confirm-dialog-warning"><strong id="user-status-dialog-warning-title">O histórico será mantido.</strong><span id="user-status-dialog-warning-text">O usuário não conseguirá acessar o painel enquanto estiver inativo.</span></div>
+      <input id="user-status-target-id" type="hidden">
+      <div class="modal-actions modal-actions-end confirm-dialog-actions">
+        <button class="button button-secondary close-user-status-modal" type="button">Cancelar</button>
+        <button id="confirm-user-status-button" class="button button-danger" type="button">Desativar usuário</button>
+      </div>
+    </div>
+  </dialog>
+
+
   <dialog id="help-dialog" class="modal help-modal">
     <div class="modal-content help-modal-content">
       <div class="modal-header help-modal-header">
@@ -404,6 +564,10 @@
           <button class="help-tab" type="button" data-help-target="help-kanban">
             <span class="help-tab-icon">▦</span>
             <span><strong>Kanban e ações</strong><small>Status, filtros e cópia</small></span>
+          </button>
+          <button class="help-tab admin-only" type="button" data-help-target="help-users">
+            <span class="help-tab-icon">♙</span>
+            <span><strong>Usuários</strong><small>Convites e permissões</small></span>
           </button>
         </nav>
 
@@ -531,6 +695,20 @@
               <p>Comece pelas solicitações destacadas como mais antigas e verifique regularmente a coluna Aguardando.</p>
             </div>
           </section>
+
+          <section id="help-users" class="help-section admin-only">
+            <div class="help-section-title">
+              <span class="help-section-number">05</span>
+              <div><span class="eyebrow">ACESSOS</span><h3>Convites, perfis e desativação</h3></div>
+            </div>
+            <div class="help-steps">
+              <article class="help-step"><span>1</span><div><strong>Crie o convite</strong><p>Informe nome, e-mail e perfil. O painel gera um link exclusivo válido por sete dias.</p></div></article>
+              <article class="help-step"><span>2</span><div><strong>Compartilhe o link</strong><p>Copie o convite e envie ao colaborador. Ele definirá a própria senha.</p></div></article>
+              <article class="help-step"><span>3</span><div><strong>Gerencie o acesso</strong><p>Altere nome ou perfil, desative e reative usuários diretamente na lista.</p></div></article>
+              <article class="help-step"><span>4</span><div><strong>Recupere a senha</strong><p>Use a ação Redefinir senha para enviar o e-mail de recuperação ao usuário.</p></div></article>
+            </div>
+            <div class="help-warning"><strong>Importante</strong><p>Desativar mantém o histórico do usuário, mas bloqueia seu acesso. O administrador não pode desativar ou remover o próprio perfil administrativo.</p></div>
+          </section>
         </div>
       </div>
 
@@ -579,6 +757,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=9.0.0"></script>
+  <script type="module" src="app.js?v=10.0.0"></script>
 </body>
 </html>

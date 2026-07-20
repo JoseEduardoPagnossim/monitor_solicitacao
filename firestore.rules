@@ -11,12 +11,17 @@ service cloud.firestore {
 
     function isActive() {
       return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && currentUser().data.active == true;
     }
 
     function isAdmin() {
       return isActive()
         && currentUser().data.role == 'admin';
+    }
+
+    function validUserRole(role) {
+      return role in ['admin', 'solicitante'];
     }
 
     function validType(type) {
@@ -62,9 +67,74 @@ service cloud.firestore {
         && data.data.size() <= 716800;
     }
 
+    function validInviteData(data) {
+      return data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.email is string
+        && data.email.size() > 3
+        && data.email.size() <= 160
+        && validUserRole(data.role)
+        && data.status == 'pending'
+        && data.createdByUid == request.auth.uid
+        && data.createdAt == request.time
+        && data.expiresAt is timestamp
+        && data.expiresAt > request.time;
+    }
+
+    function validInvitedUser(userId, data) {
+      let invite = get(/databases/$(database)/documents/userInvites/$(data.inviteToken));
+      return signedIn()
+        && request.auth.uid == userId
+        && data.inviteToken is string
+        && data.inviteToken.size() >= 32
+        && invite.data.status == 'pending'
+        && invite.data.expiresAt > request.time
+        && invite.data.email == request.auth.token.email
+        && data.email == invite.data.email
+        && data.name == invite.data.name
+        && data.role == invite.data.role
+        && data.active == true
+        && data.createdAt == request.time;
+    }
+
     match /users/{userId} {
-      allow read: if isActive() && (request.auth.uid == userId || isAdmin());
-      allow create, update, delete: if isAdmin();
+      allow get: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isAdmin() || validInvitedUser(userId, request.resource.data);
+
+      allow update: if isAdmin()
+        && request.resource.data.email == resource.data.email
+        && validUserRole(request.resource.data.role)
+        && request.resource.data.active is bool
+        && (request.auth.uid != userId
+          || (request.resource.data.active == true
+            && request.resource.data.role == 'admin'));
+
+      allow delete: if false;
+    }
+
+    match /userInvites/{inviteId} {
+      allow get: if isAdmin()
+        || (resource.data.status == 'pending'
+          && resource.data.expiresAt > request.time);
+      allow list: if isAdmin();
+
+      allow create: if isAdmin() && validInviteData(request.resource.data);
+
+      allow update: if isAdmin()
+        || (signedIn()
+          && resource.data.status == 'pending'
+          && resource.data.expiresAt > request.time
+          && request.auth.token.email == resource.data.email
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'acceptedAt', 'acceptedUid'])
+          && request.resource.data.status == 'accepted'
+          && request.resource.data.acceptedUid == request.auth.uid
+          && request.resource.data.acceptedAt == request.time);
+
+      allow delete: if isAdmin();
     }
 
     match /requests/{requestId} {

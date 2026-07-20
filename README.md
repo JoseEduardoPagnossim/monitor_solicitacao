@@ -14,7 +14,14 @@ O projeto foi preparado para ser publicado no **GitHub Pages** e utiliza o **Fir
 - Recuperação de senha pelo botão **Esqueci minha senha**.
 - Perfis de acesso `admin` e `solicitante`.
 - Bloqueio de usuário sem apagar o histórico, alterando o campo `active` para `false`.
-- Ausência de cadastro público: os usuários são criados manualmente pelo administrador no Firebase.
+- Tela administrativa de usuários, visível somente para o perfil `admin`.
+- Cadastro por convite: o administrador informa nome, e-mail e perfil e o painel gera um link exclusivo.
+- O colaborador abre o convite e cria a própria senha.
+- Convites válidos por 7 dias, com opções de copiar e cancelar.
+- Ativação, desativação e reativação de usuários sem apagar o histórico.
+- Alteração de nome e perfil pela interface administrativa.
+- Envio de redefinição de senha pelo administrador.
+- Desconexão automática quando um usuário é desativado.
 - Identificação do usuário responsável por cada solicitação.
 
 ### Kanban e acompanhamento
@@ -179,6 +186,11 @@ O painel possui uma tela **Ajuda**, disponível no menu lateral e no topo, com o
 
 O administrador pode:
 
+- abrir a área **Usuários**;
+- criar e cancelar convites;
+- editar nome e perfil dos usuários;
+- desativar e reativar acessos;
+- enviar redefinição de senha;
 - visualizar todas as solicitações;
 - filtrar por solicitante;
 - criar solicitações;
@@ -222,6 +234,7 @@ O GitHub Pages hospeda apenas arquivos estáticos e não fornece autenticação 
 
 ```text
 users
+userInvites
 requests
 requestAttachments
 ```
@@ -229,6 +242,10 @@ requestAttachments
 #### `users`
 
 Armazena o perfil e a permissão de cada usuário.
+
+#### `userInvites`
+
+Armazena convites temporários criados pelos administradores. O link contém um token aleatório e expira após sete dias.
 
 #### `requests`
 
@@ -277,7 +294,7 @@ https://firebase.google.com/docs/web/setup?hl=pt-BR
 4. Ative **E-mail/senha**.
 5. Salve a configuração.
 
-Não existe cadastro público na página. Cada usuário deve ser criado manualmente no console do Firebase.
+Não existe cadastro público livre. Depois que o primeiro administrador estiver configurado, os demais usuários são cadastrados pela tela **Usuários**, usando convites controlados pelo administrador.
 
 Documentação oficial:
 
@@ -293,9 +310,9 @@ https://firebase.google.com/docs/auth/web/password-auth?hl=pt-BR
 4. Escolha uma região próxima dos usuários.
 5. Conclua a criação.
 
-Não é necessário criar manualmente as coleções `requests` e `requestAttachments`. Elas serão criadas quando os primeiros registros forem salvos.
+Não é necessário criar manualmente as coleções `userInvites`, `requests` e `requestAttachments`. Elas serão criadas quando os primeiros registros forem salvos.
 
-A coleção `users` precisa ser criada manualmente para configurar o primeiro administrador.
+A coleção `users` precisa ser criada manualmente apenas para configurar o primeiro administrador.
 
 ---
 
@@ -318,47 +335,30 @@ As regras garantem que:
 - os anexos respeitem o limite aproximado de 700 KB;
 - somente os tipos JPEG, PNG e TXT sejam aceitos;
 - o proprietário ou administrador consiga visualizar os anexos;
-- somente o administrador consiga excluir uma solicitação.
+- somente o administrador consiga excluir uma solicitação;
+- apenas administradores listem e alterem usuários;
+- convites públicos só possam ser lidos por meio do token exclusivo, enquanto estiverem pendentes e dentro do prazo;
+- o novo usuário só consiga criar o próprio perfil quando o e-mail, nome e perfil corresponderem ao convite;
+- um administrador não consiga desativar nem remover o próprio perfil administrativo.
 
 > Sempre que o arquivo `firestore.rules` for alterado, publique novamente as regras no Firebase.
 
 ---
 
-## 5. Criar os usuários no Authentication
+## 5. Criar o primeiro administrador
 
-Para cada usuário:
+O primeiro administrador ainda precisa ser criado manualmente, pois a tela administrativa só pode ser acessada depois que já existe um perfil `admin`.
 
-1. Abra **Authentication**.
-2. Acesse a guia **Users/Usuários**.
-3. Clique em **Add user/Adicionar usuário**.
-4. Informe o e-mail.
-5. Defina uma senha inicial.
-6. Salve.
-7. Copie o **UID** criado pelo Firebase.
+### No Authentication
 
----
+1. Abra **Authentication > Users/Usuários**.
+2. Clique em **Adicionar usuário**.
+3. Informe o e-mail e uma senha inicial.
+4. Copie o **UID** criado pelo Firebase.
 
-## 6. Criar os perfis na coleção `users`
+### No Firestore
 
-Depois de criar o usuário no Authentication, abra:
-
-```text
-Firestore Database > Data/Dados
-```
-
-Crie uma coleção chamada:
-
-```text
-users
-```
-
-Dentro dela, crie um documento cujo ID seja exatamente o UID copiado do Authentication.
-
-Não utilize **Auto-ID**.
-
-### Primeiro administrador
-
-Documento:
+Crie a coleção `users` e um documento cujo ID seja exatamente o UID copiado.
 
 ```text
 users/UID_DO_ADMIN
@@ -373,32 +373,40 @@ Campos:
 | `role` | string | `admin` |
 | `active` | boolean | `true` |
 
-### Solicitante
+Não utilize **Auto-ID**.
 
-Documento:
+---
 
-```text
-users/UID_DO_USUARIO
-```
+## 6. Cadastrar e administrar os demais usuários
 
-Campos:
+Depois de entrar com o primeiro administrador:
 
-| Campo | Tipo | Exemplo |
-|---|---|---|
-| `name` | string | `Nome do colaborador` |
-| `email` | string | `colaborador@empresa.com.br` |
-| `role` | string | `solicitante` |
-| `active` | boolean | `true` |
+1. Abra **Usuários** no menu lateral.
+2. Clique em **Convidar usuário**.
+3. Informe nome, e-mail e perfil (`admin` ou `solicitante`).
+4. Clique em **Gerar convite**.
+5. Copie o link e envie ao colaborador.
+6. O colaborador abre o link e cria a própria senha.
+7. O painel cria automaticamente a conta no Firebase Authentication e o perfil na coleção `users`.
 
-Cuidados importantes:
+O convite é válido por sete dias. Convites pendentes podem ser copiados novamente ou cancelados.
 
-- o ID do documento deve ser exatamente o UID do Authentication;
-- o e-mail deve ser o mesmo nos dois locais;
-- `role` deve ser exatamente `admin` ou `solicitante`;
-- `active` deve ser do tipo **boolean**, e não texto;
-- para bloquear um usuário, altere `active` para `false`.
+Na listagem, o administrador pode:
 
-> O primeiro administrador precisa ser criado manualmente porque ainda não existe outro administrador autenticado para executar essa configuração.
+- editar nome e perfil;
+- desativar ou reativar o acesso;
+- enviar um e-mail de redefinição de senha;
+- pesquisar e filtrar usuários;
+- acompanhar convites pendentes.
+
+Ao desativar um usuário:
+
+- a conta do Firebase Authentication não é apagada;
+- as solicitações e o histórico permanecem registrados;
+- o acesso é bloqueado;
+- caso esteja conectado, o usuário é desconectado automaticamente.
+
+O administrador não pode desativar ou retirar o perfil administrativo da própria conta.
 
 ---
 
@@ -509,7 +517,7 @@ painel-solicitacoes/
 
 ### `index.html`
 
-Estrutura visual da tela de login, Kanban, formulários, ajuda e diálogos.
+Estrutura visual da tela de login, cadastro por convite, Kanban, formulários, administração de usuários, ajuda e diálogos.
 
 ### `styles.css`
 
@@ -517,7 +525,7 @@ Estilos, responsividade, alertas, máscaras visuais, modal de ajuda e confirmaç
 
 ### `app.js`
 
-Autenticação, consultas, formulários, validações, máscaras, Kanban, anexos, cópia e permissões.
+Autenticação, cadastro por convite, administração de usuários, consultas, formulários, validações, máscaras, Kanban, anexos, cópia e permissões.
 
 ### `firebase-config.js`
 
@@ -712,6 +720,23 @@ Recomendações:
 
 ---
 
+
+### Convite não abre ou informa que expirou
+
+Confira se:
+
+- o link foi copiado por completo;
+- o convite ainda está como pendente na tela **Usuários**;
+- o prazo de sete dias não terminou;
+- as regras atualizadas do arquivo `firestore.rules` foram publicadas;
+- o domínio do GitHub Pages está autorizado no Firebase Authentication.
+
+Se o convite expirou ou foi cancelado, crie um novo convite para o mesmo e-mail.
+
+### Usuário desativado ainda estava com a tela aberta
+
+O painel acompanha o documento do perfil em tempo real. Ao detectar `active: false`, a sessão é encerrada automaticamente. Caso a aba esteja sem conexão, o bloqueio ocorrerá assim que a conexão for restabelecida ou em uma nova consulta.
+
 ## Checklist de publicação
 
 - [ ] Criar projeto no Firebase.
@@ -722,7 +747,8 @@ Recomendações:
 - [ ] Publicar `firestore.rules`.
 - [ ] Criar primeiro usuário no Authentication.
 - [ ] Criar perfil `admin` na coleção `users`.
-- [ ] Criar os demais usuários.
+- [ ] Entrar como administrador e testar a tela **Usuários**.
+- [ ] Criar um convite de teste e concluir o cadastro em uma janela anônima.
 - [ ] Autorizar o domínio do GitHub Pages.
 - [ ] Enviar os arquivos ao GitHub.
 - [ ] Ativar GitHub Pages.

@@ -3,6 +3,8 @@ import {
   getAuth,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  deleteUser,
   signOut,
   sendPasswordResetEmail,
   setPersistence,
@@ -56,6 +58,8 @@ const MAX_IMAGE_SOURCE_SIZE = 5 * 1024 * 1024;
 const MAX_STORED_ATTACHMENT_SIZE = 700 * 1024;
 const MAX_IMAGE_DIMENSION = 1600;
 const ALLOWED_ATTACHMENT_TYPES = new Set(["image/jpeg", "image/png", "text/plain"]);
+const INVITE_VALID_DAYS = 7;
+const VALID_USER_ROLES = ["admin", "solicitante"];
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -66,8 +70,16 @@ const state = {
   profile: null,
   requests: [],
   users: [],
+  invites: [],
   unsubscribeRequests: null,
+  unsubscribeProfile: null,
   elapsedTimer: null,
+  currentView: "kanban",
+  userFilters: { search: "", status: "all", role: "all" },
+  inviteToken: new URLSearchParams(window.location.search).get("invite") || "",
+  inviteData: null,
+  inviteRegistrationInProgress: false,
+  forcedLogoutMessage: "",
   filters: { search: "", type: "all", priority: "all", requester: "all" },
   draggedId: null,
   modalEditable: true,
@@ -91,6 +103,17 @@ const els = {
   rememberEmail: $("#remember-email"),
   togglePassword: $("#toggle-password"),
   forgotPassword: $("#forgot-password"),
+  inviteRegistrationForm: $("#invite-registration-form"),
+  inviteLoading: $("#invite-loading"),
+  inviteRegistrationFields: $("#invite-registration-fields"),
+  inviteRegistrationName: $("#invite-registration-name"),
+  inviteRegistrationEmail: $("#invite-registration-email"),
+  inviteRegistrationRole: $("#invite-registration-role"),
+  inviteRegistrationPassword: $("#invite-registration-password"),
+  inviteRegistrationConfirmPassword: $("#invite-registration-confirm-password"),
+  inviteRegistrationButton: $("#invite-registration-button"),
+  inviteRegistrationError: $("#invite-registration-error"),
+  backToLoginButton: $("#back-to-login-button"),
   logoutButton: $("#logout-button"),
   userName: $("#user-name"),
   userRole: $("#user-role"),
@@ -112,6 +135,49 @@ const els = {
   clearFilters: $("#clear-filters"),
   kanbanBoard: $("#kanban-board"),
   emptyState: $("#empty-state"),
+  kanbanView: $("#kanban-view"),
+  usersView: $("#users-view"),
+  usersNavButton: $("#users-nav-button"),
+  refreshUsersButton: $("#refresh-users-button"),
+  newUserInviteButton: $("#new-user-invite-button"),
+  metricActiveUsers: $("#metric-active-users"),
+  metricAdminUsers: $("#metric-admin-users"),
+  metricPendingInvites: $("#metric-pending-invites"),
+  metricInactiveUsers: $("#metric-inactive-users"),
+  userSearchInput: $("#user-search-input"),
+  userStatusFilter: $("#user-status-filter"),
+  userRoleFilter: $("#user-role-filter"),
+  usersTableBody: $("#users-table-body"),
+  usersEmptyState: $("#users-empty-state"),
+  userInviteDialog: $("#user-invite-dialog"),
+  userInviteForm: $("#user-invite-form"),
+  userInviteFormFields: $("#user-invite-form-fields"),
+  userInviteResult: $("#user-invite-result"),
+  userInviteName: $("#user-invite-name"),
+  userInviteEmail: $("#user-invite-email"),
+  userInviteRole: $("#user-invite-role"),
+  userInviteError: $("#user-invite-error"),
+  createUserInviteButton: $("#create-user-invite-button"),
+  userInviteLink: $("#user-invite-link"),
+  userInviteExpiration: $("#user-invite-expiration"),
+  copyUserInviteLink: $("#copy-user-invite-link"),
+  editUserDialog: $("#edit-user-dialog"),
+  editUserForm: $("#edit-user-form"),
+  editUserId: $("#edit-user-id"),
+  editUserName: $("#edit-user-name"),
+  editUserEmail: $("#edit-user-email"),
+  editUserRole: $("#edit-user-role"),
+  editUserSelfNote: $("#edit-user-self-note"),
+  editUserError: $("#edit-user-error"),
+  saveUserButton: $("#save-user-button"),
+  userStatusDialog: $("#user-status-dialog"),
+  userStatusDialogIcon: $("#user-status-dialog-icon"),
+  userStatusDialogTitle: $("#user-status-dialog-title"),
+  userStatusDialogMessage: $("#user-status-dialog-message"),
+  userStatusDialogWarningTitle: $("#user-status-dialog-warning-title"),
+  userStatusDialogWarningText: $("#user-status-dialog-warning-text"),
+  userStatusTargetId: $("#user-status-target-id"),
+  confirmUserStatusButton: $("#confirm-user-status-button"),
   requestDialog: $("#request-dialog"),
   requestForm: $("#request-form"),
   requestModalTitle: $("#request-modal-title"),
@@ -758,6 +824,10 @@ function firebaseErrorMessage(error) {
     "auth/missing-password": "Informe sua senha.",
     "auth/network-request-failed": "Falha de conexão. Verifique sua internet.",
     "auth/user-not-found": "Usuário não encontrado.",
+    "auth/email-already-in-use": "Este e-mail já possui uma conta no Firebase.",
+    "auth/weak-password": "A senha deve possuir pelo menos 6 caracteres.",
+    "invite-invalid": "Este convite não existe ou não está mais disponível.",
+    "invite-expired": "Este convite expirou. Solicite um novo link ao administrador.",
     "permission-denied": "Você não possui permissão para executar esta ação.",
     "resource-exhausted": "O limite gratuito do Firestore foi atingido. Tente novamente mais tarde.",
     "failed-precondition": "A operação não pôde ser concluída com a configuração atual do Firestore."
@@ -791,23 +861,27 @@ async function loadUsers() {
 
   const snapshots = await getDocs(collection(db, "users"));
   state.users = snapshots.docs
-    .map((documentSnapshot) => ({ uid: documentSnapshot.id, ...documentSnapshot.data() }))
-    .filter((user) => user.active !== false);
+    .map((documentSnapshot) => ({ uid: documentSnapshot.id, ...documentSnapshot.data() }));
 
   state.users.sort((a, b) => (a.name || a.email || "").localeCompare(
     b.name || b.email || "",
     "pt-BR"
   ));
   populateUserOptions();
+  if (state.currentView === "users") renderUserManagement();
 }
 
 function populateUserOptions() {
-  const requesters = state.users
+  const allUsers = state.users
+    .map((user) => `<option value="${escapeHtml(user.uid)}">${escapeHtml(user.name || user.email || "Usuário")}</option>`)
+    .join("");
+  const activeUsers = state.users
+    .filter((user) => user.active !== false)
     .map((user) => `<option value="${escapeHtml(user.uid)}">${escapeHtml(user.name || user.email || "Usuário")}</option>`)
     .join("");
 
-  els.requesterFilter.innerHTML = `<option value="all">Todos os solicitantes</option>${requesters}`;
-  els.requestAssignee.innerHTML = `<option value="">Não atribuído</option>${requesters}`;
+  els.requesterFilter.innerHTML = `<option value="all">Todos os solicitantes</option>${allUsers}`;
+  els.requestAssignee.innerHTML = `<option value="">Não atribuído</option>${activeUsers}`;
 }
 
 function subscribeRequests() {
@@ -1762,6 +1836,449 @@ function openHelpDialog(targetId = "help-overview") {
   });
 }
 
+
+function roleLabel(role) {
+  return role === "admin" ? "Administrador" : "Solicitante";
+}
+
+function inviteStatus(invite) {
+  const expiresAt = timestampToDate(invite.expiresAt);
+  if (invite.status === "pending" && expiresAt && expiresAt.getTime() <= Date.now()) return "expired";
+  return invite.status || "pending";
+}
+
+function generateInviteToken() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function buildInviteUrl(token) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("invite", token);
+  return url.toString();
+}
+
+function removeInviteFromUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("invite");
+  history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  state.inviteToken = "";
+  state.inviteData = null;
+}
+
+function showLoginCard() {
+  els.loginForm.hidden = false;
+  els.inviteRegistrationForm.hidden = true;
+}
+
+function showInviteCard() {
+  els.loginForm.hidden = true;
+  els.inviteRegistrationForm.hidden = false;
+}
+
+async function initializeInviteFlow() {
+  if (!state.inviteToken || !isConfigReady()) return;
+  showInviteCard();
+  els.inviteLoading.hidden = false;
+  els.inviteRegistrationFields.hidden = true;
+  showFormError(els.inviteRegistrationError);
+
+  try {
+    const snapshot = await getDoc(doc(db, "userInvites", state.inviteToken));
+    if (!snapshot.exists()) throw { code: "invite-invalid" };
+    const invite = { id: snapshot.id, ...snapshot.data() };
+    const expiresAt = timestampToDate(invite.expiresAt);
+    if (invite.status !== "pending") throw { code: "invite-invalid" };
+    if (!expiresAt || expiresAt.getTime() <= Date.now()) throw { code: "invite-expired" };
+
+    state.inviteData = invite;
+    els.inviteRegistrationName.value = invite.name || "";
+    els.inviteRegistrationEmail.value = invite.email || "";
+    els.inviteRegistrationRole.textContent = roleLabel(invite.role);
+    els.inviteLoading.hidden = true;
+    els.inviteRegistrationFields.hidden = false;
+  } catch (error) {
+    console.error(error);
+    els.inviteLoading.hidden = true;
+    showFormError(els.inviteRegistrationError, firebaseErrorMessage(error));
+  }
+}
+
+async function registerFromInvite(event) {
+  event.preventDefault();
+  showFormError(els.inviteRegistrationError);
+  const invite = state.inviteData;
+  const password = els.inviteRegistrationPassword.value;
+  const confirmation = els.inviteRegistrationConfirmPassword.value;
+
+  if (!invite || invite.status !== "pending") {
+    showFormError(els.inviteRegistrationError, "Este convite não está mais disponível.");
+    return;
+  }
+  if (password.length < 6) {
+    showFormError(els.inviteRegistrationError, "A senha deve possuir pelo menos 6 caracteres.");
+    return;
+  }
+  if (password !== confirmation) {
+    showFormError(els.inviteRegistrationError, "As senhas informadas não são iguais.");
+    return;
+  }
+
+  setButtonLoading(els.inviteRegistrationButton, true, "Criando acesso...");
+  state.inviteRegistrationInProgress = true;
+  let createdUser = null;
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+    const credential = await createUserWithEmailAndPassword(auth, invite.email, password);
+    createdUser = credential.user;
+    const batch = writeBatch(db);
+    batch.set(doc(db, "users", createdUser.uid), {
+      name: invite.name,
+      email: invite.email,
+      role: invite.role,
+      active: true,
+      inviteToken: state.inviteToken,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    batch.update(doc(db, "userInvites", state.inviteToken), {
+      status: "accepted",
+      acceptedAt: serverTimestamp(),
+      acceptedUid: createdUser.uid
+    });
+    await batch.commit();
+
+    removeInviteFromUrl();
+    state.inviteRegistrationInProgress = false;
+    showToast("Acesso criado com sucesso.");
+    await handleAuthenticated(createdUser);
+  } catch (error) {
+    console.error(error);
+    if (createdUser) {
+      try { await deleteUser(createdUser); } catch (cleanupError) { console.error(cleanupError); }
+    }
+    state.inviteRegistrationInProgress = false;
+    showFormError(els.inviteRegistrationError, firebaseErrorMessage(error));
+  } finally {
+    setButtonLoading(els.inviteRegistrationButton, false);
+  }
+}
+
+async function loadInvites() {
+  if (!isAdmin()) {
+    state.invites = [];
+    return;
+  }
+  const snapshots = await getDocs(collection(db, "userInvites"));
+  state.invites = snapshots.docs
+    .map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }))
+    .sort((a, b) => (timestampToDate(b.createdAt)?.getTime() || 0) - (timestampToDate(a.createdAt)?.getTime() || 0));
+  if (state.currentView === "users") renderUserManagement();
+}
+
+async function refreshUserManagement(showMessage = false) {
+  if (!isAdmin()) return;
+  try {
+    await Promise.all([loadUsers(), loadInvites()]);
+    renderUserManagement();
+    if (showMessage) showToast("Lista de usuários atualizada.");
+  } catch (error) {
+    console.error(error);
+    showToast(firebaseErrorMessage(error), "error");
+  }
+}
+
+function userManagementEntries() {
+  const users = state.users.map((user) => ({ kind: "user", ...user }));
+  const invites = state.invites
+    .filter((invite) => inviteStatus(invite) === "pending")
+    .map((invite) => ({ kind: "invite", ...invite }));
+  const term = state.userFilters.search.toLocaleLowerCase("pt-BR");
+
+  return [...users, ...invites].filter((entry) => {
+    const status = entry.kind === "invite" ? "pending" : entry.active === false ? "inactive" : "active";
+    const haystack = `${entry.name || ""} ${entry.email || ""}`.toLocaleLowerCase("pt-BR");
+    return (!term || haystack.includes(term))
+      && (state.userFilters.status === "all" || state.userFilters.status === status)
+      && (state.userFilters.role === "all" || state.userFilters.role === entry.role);
+  }).sort((a, b) => (a.name || a.email || "").localeCompare(b.name || b.email || "", "pt-BR"));
+}
+
+function userRowHtml(entry) {
+  if (entry.kind === "invite") {
+    return `
+      <tr>
+        <td><div class="user-identity"><div class="user-list-avatar pending">✉</div><div><strong>${escapeHtml(entry.name || "Convite")}</strong><span>${escapeHtml(entry.email || "")}</span></div></div></td>
+        <td><span class="user-role-badge ${escapeHtml(entry.role)}">${escapeHtml(roleLabel(entry.role))}</span></td>
+        <td><span class="user-status-badge pending">● Convite pendente</span></td>
+        <td><div class="user-date">Criado em ${escapeHtml(formatDateTime(entry.createdAt))}<br>Expira em ${escapeHtml(formatDateTime(entry.expiresAt))}</div></td>
+        <td><div class="user-actions">
+          <button class="user-action-button primary" type="button" data-user-action="copy-invite" data-id="${escapeHtml(entry.id)}">⧉ Copiar convite</button>
+          <button class="user-action-button danger" type="button" data-user-action="cancel-invite" data-id="${escapeHtml(entry.id)}">Cancelar convite</button>
+        </div></td>
+      </tr>`;
+  }
+
+  const active = entry.active !== false;
+  const isSelf = entry.uid === state.user?.uid;
+  return `
+    <tr>
+      <td><div class="user-identity"><div class="user-list-avatar">${escapeHtml(initials(entry.name || entry.email))}</div><div><strong>${escapeHtml(entry.name || "Usuário")}${isSelf ? " (você)" : ""}</strong><span>${escapeHtml(entry.email || "")}</span></div></div></td>
+      <td><span class="user-role-badge ${escapeHtml(entry.role)}">${escapeHtml(roleLabel(entry.role))}</span></td>
+      <td><span class="user-status-badge ${active ? "active" : "inactive"}">● ${active ? "Ativo" : "Inativo"}</span></td>
+      <td><div class="user-date">${escapeHtml(formatDateTime(entry.createdAt))}</div></td>
+      <td><div class="user-actions">
+        <button class="user-action-button" type="button" data-user-action="edit-user" data-id="${escapeHtml(entry.uid)}">Editar</button>
+        <button class="user-action-button" type="button" data-user-action="reset-password" data-id="${escapeHtml(entry.uid)}">Redefinir senha</button>
+        <button class="user-action-button ${active ? "danger" : "success"}" type="button" data-user-action="toggle-user" data-id="${escapeHtml(entry.uid)}" ${isSelf ? "disabled title=\"Você não pode desativar o próprio acesso\"" : ""}>${active ? "Desativar" : "Reativar"}</button>
+      </div></td>
+    </tr>`;
+}
+
+function renderUserManagement() {
+  if (!isAdmin()) return;
+  const activeUsers = state.users.filter((user) => user.active !== false);
+  const inactiveUsers = state.users.filter((user) => user.active === false);
+  const pendingInvites = state.invites.filter((invite) => inviteStatus(invite) === "pending");
+  els.metricActiveUsers.textContent = activeUsers.length;
+  els.metricAdminUsers.textContent = activeUsers.filter((user) => user.role === "admin").length;
+  els.metricPendingInvites.textContent = pendingInvites.length;
+  els.metricInactiveUsers.textContent = inactiveUsers.length;
+
+  const entries = userManagementEntries();
+  els.usersTableBody.innerHTML = entries.map(userRowHtml).join("");
+  els.usersEmptyState.hidden = entries.length !== 0;
+  els.usersTableBody.closest(".users-table-wrap").hidden = entries.length === 0;
+}
+
+function switchAppView(view = "kanban") {
+  if (view === "users" && !isAdmin()) view = "kanban";
+  state.currentView = view;
+  els.kanbanView.hidden = view !== "kanban";
+  els.usersView.hidden = view !== "users";
+  $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
+  if (view === "users") refreshUserManagement();
+  els.sidebar.classList.remove("open");
+}
+
+function openUserInviteDialog() {
+  if (!isAdmin()) return;
+  els.userInviteForm.reset();
+  els.userInviteRole.value = "solicitante";
+  els.userInviteFormFields.hidden = false;
+  els.userInviteResult.hidden = true;
+  showFormError(els.userInviteError);
+  els.userInviteDialog.showModal();
+}
+
+async function createUserInvite(event) {
+  event.preventDefault();
+  if (!isAdmin()) return;
+  showFormError(els.userInviteError);
+  const name = sanitizeText(els.userInviteName.value);
+  const email = els.userInviteEmail.value.trim().toLocaleLowerCase("pt-BR");
+  const role = VALID_USER_ROLES.includes(els.userInviteRole.value) ? els.userInviteRole.value : "solicitante";
+
+  if (!name || !email) {
+    showFormError(els.userInviteError, "Preencha nome e e-mail.");
+    return;
+  }
+  if (state.users.some((user) => (user.email || "").toLocaleLowerCase("pt-BR") === email)) {
+    showFormError(els.userInviteError, "Já existe um usuário cadastrado com este e-mail.");
+    return;
+  }
+  if (state.invites.some((invite) => inviteStatus(invite) === "pending" && (invite.email || "").toLocaleLowerCase("pt-BR") === email)) {
+    showFormError(els.userInviteError, "Já existe um convite pendente para este e-mail.");
+    return;
+  }
+
+  setButtonLoading(els.createUserInviteButton, true, "Gerando...");
+  try {
+    const token = generateInviteToken();
+    const expirationDate = new Date(Date.now() + INVITE_VALID_DAYS * 86400000);
+    await setDoc(doc(db, "userInvites", token), {
+      name,
+      email,
+      role,
+      status: "pending",
+      createdAt: serverTimestamp(),
+      createdByUid: state.user.uid,
+      createdByName: state.profile.name || state.user.email,
+      expiresAt: Timestamp.fromDate(expirationDate)
+    });
+    const link = buildInviteUrl(token);
+    els.userInviteLink.value = link;
+    els.userInviteExpiration.textContent = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(expirationDate);
+    els.userInviteFormFields.hidden = true;
+    els.userInviteResult.hidden = false;
+    await loadInvites();
+  } catch (error) {
+    console.error(error);
+    showFormError(els.userInviteError, firebaseErrorMessage(error));
+  } finally {
+    setButtonLoading(els.createUserInviteButton, false);
+  }
+}
+
+function openEditUserDialog(uid) {
+  const user = state.users.find((entry) => entry.uid === uid);
+  if (!isAdmin() || !user) return;
+  const isSelf = uid === state.user.uid;
+  els.editUserId.value = uid;
+  els.editUserName.value = user.name || "";
+  els.editUserEmail.value = user.email || "";
+  els.editUserRole.value = user.role || "solicitante";
+  els.editUserRole.disabled = isSelf;
+  els.editUserSelfNote.hidden = !isSelf;
+  showFormError(els.editUserError);
+  els.editUserDialog.showModal();
+}
+
+async function saveUserProfile(event) {
+  event.preventDefault();
+  if (!isAdmin()) return;
+  showFormError(els.editUserError);
+  const uid = els.editUserId.value;
+  const user = state.users.find((entry) => entry.uid === uid);
+  if (!user) return;
+  const name = sanitizeText(els.editUserName.value);
+  const role = uid === state.user.uid ? "admin" : els.editUserRole.value;
+  if (!name || !VALID_USER_ROLES.includes(role)) {
+    showFormError(els.editUserError, "Informe um nome e um perfil válidos.");
+    return;
+  }
+
+  setButtonLoading(els.saveUserButton, true, "Salvando...");
+  try {
+    await updateDoc(doc(db, "users", uid), {
+      name,
+      role,
+      updatedAt: serverTimestamp(),
+      updatedByUid: state.user.uid
+    });
+    closeModal(els.editUserDialog);
+    await loadUsers();
+    showToast("Usuário atualizado com sucesso.");
+  } catch (error) {
+    console.error(error);
+    showFormError(els.editUserError, firebaseErrorMessage(error));
+  } finally {
+    setButtonLoading(els.saveUserButton, false);
+  }
+}
+
+function openUserStatusDialog(uid) {
+  const user = state.users.find((entry) => entry.uid === uid);
+  if (!isAdmin() || !user || uid === state.user.uid) return;
+  const activating = user.active === false;
+  els.userStatusTargetId.value = uid;
+  els.userStatusDialogTitle.textContent = activating ? "Reativar usuário?" : "Desativar usuário?";
+  els.userStatusDialogMessage.textContent = activating
+    ? `${user.name || user.email} voltará a acessar o painel com a senha atual.`
+    : `${user.name || user.email} perderá o acesso imediatamente.`;
+  els.userStatusDialogWarningTitle.textContent = activating ? "O acesso será restaurado." : "O histórico será mantido.";
+  els.userStatusDialogWarningText.textContent = activating
+    ? "Caso tenha esquecido a senha, envie também um link de redefinição."
+    : "Solicitações antigas e registros feitos por este usuário não serão apagados.";
+  els.confirmUserStatusButton.textContent = activating ? "Reativar usuário" : "Desativar usuário";
+  els.confirmUserStatusButton.classList.toggle("button-danger", !activating);
+  els.confirmUserStatusButton.classList.toggle("button-primary", activating);
+  els.userStatusDialogIcon.textContent = activating ? "✓" : "!";
+  els.userStatusDialog.showModal();
+}
+
+async function confirmUserStatusChange() {
+  if (!isAdmin()) return;
+  const uid = els.userStatusTargetId.value;
+  const user = state.users.find((entry) => entry.uid === uid);
+  if (!user || uid === state.user.uid) return;
+  const active = user.active === false;
+  setButtonLoading(els.confirmUserStatusButton, true, active ? "Reativando..." : "Desativando...");
+  try {
+    await updateDoc(doc(db, "users", uid), {
+      active,
+      updatedAt: serverTimestamp(),
+      updatedByUid: state.user.uid
+    });
+    closeModal(els.userStatusDialog);
+    await loadUsers();
+    showToast(active ? "Usuário reativado." : "Usuário desativado.");
+  } catch (error) {
+    console.error(error);
+    showToast(firebaseErrorMessage(error), "error");
+  } finally {
+    setButtonLoading(els.confirmUserStatusButton, false);
+  }
+}
+
+async function sendUserPasswordReset(uid) {
+  const user = state.users.find((entry) => entry.uid === uid);
+  if (!isAdmin() || !user?.email) return;
+  try {
+    auth.languageCode = "pt-BR";
+    await sendPasswordResetEmail(auth, user.email);
+    showToast(`Link de redefinição enviado para ${user.email}.`);
+  } catch (error) {
+    console.error(error);
+    showToast(firebaseErrorMessage(error), "error");
+  }
+}
+
+async function cancelInvite(id) {
+  const invite = state.invites.find((entry) => entry.id === id);
+  if (!isAdmin() || !invite) return;
+  try {
+    await updateDoc(doc(db, "userInvites", id), {
+      status: "cancelled",
+      cancelledAt: serverTimestamp(),
+      cancelledByUid: state.user.uid
+    });
+    await loadInvites();
+    showToast("Convite cancelado.");
+  } catch (error) {
+    console.error(error);
+    showToast(firebaseErrorMessage(error), "error");
+  }
+}
+
+function handleUserTableAction(event) {
+  const button = event.target.closest("[data-user-action]");
+  if (!button) return;
+  const { userAction, id } = button.dataset;
+  if (userAction === "edit-user") openEditUserDialog(id);
+  if (userAction === "toggle-user") openUserStatusDialog(id);
+  if (userAction === "reset-password") sendUserPasswordReset(id);
+  if (userAction === "copy-invite") copyText(buildInviteUrl(id));
+  if (userAction === "cancel-invite") cancelInvite(id);
+}
+
+function subscribeCurrentProfile() {
+  if (state.unsubscribeProfile) state.unsubscribeProfile();
+  if (!state.user) return;
+  state.unsubscribeProfile = onSnapshot(doc(db, "users", state.user.uid), async (snapshot) => {
+    if (!snapshot.exists() || snapshot.data().active !== true) {
+      state.forcedLogoutMessage = "Seu acesso foi desativado por um administrador.";
+      signOut(auth);
+      return;
+    }
+    const previousRole = state.profile?.role;
+    state.profile = { uid: snapshot.id, ...snapshot.data() };
+    renderUser();
+    if (previousRole && previousRole !== state.profile.role) {
+      if (!isAdmin() && state.currentView === "users") switchAppView("kanban");
+      await loadUsers();
+      subscribeRequests();
+    }
+  }, (error) => {
+    console.error(error);
+    state.forcedLogoutMessage = "Seu acesso não está mais disponível.";
+    signOut(auth);
+  });
+}
+
 function setupEvents() {
   els.loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1794,6 +2311,19 @@ function setupEvents() {
     } finally {
       setButtonLoading(els.loginButton, false);
     }
+  });
+
+  els.inviteRegistrationForm.addEventListener("submit", registerFromInvite);
+  els.backToLoginButton.addEventListener("click", () => {
+    removeInviteFromUrl();
+    showLoginCard();
+    showFormError(els.inviteRegistrationError);
+  });
+  $(".toggle-invite-password").addEventListener("click", (event) => {
+    const hidden = els.inviteRegistrationPassword.type === "password";
+    els.inviteRegistrationPassword.type = hidden ? "text" : "password";
+    els.inviteRegistrationConfirmPassword.type = hidden ? "text" : "password";
+    event.currentTarget.textContent = hidden ? "🙈" : "👁";
   });
 
   els.togglePassword.addEventListener("click", () => {
@@ -1829,12 +2359,8 @@ function setupEvents() {
   els.copyRequestButton.addEventListener("click", () => copyRequestById(els.requestId.value));
   els.deleteRequestButton.addEventListener("click", deleteRequest);
   els.confirmDeleteButton.addEventListener("click", confirmDeleteRequest);
-  $$(".close-delete-confirm").forEach((button) => {
-    button.addEventListener("click", () => closeModal(els.deleteConfirmDialog));
-  });
-  $$(".close-modal").forEach((button) => {
-    button.addEventListener("click", () => closeModal(els.requestDialog));
-  });
+  $$(".close-delete-confirm").forEach((button) => button.addEventListener("click", () => closeModal(els.deleteConfirmDialog)));
+  $$(".close-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.requestDialog)));
 
   [els.searchInput, els.typeFilter, els.priorityFilter, els.requesterFilter].forEach((control) => {
     control.addEventListener(control === els.searchInput ? "input" : "change", applyFilters);
@@ -1848,8 +2374,11 @@ function setupEvents() {
         els.sidebar.classList.remove("open");
         return;
       }
-      $$(".nav-item").forEach((item) => item.classList.remove("active"));
-      button.classList.add("active");
+      if (button.dataset.view === "users") {
+        switchAppView("users");
+        return;
+      }
+      switchAppView("kanban");
       if (button.dataset.filterType) {
         els.typeFilter.value = button.dataset.filterType;
         state.filters.type = button.dataset.filterType;
@@ -1857,19 +2386,43 @@ function setupEvents() {
         els.typeFilter.value = "all";
         state.filters.type = "all";
       }
+      $$(".nav-item").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
       renderBoard();
-      els.sidebar.classList.remove("open");
     });
   });
 
-  els.mobileMenuButton.addEventListener("click", () => els.sidebar.classList.toggle("open"));
+  $$(".mobile-menu").forEach((button) => button.addEventListener("click", () => els.sidebar.classList.toggle("open")));
   document.addEventListener("click", (event) => {
     if (window.innerWidth <= 900
       && els.sidebar.classList.contains("open")
       && !els.sidebar.contains(event.target)
-      && event.target !== els.mobileMenuButton) {
+      && !event.target.closest(".mobile-menu")) {
       els.sidebar.classList.remove("open");
     }
+  });
+
+  els.newUserInviteButton.addEventListener("click", openUserInviteDialog);
+  els.refreshUsersButton.addEventListener("click", () => refreshUserManagement(true));
+  els.userInviteForm.addEventListener("submit", createUserInvite);
+  els.copyUserInviteLink.addEventListener("click", () => copyText(els.userInviteLink.value));
+  $$(".close-user-invite-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.userInviteDialog)));
+  els.editUserForm.addEventListener("submit", saveUserProfile);
+  $$(".close-edit-user-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.editUserDialog)));
+  els.confirmUserStatusButton.addEventListener("click", confirmUserStatusChange);
+  $$(".close-user-status-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.userStatusDialog)));
+  els.usersTableBody.addEventListener("click", handleUserTableAction);
+  els.userSearchInput.addEventListener("input", () => {
+    state.userFilters.search = els.userSearchInput.value.trim();
+    renderUserManagement();
+  });
+  els.userStatusFilter.addEventListener("change", () => {
+    state.userFilters.status = els.userStatusFilter.value;
+    renderUserManagement();
+  });
+  els.userRoleFilter.addEventListener("change", () => {
+    state.userFilters.role = els.userRoleFilter.value;
+    renderUserManagement();
   });
 
   els.forgotPassword.addEventListener("click", () => {
@@ -1877,15 +2430,12 @@ function setupEvents() {
     showFormError(els.resetError);
     els.resetDialog.showModal();
   });
-
-  $$(".close-reset-modal").forEach((button) => {
-    button.addEventListener("click", () => closeModal(els.resetDialog));
-  });
-
+  $$(".close-reset-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.resetDialog)));
   els.resetForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     showFormError(els.resetError);
     try {
+      auth.languageCode = "pt-BR";
       await sendPasswordResetEmail(auth, els.resetEmail.value.trim());
       els.resetDialog.close();
       showToast("Link de redefinição enviado para o e-mail informado.");
@@ -1895,25 +2445,22 @@ function setupEvents() {
     }
   });
 
-  els.requestDialog.addEventListener("click", (event) => {
-    if (event.target === els.requestDialog) els.requestDialog.close();
-  });
-  els.resetDialog.addEventListener("click", (event) => {
-    if (event.target === els.resetDialog) els.resetDialog.close();
-  });
-  els.helpDialog.addEventListener("click", (event) => {
-    if (event.target === els.helpDialog) els.helpDialog.close();
+  [els.requestDialog, els.resetDialog, els.helpDialog, els.userInviteDialog, els.editUserDialog, els.userStatusDialog].forEach((dialog) => {
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
   });
 
   setupDropzones();
 }
 
 async function handleAuthenticated(user) {
+  if (state.inviteRegistrationInProgress) return;
   try {
     const profile = await loadProfile(user);
     if (profile.active !== true) {
+      state.forcedLogoutMessage = "Seu acesso está desativado. Procure o administrador.";
       await signOut(auth);
-      showFormError(els.loginError, "Seu acesso está desativado. Procure o administrador.");
       return;
     }
 
@@ -1921,31 +2468,50 @@ async function handleAuthenticated(user) {
     state.profile = profile;
     els.loginView.hidden = true;
     els.appView.hidden = false;
+    showLoginCard();
     renderUser();
+    switchAppView("kanban");
     await loadUsers();
     subscribeRequests();
+    subscribeCurrentProfile();
 
     if (state.elapsedTimer) clearInterval(state.elapsedTimer);
     state.elapsedTimer = setInterval(updateElapsedLabels, 60000);
   } catch (error) {
     console.error(error);
-    await signOut(auth);
     const message = error.message === "profile-not-found"
-      ? "Seu login existe, mas o perfil de acesso ainda não foi cadastrado no Firestore. Procure o administrador."
+      ? "Seu login existe, mas o perfil de acesso ainda não foi cadastrado. Solicite um convite ao administrador."
       : firebaseErrorMessage(error);
-    showFormError(els.loginError, message);
+    state.forcedLogoutMessage = message;
+    await signOut(auth);
   }
 }
 
 function handleSignedOut() {
   if (state.unsubscribeRequests) state.unsubscribeRequests();
+  if (state.unsubscribeProfile) state.unsubscribeProfile();
   if (state.elapsedTimer) clearInterval(state.elapsedTimer);
+  state.unsubscribeRequests = null;
+  state.unsubscribeProfile = null;
   state.user = null;
   state.profile = null;
   state.requests = [];
+  state.users = [];
+  state.invites = [];
   els.appView.hidden = true;
   els.loginView.hidden = false;
   els.loginPassword.value = "";
+
+  if (state.inviteToken) {
+    showInviteCard();
+    initializeInviteFlow();
+  } else {
+    showLoginCard();
+    if (state.forcedLogoutMessage) {
+      showFormError(els.loginError, state.forcedLogoutMessage);
+      state.forcedLogoutMessage = "";
+    }
+  }
 }
 
 setupEvents();
@@ -1957,4 +2523,12 @@ if (rememberedEmail) {
 if (!isConfigReady()) {
   showFormError(els.loginError, "Configure o arquivo firebase-config.js para conectar o painel ao Firebase.");
 }
-onAuthStateChanged(auth, (user) => user ? handleAuthenticated(user) : handleSignedOut());
+if (state.inviteToken) showInviteCard();
+onAuthStateChanged(auth, async (user) => {
+  if (state.inviteToken && user && !state.inviteRegistrationInProgress) {
+    await signOut(auth);
+    return;
+  }
+  if (user) await handleAuthenticated(user);
+  else handleSignedOut();
+});
