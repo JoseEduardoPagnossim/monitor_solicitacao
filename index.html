@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Kanban interno para solicitações de programação e cancelamento.">
+  <meta name="description" content="Kanban interno para solicitações de programação, cancelamento e TEF Elgin.">
   <title>Painel de Solicitações</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=10.0.0">
+  <link rel="stylesheet" href="styles.css?v=11.0.0">
 </head>
 <body>
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
@@ -19,7 +19,7 @@
       <div>
         <span class="eyebrow">CONTROLE INTERNO</span>
         <h1>Solicitações organizadas, prioridades visíveis.</h1>
-        <p>Centralize pedidos de programação e cancelamento, acompanhe o tempo em aberto e não deixe nenhuma demanda se perder.</p>
+        <p>Centralize pedidos de programação, cancelamento e TEF Elgin, acompanhe o tempo em aberto e não deixe nenhuma demanda se perder.</p>
       </div>
       <div class="login-features">
         <div><strong>Kanban</strong><span>Status em tempo real</span></div>
@@ -121,6 +121,9 @@
         <button class="nav-item" data-filter-type="cancelamento">
           <span class="nav-icon">⊘</span> Cancelamentos
         </button>
+        <button class="nav-item" data-filter-type="tef_elgin">
+          <span class="nav-icon">▤</span> TEF Elgin
+        </button>
         <button id="users-nav-button" class="nav-item admin-only" data-view="users" type="button">
           <span class="nav-icon">♙</span> Usuários
         </button>
@@ -137,6 +140,7 @@
             <strong id="user-name">Usuário</strong>
             <span id="user-role">Solicitante</span>
           </div>
+          <button id="change-password-button" class="icon-button" title="Alterar minha senha" aria-label="Alterar minha senha">🔑</button>
           <button id="logout-button" class="icon-button" title="Sair" aria-label="Sair">↪</button>
         </div>
       </div>
@@ -180,12 +184,13 @@
       <section class="toolbar">
         <div class="search-box">
           <span>⌕</span>
-          <input id="search-input" type="search" placeholder="Buscar cliente, assunto ou solicitante...">
+          <input id="search-input" type="search" placeholder="Buscar cliente, CNPJ, título ou solicitante...">
         </div>
         <select id="type-filter" class="select-control" aria-label="Filtrar por tipo">
           <option value="all">Todos os tipos</option>
           <option value="programacao">Programação</option>
           <option value="cancelamento">Cancelamento</option>
+          <option value="tef_elgin">TEF Elgin</option>
         </select>
         <select id="priority-filter" class="select-control" aria-label="Filtrar por prioridade">
           <option value="all">Todas as prioridades</option>
@@ -297,6 +302,7 @@
           <select id="request-type" required>
             <option value="programacao">Solicitação de programação</option>
             <option value="cancelamento">Chamado para cancelamento</option>
+            <option value="tef_elgin">Solicitação TEF Elgin</option>
           </select>
         </label>
         <label id="priority-field" class="field">
@@ -396,7 +402,7 @@
             <div>
               <span class="eyebrow">CHAMADO PARA CANCELAMENTO</span>
               <h3>Cadastro do cliente</h3>
-              <p>Estes campos são únicos e permanecem fixos. Preencha um cliente e clique em <strong>Adicionar cliente à lista</strong>. Depois, preencha o próximo.</p>
+              <p>Estes campos são únicos e permanecem fixos. Informe o CPF/CNPJ ou a Razão Social, preencha o motivo e clique em <strong>Adicionar cliente à lista</strong>.</p>
             </div>
           </div>
 
@@ -410,12 +416,12 @@
             </div>
             <div class="form-grid nested-grid">
               <label class="field">
-                <span>CPF/CNPJ *</span>
+                <span>CPF/CNPJ <small>(ou Razão Social)</small></span>
                 <input id="cancellation-cnpj-input" class="cpf-cnpj-input" type="text" maxlength="18" placeholder="CPF ou CNPJ" autocomplete="off" data-validation-message="cancellation-cnpj-error" aria-describedby="cancellation-cnpj-error">
                 <small id="cancellation-cnpj-error" class="field-validation-message" hidden></small>
               </label>
               <label class="field">
-                <span>Razão Social *</span>
+                <span>Razão Social <small>(ou CPF/CNPJ)</small></span>
                 <input id="cancellation-client-name-input" type="text" maxlength="120" placeholder="Razão social ou nome fantasia" autocomplete="off">
               </label>
               <label class="field form-span-2">
@@ -437,6 +443,89 @@
             <span id="cancellation-list-count" class="cancellation-list-count">0 clientes</span>
           </div>
           <div id="cancellation-list" class="cancellation-list"></div>
+        </section>
+
+        <section id="tef-fields" class="dynamic-section form-span-2" aria-label="Dados da solicitação TEF Elgin" hidden>
+          <div class="form-section-heading tef-heading">
+            <div>
+              <span class="eyebrow">SOLICITAÇÃO TEF ELGIN</span>
+              <h3>Dados para configuração</h3>
+              <p>Preencha todas as informações necessárias para o encaminhamento da solicitação de TEF.</p>
+            </div>
+          </div>
+          <div class="form-grid nested-grid">
+            <label class="field">
+              <span>CNPJ *</span>
+              <input id="tef-cnpj" class="cnpj-only-input" type="text" inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00" data-validation-message="tef-cnpj-error" aria-describedby="tef-cnpj-error" required>
+              <small id="tef-cnpj-error" class="field-validation-message" hidden></small>
+            </label>
+            <label class="field">
+              <span>Sistema operacional *</span>
+              <input id="tef-operating-system" type="text" maxlength="120" placeholder="Ex.: Windows 10 Pro 64 bits" required>
+            </label>
+            <label class="field">
+              <span>Memória RAM da máquina *</span>
+              <select id="tef-ram" required>
+                <option value="">Selecione</option>
+                <option value="6 GB">6 GB</option>
+                <option value="8 GB">8 GB</option>
+                <option value="12 GB">12 GB</option>
+                <option value="16 GB">16 GB</option>
+                <option value="32 GB">32 GB</option>
+                <option value="64 GB ou mais">64 GB ou mais</option>
+                <option value="Outro valor acima de 4 GB">Outro valor acima de 4 GB</option>
+              </select>
+              <small>A memória deve ser superior a 4 GB.</small>
+            </label>
+            <label class="field">
+              <span>Sistema utilizado *</span>
+              <select id="tef-system-used" required>
+                <option value="">Selecione</option>
+                <option value="Gerencie Aqui">Gerencie Aqui</option>
+                <option value="SIEM">SIEM</option>
+                <option value="Gerencie Vendas">Gerencie Vendas</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Número do estabelecimento *</span>
+              <input id="tef-establishment-number" type="text" maxlength="120" placeholder="Solicite normalmente à adquirente" required>
+            </label>
+            <label class="field">
+              <span>Número lógico do PIN Pad (SAK) *</span>
+              <input id="tef-pinpad-logical-number" type="text" maxlength="120" placeholder="Solicite normalmente à adquirente" required>
+            </label>
+            <label class="field">
+              <span>Modelo do PIN Pad *</span>
+              <input id="tef-pinpad-model" type="text" maxlength="120" placeholder="Máquina de cartão TEF" required>
+            </label>
+            <label class="field">
+              <span>Adquirente *</span>
+              <input id="tef-acquirer" type="text" maxlength="120" placeholder="Empresa com a qual negociou as taxas" required>
+            </label>
+            <label class="field">
+              <span>Nome completo do proprietário *</span>
+              <input id="tef-owner-name" type="text" maxlength="160" placeholder="Nome completo" required>
+            </label>
+            <label class="field">
+              <span>CPF do proprietário *</span>
+              <input id="tef-owner-cpf" class="cpf-only-input" type="text" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" data-validation-message="tef-owner-cpf-error" aria-describedby="tef-owner-cpf-error" required>
+              <small id="tef-owner-cpf-error" class="field-validation-message" hidden></small>
+            </label>
+            <label class="field">
+              <span>Fone para contato *</span>
+              <input id="tef-contact-phone" class="phone-input" type="tel" inputmode="numeric" maxlength="15" placeholder="(00) 00000-0000" data-validation-message="tef-contact-phone-error" aria-describedby="tef-contact-phone-error" required>
+              <small id="tef-contact-phone-error" class="field-validation-message" hidden></small>
+            </label>
+            <label class="field">
+              <span>E-mail *</span>
+              <input id="tef-contact-email" type="email" maxlength="160" placeholder="nome@empresa.com.br" required>
+            </label>
+            <label class="field form-span-2">
+              <span>Valor combinado *</span>
+              <input id="tef-agreed-value" type="text" maxlength="120" placeholder="Informe o valor combinado com o cliente" required>
+            </label>
+          </div>
         </section>
 
         <label id="status-field" class="field admin-only">
@@ -580,7 +669,7 @@
 
             <div class="help-steps">
               <article class="help-step"><span>1</span><div><strong>Clique em Nova solicitação</strong><p>Abra o formulário pelo botão azul no canto superior direito.</p></div></article>
-              <article class="help-step"><span>2</span><div><strong>Escolha o tipo correto</strong><p>Use Programação para melhorias do sistema e Cancelamento para clientes que solicitaram encerramento.</p></div></article>
+              <article class="help-step"><span>2</span><div><strong>Escolha o tipo correto</strong><p>Use Programação para melhorias do sistema, Cancelamento para encerramentos e TEF Elgin para configurações do TEF.</p></div></article>
               <article class="help-step"><span>3</span><div><strong>Preencha informações objetivas</strong><p>Descreva fatos, exemplos e impactos. Evite textos genéricos como “cliente quer uma melhoria”.</p></div></article>
               <article class="help-step"><span>4</span><div><strong>Salve e acompanhe</strong><p>A demanda ficará no Kanban e poderá ser acompanhada conforme o status.</p></div></article>
             </div>
@@ -643,7 +732,7 @@
             </div>
 
             <div class="help-cancellation-flow">
-              <article><span>1</span><div><strong>Preencha os campos fixos</strong><p>Digite CPF/CNPJ, Razão Social e Motivo do primeiro cliente.</p></div></article>
+              <article><span>1</span><div><strong>Preencha os campos fixos</strong><p>Informe o CPF/CNPJ ou a Razão Social e preencha o Motivo do primeiro cliente.</p></div></article>
               <div class="help-flow-arrow">↓</div>
               <article><span>2</span><div><strong>Clique em Adicionar cliente à lista</strong><p>O cliente será incluído na tabela abaixo e os campos ficarão livres para o próximo cadastro.</p></div></article>
               <div class="help-flow-arrow">↓</div>
@@ -655,8 +744,8 @@
             <div class="help-form-block">
               <div class="help-form-block-title"><span>✓</span><div><strong>O que informar em cada campo</strong><small>Dados mínimos para o responsável localizar e entender o cancelamento.</small></div></div>
               <div class="help-field-list">
-                <div><strong>CPF/CNPJ</strong><p>Documento válido da pessoa ou empresa que está solicitando o cancelamento.</p></div>
-                <div><strong>Razão Social</strong><p>Nome da empresa conforme o cadastro do cliente.</p></div>
+                <div><strong>CPF/CNPJ</strong><p>Informe um documento válido quando disponível. Ele pode ser usado sem a Razão Social.</p></div>
+                <div><strong>Razão Social</strong><p>Informe o nome do cliente quando o documento não estiver disponível. É obrigatório preencher pelo menos um dos dois campos.</p></div>
                 <div class="help-field-wide"><strong>Motivo</strong><p>Registre o motivo informado pelo cliente de maneira objetiva. Exemplo: encerramento da empresa, troca de sistema, custo, insatisfação ou ausência de uso.</p></div>
               </div>
             </div>
@@ -667,9 +756,27 @@
             </div>
           </section>
 
-          <section id="help-kanban" class="help-section">
+          <section id="help-tef" class="help-section">
             <div class="help-section-title">
               <span class="help-section-number">04</span>
+              <div><span class="eyebrow">TEF ELGIN</span><h3>Como preencher a solicitação</h3></div>
+            </div>
+            <div class="help-form-block">
+              <div class="help-field-list single-column">
+                <div><strong>CNPJ</strong><p>Informe um CNPJ válido do estabelecimento que receberá a configuração.</p></div>
+                <div><strong>Sistema operacional e memória RAM</strong><p>Registre a versão do sistema operacional e selecione a memória disponível. A máquina precisa possuir mais de 4 GB.</p></div>
+                <div><strong>Sistema utilizado</strong><p>Selecione o produto Soften utilizado pelo cliente.</p></div>
+                <div><strong>Número do estabelecimento e SAK</strong><p>Solicite essas informações à adquirente do cliente e confira os números antes de salvar.</p></div>
+                <div><strong>PIN Pad e adquirente</strong><p>Informe o modelo da máquina TEF e a empresa com a qual o cliente negociou as taxas.</p></div>
+                <div><strong>Dados do proprietário</strong><p>Preencha nome, CPF válido, telefone com DDD e e-mail de contato.</p></div>
+                <div><strong>Valor combinado</strong><p>Registre o valor comercial acordado com o cliente.</p></div>
+              </div>
+            </div>
+          </section>
+
+          <section id="help-kanban" class="help-section">
+            <div class="help-section-title">
+              <span class="help-section-number">05</span>
               <div><span class="eyebrow">ACOMPANHAMENTO</span><h3>Kanban, filtros e ações</h3></div>
             </div>
 
@@ -685,7 +792,7 @@
                 <div><strong>Busca e filtros</strong><p>Use a busca por cliente, título ou solicitante. Também é possível filtrar por tipo, prioridade e usuário.</p></div>
                 <div><strong>Responsável</strong><p>O administrador pode atribuir a demanda para um usuário cadastrado.</p></div>
                 <div><strong>Mover no Kanban</strong><p>O administrador pode arrastar o cartão entre as colunas para atualizar o status.</p></div>
-                <div><strong>Botão Copiar dados</strong><p>Disponível para o administrador. Em Programação, copia o formulário formatado; em Cancelamento, copia a listagem completa dos clientes.</p></div>
+                <div><strong>Botão Copiar dados</strong><p>Disponível para o administrador. Em Programação, copia o formulário formatado; em Cancelamento, copia a lista; em TEF Elgin, copia todos os dados da configuração.</p></div>
                 <div><strong>Editar e excluir</strong><p>O solicitante pode editar uma demanda própria enquanto ela estiver em Nova. A exclusão de solicitações é permitida exclusivamente para usuários com perfil Administrador.</p></div>
               </div>
             </div>
@@ -698,14 +805,14 @@
 
           <section id="help-users" class="help-section admin-only">
             <div class="help-section-title">
-              <span class="help-section-number">05</span>
+              <span class="help-section-number">06</span>
               <div><span class="eyebrow">ACESSOS</span><h3>Convites, perfis e desativação</h3></div>
             </div>
             <div class="help-steps">
               <article class="help-step"><span>1</span><div><strong>Crie o convite</strong><p>Informe nome, e-mail e perfil. O painel gera um link exclusivo válido por sete dias.</p></div></article>
               <article class="help-step"><span>2</span><div><strong>Compartilhe o link</strong><p>Copie o convite e envie ao colaborador. Ele definirá a própria senha.</p></div></article>
               <article class="help-step"><span>3</span><div><strong>Gerencie o acesso</strong><p>Altere nome ou perfil, desative e reative usuários diretamente na lista.</p></div></article>
-              <article class="help-step"><span>4</span><div><strong>Recupere a senha</strong><p>Use a ação Redefinir senha para enviar o e-mail de recuperação ao usuário.</p></div></article>
+              <article class="help-step"><span>4</span><div><strong>Recupere a senha</strong><p>O próprio usuário pode alterar a senha no ícone de chave do perfil. O administrador ainda pode enviar a recuperação por e-mail.</p></div></article>
             </div>
             <div class="help-warning"><strong>Importante</strong><p>Desativar mantém o histórico do usuário, mas bloqueia seu acesso. O administrador não pode desativar ou remover o próprio perfil administrativo.</p></div>
           </section>
@@ -738,6 +845,37 @@
     </div>
   </dialog>
 
+  <dialog id="change-password-dialog" class="modal modal-small">
+    <form id="change-password-form" method="dialog" class="modal-content">
+      <div class="modal-header">
+        <div><span class="eyebrow">MINHA CONTA</span><h2>Alterar senha</h2></div>
+        <button class="icon-button close-change-password-modal" type="button" aria-label="Fechar">×</button>
+      </div>
+      <p class="modal-help">Confirme sua senha atual e defina uma nova senha. A alteração é feita imediatamente, sem envio de e-mail.</p>
+      <label class="field">
+        <span>Senha atual *</span>
+        <input id="current-password" type="password" minlength="6" autocomplete="current-password" required>
+      </label>
+      <label class="field">
+        <span>Nova senha *</span>
+        <input id="new-password" type="password" minlength="6" autocomplete="new-password" required>
+      </label>
+      <label class="field">
+        <span>Confirmar nova senha *</span>
+        <input id="confirm-new-password" type="password" minlength="6" autocomplete="new-password" required>
+      </label>
+      <label class="check-row password-show-row">
+        <input id="show-change-passwords" type="checkbox">
+        <span>Mostrar senhas</span>
+      </label>
+      <p id="change-password-error" class="form-error" hidden></p>
+      <div class="modal-actions modal-actions-end">
+        <button class="button button-secondary close-change-password-modal" type="button">Cancelar</button>
+        <button id="save-new-password-button" class="button button-primary" type="submit">Alterar senha</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="reset-dialog" class="modal modal-small">
     <form id="reset-form" method="dialog" class="modal-content">
       <div class="modal-header">
@@ -757,6 +895,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=10.0.0"></script>
+  <script type="module" src="app.js?v=11.0.0"></script>
 </body>
 </html>

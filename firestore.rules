@@ -25,7 +25,7 @@ service cloud.firestore {
     }
 
     function validType(type) {
-      return type in ['programacao', 'cancelamento'];
+      return type in ['programacao', 'cancelamento', 'tef_elgin'];
     }
 
     function validPriority(priority) {
@@ -34,6 +34,49 @@ service cloud.firestore {
 
     function validStatus(status) {
       return status in ['nova', 'analise', 'aguardando', 'concluida'];
+    }
+
+    function validTefData(data) {
+      return data.type != 'tef_elgin'
+        || (data.tefCnpj is string
+          && data.tefCnpj.size() >= 14
+          && data.tefCnpj.size() <= 18
+          && data.tefOperatingSystem is string
+          && data.tefOperatingSystem.size() > 0
+          && data.tefOperatingSystem.size() <= 120
+          && data.tefRam is string
+          && data.tefRam.size() > 0
+          && data.tefRam.size() <= 40
+          && data.tefSystemUsed is string
+          && data.tefSystemUsed.size() > 0
+          && data.tefSystemUsed.size() <= 80
+          && data.tefEstablishmentNumber is string
+          && data.tefEstablishmentNumber.size() > 0
+          && data.tefEstablishmentNumber.size() <= 120
+          && data.tefPinpadLogicalNumber is string
+          && data.tefPinpadLogicalNumber.size() > 0
+          && data.tefPinpadLogicalNumber.size() <= 120
+          && data.tefPinpadModel is string
+          && data.tefPinpadModel.size() > 0
+          && data.tefPinpadModel.size() <= 120
+          && data.tefAcquirer is string
+          && data.tefAcquirer.size() > 0
+          && data.tefAcquirer.size() <= 120
+          && data.tefOwnerName is string
+          && data.tefOwnerName.size() > 0
+          && data.tefOwnerName.size() <= 160
+          && data.tefOwnerCpf is string
+          && data.tefOwnerCpf.size() >= 11
+          && data.tefOwnerCpf.size() <= 14
+          && data.tefContactPhone is string
+          && data.tefContactPhone.size() >= 10
+          && data.tefContactPhone.size() <= 15
+          && data.tefContactEmail is string
+          && data.tefContactEmail.size() > 3
+          && data.tefContactEmail.size() <= 160
+          && data.tefAgreedValue is string
+          && data.tefAgreedValue.size() > 0
+          && data.tefAgreedValue.size() <= 120);
     }
 
     function validRequestData(data) {
@@ -48,7 +91,8 @@ service cloud.firestore {
         && data.title.size() <= 140
         && data.description is string
         && data.description.size() > 0
-        && data.description.size() <= 3000;
+        && data.description.size() <= 3000
+        && validTefData(data);
     }
 
     function validAttachmentData(data) {

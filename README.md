@@ -1,10 +1,12 @@
 # Painel de Solicitações
 
-Aplicação web interna para centralizar **solicitações de programação** e **chamados para cancelamento** em um quadro Kanban, com autenticação individual, acompanhamento por status, destaque das demandas mais antigas e controle de permissões.
+Aplicação web interna para centralizar **solicitações de programação**, **chamados para cancelamento** e **solicitações TEF Elgin** em um quadro Kanban, com autenticação individual, acompanhamento por status, destaque das demandas mais antigas e controle de permissões.
 
 O projeto foi preparado para ser publicado no **GitHub Pages** e utiliza o **Firebase Authentication** e o **Cloud Firestore** como serviços de login, banco de dados e armazenamento dos anexos.
 
 ---
+
+> Versão 11: inclui alteração de senha no painel, regra flexível de identificação no cancelamento e o novo formulário TEF Elgin.
 
 ## Funcionalidades disponíveis
 
@@ -12,6 +14,7 @@ O projeto foi preparado para ser publicado no **GitHub Pages** e utiliza o **Fir
 
 - Login individual por e-mail e senha.
 - Recuperação de senha pelo botão **Esqueci minha senha**.
+- Alteração da própria senha dentro do painel, mediante confirmação da senha atual e sem envio de e-mail.
 - Perfis de acesso `admin` e `solicitante`.
 - Bloqueio de usuário sem apagar o histórico, alterando o campo `active` para `false`.
 - Tela administrativa de usuários, visível somente para o perfil `admin`.
@@ -101,6 +104,8 @@ O formulário de cancelamento utiliza campos fixos para:
 - Razão Social;
 - Motivo.
 
+É obrigatório informar **CPF/CNPJ ou Razão Social**, não sendo necessário preencher os dois. Quando o documento for informado, ele precisa ser válido. O Motivo permanece obrigatório.
+
 Funcionamento:
 
 1. O técnico preenche os dados do primeiro cliente.
@@ -111,6 +116,27 @@ Funcionamento:
 6. Após revisar a lista, salva a solicitação.
 
 O administrador possui a ação **Copiar dados**, que copia toda a relação de cancelamentos de uma vez.
+
+
+### Solicitação TEF Elgin
+
+O formulário TEF Elgin possui os seguintes campos obrigatórios:
+
+- CNPJ, com validação;
+- Sistema operacional;
+- Memória RAM da máquina, com opções sempre superiores a 4 GB;
+- Sistema utilizado: Gerencie Aqui, SIEM, Gerencie Vendas ou Outro;
+- Número do estabelecimento;
+- Número lógico do PIN Pad (SAK);
+- Modelo do PIN Pad;
+- Adquirente;
+- Nome completo do proprietário;
+- CPF do proprietário, com validação;
+- Fone para contato, com DDD e validação;
+- E-mail;
+- Valor combinado.
+
+O título é gerado automaticamente usando o CNPJ. O administrador também possui a ação **Copiar dados**, que copia todo o formulário TEF em um bloco formatado.
 
 ### Validações e máscaras
 
@@ -164,6 +190,8 @@ O painel possui uma tela **Ajuda**, disponível no menu lateral e no topo, com o
 - preenchimento da solicitação de programação;
 - preenchimento de cada campo;
 - cadastro de um ou vários cancelamentos;
+- preenchimento da solicitação TEF Elgin;
+- alteração da própria senha dentro do painel;
 - funcionamento do Kanban;
 - filtros, responsável e movimentação dos cartões;
 - botão de copiar;
@@ -191,6 +219,7 @@ O administrador pode:
 - editar nome e perfil dos usuários;
 - desativar e reativar acessos;
 - enviar redefinição de senha;
+- alterar a própria senha sem envio de e-mail;
 - visualizar todas as solicitações;
 - filtrar por solicitante;
 - criar solicitações;
@@ -210,7 +239,8 @@ O solicitante pode:
 - visualizar somente as próprias solicitações;
 - editar somente as próprias solicitações enquanto estiverem na etapa **Nova**;
 - adicionar ou remover anexos enquanto a solicitação puder ser editada;
-- acompanhar o andamento e o tempo em aberto.
+- acompanhar o andamento e o tempo em aberto;
+- alterar a própria senha pelo ícone de chave no perfil, confirmando a senha atual.
 
 O solicitante não pode:
 
@@ -226,7 +256,7 @@ O solicitante não pode:
 O GitHub Pages hospeda apenas arquivos estáticos e não fornece autenticação segura nem banco de dados. Por isso, o projeto utiliza:
 
 - **GitHub Pages**: hospedagem da página;
-- **Firebase Authentication**: login por e-mail e senha e recuperação de senha;
+- **Firebase Authentication**: login por e-mail e senha, alteração da senha no painel e recuperação por e-mail;
 - **Cloud Firestore**: usuários, solicitações e anexos;
 - **Firestore Security Rules**: controle efetivo de leitura, criação, edição e exclusão.
 
@@ -249,7 +279,7 @@ Armazena convites temporários criados pelos administradores. O link contém um 
 
 #### `requests`
 
-Armazena as solicitações de programação e cancelamento.
+Armazena as solicitações de programação, cancelamento e TEF Elgin.
 
 #### `requestAttachments`
 
@@ -334,6 +364,7 @@ As regras garantem que:
 - somente o administrador altere status ou exclua solicitações;
 - os anexos respeitem o limite aproximado de 700 KB;
 - somente os tipos JPEG, PNG e TXT sejam aceitos;
+- o tipo TEF Elgin e seus campos obrigatórios sejam validados pelas regras;
 - o proprietário ou administrador consiga visualizar os anexos;
 - somente o administrador consiga excluir uma solicitação;
 - apenas administradores listem e alterem usuários;
@@ -412,7 +443,19 @@ O administrador não pode desativar ou retirar o perfil administrativo da própr
 
 ## 7. Recuperação e troca de senha
 
-Na tela de login, o usuário pode clicar em:
+### Alterar a senha dentro do painel
+
+O usuário conectado pode clicar no ícone de chave exibido ao lado do perfil. A tela solicitará:
+
+- senha atual;
+- nova senha;
+- confirmação da nova senha.
+
+A senha atual é utilizada para reautenticar o usuário e a nova senha é aplicada imediatamente, sem envio de e-mail. A nova senha deve possuir pelo menos seis caracteres e ser diferente da atual.
+
+### Recuperar por e-mail
+
+Na tela de login, o usuário também pode clicar em:
 
 ```text
 Esqueci minha senha
@@ -608,16 +651,31 @@ Campo opcional. Utilize imagens ou arquivos TXT que ajudem a demonstrar o cenár
 
 ## Como preencher um chamado para cancelamento
 
-1. Informe um CPF ou CNPJ válido.
-2. Informe a Razão Social.
-3. Registre o motivo do cancelamento.
-4. Clique em **Adicionar cliente à lista**.
-5. Confira se o cliente apareceu na tabela.
-6. Repita para os demais clientes, quando necessário.
-7. Revise a lista.
-8. Clique em **Salvar solicitação**.
+1. Informe um CPF/CNPJ válido **ou** a Razão Social.
+2. Registre o motivo do cancelamento.
+3. Clique em **Adicionar cliente à lista**.
+4. Confira se o cliente apareceu na tabela.
+5. Repita para os demais clientes, quando necessário.
+6. Revise a lista.
+7. Clique em **Salvar solicitação**.
 
 > Apenas preencher os campos não inclui o cliente na solicitação. É obrigatório clicar em **Adicionar cliente à lista**.
+
+---
+
+## Como preencher uma solicitação TEF Elgin
+
+1. Informe um CNPJ válido.
+2. Registre o sistema operacional da máquina.
+3. Selecione uma opção de memória RAM superior a 4 GB.
+4. Selecione o sistema utilizado.
+5. Informe o número do estabelecimento e o número lógico do PIN Pad (SAK), normalmente fornecidos pela adquirente.
+6. Registre o modelo do PIN Pad e a adquirente.
+7. Informe nome, CPF, telefone e e-mail do proprietário.
+8. Registre o valor combinado.
+9. Revise e salve a solicitação.
+
+O administrador poderá usar **Copiar dados** para obter o formulário completo em texto.
 
 ---
 
@@ -758,7 +816,11 @@ O painel acompanha o documento do perfil em tempo real. Ao detectar `active: fal
 - [ ] Testar programação com anexo.
 - [ ] Testar cancelamento com um cliente.
 - [ ] Testar cancelamento com vários clientes.
+- [ ] Testar cancelamento preenchendo somente o CPF/CNPJ.
+- [ ] Testar cancelamento preenchendo somente a Razão Social.
+- [ ] Testar solicitação TEF Elgin e a validação de CNPJ/CPF.
 - [ ] Testar cópia dos dados.
 - [ ] Testar movimentação no Kanban.
 - [ ] Confirmar que apenas o administrador pode excluir.
-- [ ] Testar recuperação de senha.
+- [ ] Testar alteração de senha dentro do painel.
+- [ ] Testar recuperação de senha por e-mail.

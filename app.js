@@ -7,6 +7,9 @@ import {
   deleteUser,
   signOut,
   sendPasswordResetEmail,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence
@@ -39,7 +42,8 @@ const STATUS_LABELS = {
 
 const TYPE_LABELS = {
   programacao: "Programação",
-  cancelamento: "Cancelamento"
+  cancelamento: "Cancelamento",
+  tef_elgin: "TEF Elgin"
 };
 
 const PRIORITY_LABELS = {
@@ -115,6 +119,15 @@ const els = {
   inviteRegistrationError: $("#invite-registration-error"),
   backToLoginButton: $("#back-to-login-button"),
   logoutButton: $("#logout-button"),
+  changePasswordButton: $("#change-password-button"),
+  changePasswordDialog: $("#change-password-dialog"),
+  changePasswordForm: $("#change-password-form"),
+  currentPassword: $("#current-password"),
+  newPassword: $("#new-password"),
+  confirmNewPassword: $("#confirm-new-password"),
+  showChangePasswords: $("#show-change-passwords"),
+  changePasswordError: $("#change-password-error"),
+  saveNewPasswordButton: $("#save-new-password-button"),
   userName: $("#user-name"),
   userRole: $("#user-role"),
   userAvatar: $("#user-avatar"),
@@ -210,6 +223,20 @@ const els = {
   cancellationListCount: $("#cancellation-list-count"),
   cancellationList: $("#cancellation-list"),
   addCancellationItem: $("#add-cancellation-item"),
+  tefFields: $("#tef-fields"),
+  tefCnpj: $("#tef-cnpj"),
+  tefOperatingSystem: $("#tef-operating-system"),
+  tefRam: $("#tef-ram"),
+  tefSystemUsed: $("#tef-system-used"),
+  tefEstablishmentNumber: $("#tef-establishment-number"),
+  tefPinpadLogicalNumber: $("#tef-pinpad-logical-number"),
+  tefPinpadModel: $("#tef-pinpad-model"),
+  tefAcquirer: $("#tef-acquirer"),
+  tefOwnerName: $("#tef-owner-name"),
+  tefOwnerCpf: $("#tef-owner-cpf"),
+  tefContactPhone: $("#tef-contact-phone"),
+  tefContactEmail: $("#tef-contact-email"),
+  tefAgreedValue: $("#tef-agreed-value"),
   requestStatus: $("#request-status"),
   requestAssignee: $("#request-assignee"),
   requestAudit: $("#request-audit"),
@@ -280,6 +307,23 @@ function formatCpfCnpj(value = "") {
       .replace(/(\d{3})(\d)/, "$1.$2")
       .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
   }
+  return digits
+    .replace(/(\d{2})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1/$2")
+    .replace(/(\d{4})(\d{1,2})$/, "$1-$2");
+}
+
+function formatCpf(value = "") {
+  const digits = documentDigits(value).slice(0, 11);
+  return digits
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+}
+
+function formatCnpj(value = "") {
+  const digits = documentDigits(value).slice(0, 14);
   return digits
     .replace(/(\d{2})(\d)/, "$1.$2")
     .replace(/(\d{3})(\d)/, "$1.$2")
@@ -363,6 +407,44 @@ function setupDocumentInput(input, options = {}) {
   input.addEventListener("blur", () => {
     input.value = formatCpfCnpj(input.value);
     setDocumentValidity(input, { ...options, showMessage: true });
+  });
+}
+
+function setSpecificDocumentValidity(input, kind, { required = true, showMessage = false } = {}) {
+  const value = input.value.trim();
+  const valid = kind === "cpf" ? isValidCpf(value) : isValidCnpj(value);
+  const label = kind === "cpf" ? "CPF" : "CNPJ";
+  let message = "";
+
+  if (!value && required) message = `Informe o ${label}.`;
+  else if (value && !valid) message = `O ${label} não é válido.`;
+
+  const messageElement = input.dataset.validationMessage
+    ? document.getElementById(input.dataset.validationMessage)
+    : null;
+  const visibleMessage = showMessage ? message : "";
+
+  input.setCustomValidity(message);
+  input.classList.toggle("input-invalid", Boolean(visibleMessage));
+  input.classList.toggle("input-valid", Boolean(value) && !message);
+  input.setAttribute("aria-invalid", visibleMessage ? "true" : "false");
+
+  if (messageElement) {
+    messageElement.textContent = visibleMessage;
+    messageElement.hidden = !visibleMessage;
+  }
+  return !message;
+}
+
+function setupSpecificDocumentInput(input, kind, options = {}) {
+  const formatter = kind === "cpf" ? formatCpf : formatCnpj;
+  input.addEventListener("input", () => {
+    input.value = formatter(input.value);
+    setSpecificDocumentValidity(input, kind, { ...options, showMessage: false });
+  });
+  input.addEventListener("blur", () => {
+    input.value = formatter(input.value);
+    setSpecificDocumentValidity(input, kind, { ...options, showMessage: true });
   });
 }
 
@@ -826,6 +908,8 @@ function firebaseErrorMessage(error) {
     "auth/user-not-found": "Usuário não encontrado.",
     "auth/email-already-in-use": "Este e-mail já possui uma conta no Firebase.",
     "auth/weak-password": "A senha deve possuir pelo menos 6 caracteres.",
+    "auth/wrong-password": "A senha atual está incorreta.",
+    "auth/requires-recent-login": "Confirme novamente sua senha atual para continuar.",
     "invite-invalid": "Este convite não existe ou não está mais disponível.",
     "invite-expired": "Este convite expirou. Solicite um novo link ao administrador.",
     "permission-denied": "Você não possui permissão para executar esta ação.",
@@ -944,6 +1028,19 @@ function filteredRequests() {
       item.currentBehavior,
       item.expectedBehavior,
       item.justification,
+      item.tefCnpj,
+      item.tefOperatingSystem,
+      item.tefRam,
+      item.tefSystemUsed,
+      item.tefEstablishmentNumber,
+      item.tefPinpadLogicalNumber,
+      item.tefPinpadModel,
+      item.tefAcquirer,
+      item.tefOwnerName,
+      item.tefOwnerCpf,
+      item.tefContactPhone,
+      item.tefContactEmail,
+      item.tefAgreedValue,
       item.requesterName,
       item.requesterEmail,
       item.assigneeName,
@@ -965,13 +1062,21 @@ function requestAge(item) {
 }
 
 function requestCardTitle(item) {
+  if (item.type === "tef_elgin") return item.title || `TEF Elgin — ${item.tefCnpj || item.clientCode || "cliente"}`;
   if (item.type !== "cancelamento") return item.title || "Sem título";
   const entries = cancellationItemsFromRequest(item);
   if (entries.length > 1) return `Cancelamentos — ${entries.length} clientes`;
-  return item.title || `Cancelamento — ${entries[0]?.clientName || "cliente"}`;
+  const first = entries[0] || {};
+  return item.title || `Cancelamento — ${first.clientName || first.clientCnpj || "cliente"}`;
 }
 
 function requestCardClient(item) {
+  if (item.type === "tef_elgin") {
+    return {
+      name: item.tefCnpj || item.clientCode || "CNPJ não informado",
+      code: item.tefSystemUsed || "TEF Elgin"
+    };
+  }
   if (item.type !== "cancelamento") {
     return {
       name: item.clientName || "Cliente não informado",
@@ -982,16 +1087,19 @@ function requestCardClient(item) {
   const entries = cancellationItemsFromRequest(item);
   const first = entries[0] || {};
   return {
-    name: first.clientName || "Cliente não informado",
-    code: entries.length > 1 ? `+${entries.length - 1} cliente${entries.length - 1 === 1 ? "" : "s"}` : first.clientCnpj || ""
+    name: first.clientName || first.clientCnpj || "Cliente não informado",
+    code: entries.length > 1 ? `+${entries.length - 1} cliente${entries.length - 1 === 1 ? "" : "s"}` : first.clientName ? first.clientCnpj || "" : ""
   };
 }
 
 function requestCardDescription(item) {
+  if (item.type === "tef_elgin") {
+    return [item.tefOperatingSystem, item.tefRam, item.tefAcquirer].filter(Boolean).join(" · ");
+  }
   if (item.type !== "cancelamento") return item.description || "";
   const entries = cancellationItemsFromRequest(item);
   if (entries.length === 1) return entries[0]?.reason || "";
-  return entries.map((entry) => entry.clientName).filter(Boolean).join(" · ");
+  return entries.map((entry) => entry.clientName || entry.clientCnpj).filter(Boolean).join(" · ");
 }
 
 function cardHtml(item, isOldest) {
@@ -1302,21 +1410,20 @@ function addCancellationItem() {
   }
 
   const draft = getCancellationDraft();
-  if (!draft.clientCnpj || !draft.clientName || !draft.reason) {
-    showFormError(els.requestError, "Preencha CPF/CNPJ, Razão Social e Motivo antes de adicionar o cliente à lista.");
-    if (!draft.clientCnpj) els.cancellationCnpjInput.focus();
-    else if (!draft.clientName) els.cancellationClientNameInput.focus();
+  if ((!draft.clientCnpj && !draft.clientName) || !draft.reason) {
+    showFormError(els.requestError, "Informe o CPF/CNPJ ou a Razão Social e preencha o Motivo antes de adicionar o cliente à lista.");
+    if (!draft.clientCnpj && !draft.clientName) els.cancellationCnpjInput.focus();
     else els.cancellationReasonInput.focus();
     return;
   }
 
-  if (!setDocumentValidity(els.cancellationCnpjInput, { required: true, showMessage: true })) {
-    showFormError(els.requestError, "Informe um CPF ou CNPJ válido antes de adicionar o cliente à lista.");
+  if (draft.clientCnpj && !setDocumentValidity(els.cancellationCnpjInput, { required: false, showMessage: true })) {
+    showFormError(els.requestError, "O CPF/CNPJ informado não é válido.");
     els.cancellationCnpjInput.focus();
     return;
   }
 
-  draft.clientCnpj = formatCpfCnpj(draft.clientCnpj);
+  draft.clientCnpj = draft.clientCnpj ? formatCpfCnpj(draft.clientCnpj) : "";
   state.modalCancellationItems.push(draft);
   renderCancellationItems(state.modalCancellationItems, true);
   clearCancellationDraft();
@@ -1332,21 +1439,23 @@ function setSectionInputsEnabled(section, enabled) {
 }
 
 function updateRequestTypeFields() {
-  const isProgramming = els.requestType.value === "programacao";
+  const type = els.requestType.value;
+  const isProgramming = type === "programacao";
+  const isCancellation = type === "cancelamento";
+  const isTef = type === "tef_elgin";
+
   els.programmingFields.hidden = !isProgramming;
-  els.cancellationFields.hidden = isProgramming;
+  els.cancellationFields.hidden = !isCancellation;
+  els.tefFields.hidden = !isTef;
   els.priorityField.hidden = !isProgramming;
 
   setSectionInputsEnabled(els.programmingFields, isProgramming && state.modalEditable);
+  setSectionInputsEnabled(els.cancellationFields, isCancellation && state.modalEditable);
+  setSectionInputsEnabled(els.tefFields, isTef && state.modalEditable);
   els.requestPriority.disabled = !isProgramming || !state.modalEditable;
 
-  if (isProgramming) {
-    setSectionInputsEnabled(els.cancellationFields, false);
-    renderAttachmentList();
-  } else {
-    setSectionInputsEnabled(els.cancellationFields, state.modalEditable);
-    renderCancellationItems(state.modalCancellationItems, state.modalEditable);
-  }
+  if (isProgramming) renderAttachmentList();
+  if (isCancellation) renderCancellationItems(state.modalCancellationItems, state.modalEditable);
 
   els.requestType.disabled = !state.modalEditable;
   els.requestStatus.disabled = !isAdmin();
@@ -1359,6 +1468,12 @@ function resetRequestForm() {
   els.requestClientCode.classList.remove("input-invalid", "input-valid");
   setPhoneValidity(els.requestContactPhone, { showMessage: false });
   els.requestContactPhone.classList.remove("input-invalid", "input-valid");
+  setSpecificDocumentValidity(els.tefCnpj, "cnpj", { required: true, showMessage: false });
+  els.tefCnpj.classList.remove("input-invalid", "input-valid");
+  setSpecificDocumentValidity(els.tefOwnerCpf, "cpf", { required: true, showMessage: false });
+  els.tefOwnerCpf.classList.remove("input-invalid", "input-valid");
+  setPhoneValidity(els.tefContactPhone, { showMessage: false });
+  els.tefContactPhone.classList.remove("input-invalid", "input-valid");
   state.modalEditable = true;
   els.requestId.value = "";
   els.requestType.value = "programacao";
@@ -1390,7 +1505,8 @@ function openNewRequestModal(type = "programacao") {
   els.requestDialog.showModal();
   window.setTimeout(() => {
     if (els.requestType.value === "programacao") els.requestClient.focus();
-    else els.cancellationCnpjInput.focus();
+    else if (els.requestType.value === "cancelamento") els.cancellationCnpjInput.focus();
+    else els.tefCnpj.focus();
   }, 50);
 }
 
@@ -1423,6 +1539,19 @@ function openRequestModal(id) {
   els.requestExpectedBehavior.value = item.expectedBehavior || "";
   els.requestJustification.value = item.justification || "";
   els.requestLink.value = item.videoLink || item.externalLink || "";
+  els.tefCnpj.value = formatCnpj(item.tefCnpj || (item.type === "tef_elgin" ? item.clientCode : ""));
+  els.tefOperatingSystem.value = item.tefOperatingSystem || "";
+  els.tefRam.value = item.tefRam || "";
+  els.tefSystemUsed.value = item.tefSystemUsed || "";
+  els.tefEstablishmentNumber.value = item.tefEstablishmentNumber || "";
+  els.tefPinpadLogicalNumber.value = item.tefPinpadLogicalNumber || "";
+  els.tefPinpadModel.value = item.tefPinpadModel || "";
+  els.tefAcquirer.value = item.tefAcquirer || "";
+  els.tefOwnerName.value = item.tefOwnerName || "";
+  els.tefOwnerCpf.value = formatCpf(item.tefOwnerCpf || "");
+  els.tefContactPhone.value = formatPhone(item.tefContactPhone || "");
+  els.tefContactEmail.value = item.tefContactEmail || "";
+  els.tefAgreedValue.value = item.tefAgreedValue || "";
   state.modalExistingAttachments = Array.isArray(item.attachments)
     ? item.attachments.map(normalizeAttachment)
     : [];
@@ -1514,33 +1643,34 @@ function buildCancellationPayload() {
     return { error: "Adicione pelo menos um cliente para cancelamento." };
   }
 
-  const incompleteIndex = cancellationItems.findIndex((entry) => !entry.clientName || !entry.clientCnpj || !entry.reason);
+  const incompleteIndex = cancellationItems.findIndex((entry) => (!entry.clientName && !entry.clientCnpj) || !entry.reason);
   if (incompleteIndex >= 0) {
-    return { error: `Preencha CPF/CNPJ, Razão Social e Motivo do cliente ${incompleteIndex + 1}.` };
+    return { error: `Informe CPF/CNPJ ou Razão Social e o Motivo do cliente ${incompleteIndex + 1}.` };
   }
 
-  const invalidDocumentIndex = cancellationItems.findIndex((entry) => !isValidCpfCnpj(entry.clientCnpj));
+  const invalidDocumentIndex = cancellationItems.findIndex((entry) => entry.clientCnpj && !isValidCpfCnpj(entry.clientCnpj));
   if (invalidDocumentIndex >= 0) {
     return { error: `O CPF/CNPJ do cliente ${invalidDocumentIndex + 1} é inválido.` };
   }
 
   cancellationItems.forEach((entry) => {
-    entry.clientCnpj = formatCpfCnpj(entry.clientCnpj);
+    entry.clientCnpj = entry.clientCnpj ? formatCpfCnpj(entry.clientCnpj) : "";
   });
 
   const first = cancellationItems[0];
+  const firstIdentifier = first.clientName || first.clientCnpj;
   const title = cancellationItems.length === 1
-    ? `Cancelamento — ${first.clientName}`
+    ? `Cancelamento — ${firstIdentifier}`
     : `Cancelamentos — ${cancellationItems.length} clientes`;
   const description = cancellationItems
-    .map((entry, index) => `${index + 1}. ${entry.clientName}: ${entry.reason}`)
+    .map((entry, index) => `${index + 1}. ${entry.clientName || entry.clientCnpj}: ${entry.reason}`)
     .join("\n")
     .slice(0, 3000);
 
   return {
     data: {
       priority: "normal",
-      clientName: first.clientName,
+      clientName: first.clientName || first.clientCnpj,
       clientCode: first.clientCnpj,
       title: title.slice(0, 140),
       description: description || "Solicitação de cancelamento.",
@@ -1558,6 +1688,71 @@ function buildCancellationPayload() {
   };
 }
 
+function buildTefPayload() {
+  const data = {
+    tefCnpj: formatCnpj(els.tefCnpj.value),
+    tefOperatingSystem: sanitizeText(els.tefOperatingSystem.value),
+    tefRam: sanitizeText(els.tefRam.value),
+    tefSystemUsed: sanitizeText(els.tefSystemUsed.value),
+    tefEstablishmentNumber: sanitizeText(els.tefEstablishmentNumber.value),
+    tefPinpadLogicalNumber: sanitizeText(els.tefPinpadLogicalNumber.value),
+    tefPinpadModel: sanitizeText(els.tefPinpadModel.value),
+    tefAcquirer: sanitizeText(els.tefAcquirer.value),
+    tefOwnerName: sanitizeText(els.tefOwnerName.value),
+    tefOwnerCpf: formatCpf(els.tefOwnerCpf.value),
+    tefContactPhone: formatPhone(els.tefContactPhone.value),
+    tefContactEmail: sanitizeText(els.tefContactEmail.value),
+    tefAgreedValue: sanitizeText(els.tefAgreedValue.value)
+  };
+
+  if (!setSpecificDocumentValidity(els.tefCnpj, "cnpj", { required: true, showMessage: true })) {
+    els.tefCnpj.focus();
+    return { error: "Informe um CNPJ válido para a solicitação TEF." };
+  }
+  if (!setSpecificDocumentValidity(els.tefOwnerCpf, "cpf", { required: true, showMessage: true })) {
+    els.tefOwnerCpf.focus();
+    return { error: "Informe um CPF válido para o proprietário." };
+  }
+  if (!setPhoneValidity(els.tefContactPhone, { showMessage: true })) {
+    els.tefContactPhone.focus();
+    return { error: "Informe um telefone fixo ou celular com DDD válido." };
+  }
+
+  if (Object.values(data).some((value) => !value)) {
+    return { error: "Preencha todos os campos obrigatórios da solicitação TEF Elgin." };
+  }
+
+  const title = `TEF Elgin — ${data.tefCnpj}`;
+  const description = [
+    `Sistema operacional: ${data.tefOperatingSystem}`,
+    `Memória RAM: ${data.tefRam}`,
+    `Sistema utilizado: ${data.tefSystemUsed}`,
+    `Adquirente: ${data.tefAcquirer}`,
+    `Proprietário: ${data.tefOwnerName}`
+  ].join("\n");
+
+  return {
+    data: {
+      priority: "normal",
+      clientName: data.tefCnpj,
+      clientCode: data.tefCnpj,
+      contactName: data.tefOwnerName,
+      contactRole: "Proprietário",
+      contactEmail: data.tefContactEmail,
+      contactPhone: data.tefContactPhone,
+      title: title.slice(0, 140),
+      description: description.slice(0, 3000),
+      currentBehavior: "",
+      expectedBehavior: "",
+      justification: "",
+      videoLink: "",
+      externalLink: "",
+      cancellationItems: [],
+      ...data
+    }
+  };
+}
+
 async function saveRequest(event) {
   event.preventDefault();
   showFormError(els.requestError);
@@ -1569,7 +1764,9 @@ async function saveRequest(event) {
     : "programacao";
   const typeResult = type === "programacao"
     ? buildProgrammingPayload()
-    : buildCancellationPayload();
+    : type === "cancelamento"
+      ? buildCancellationPayload()
+      : buildTefPayload();
 
   if (typeResult.error) {
     showFormError(els.requestError, typeResult.error);
@@ -1663,7 +1860,9 @@ async function saveRequest(event) {
       ? "Solicitação atualizada com sucesso."
       : type === "cancelamento"
         ? "Lista de cancelamentos criada com sucesso."
-        : "Solicitação criada com sucesso.");
+        : type === "tef_elgin"
+          ? "Solicitação TEF Elgin criada com sucesso."
+          : "Solicitação criada com sucesso.");
     els.requestDialog.close();
   } catch (error) {
     console.error(error);
@@ -1756,10 +1955,28 @@ Motivo: ${entry.reason || ""}`);
   return `=== CHAMADOS PARA CANCELAMENTO ===\n\n${blocks.join("\n\n------------------------------\n\n")}`;
 }
 
+function tefCopyText(item) {
+  return `=== SOLICITAÇÃO TEF ELGIN ===
+
+CNPJ: ${item.tefCnpj || item.clientCode || ""}
+SISTEMA OPERACIONAL: ${item.tefOperatingSystem || ""}
+MEMÓRIA RAM DA MÁQUINA: ${item.tefRam || ""}
+SISTEMA UTILIZADO: ${item.tefSystemUsed || ""}
+NÚMERO DO ESTABELECIMENTO: ${item.tefEstablishmentNumber || ""}
+NÚMERO LÓGICO DO PINPAD (SAK): ${item.tefPinpadLogicalNumber || ""}
+MODELO PINPAD (MÁQUINA DE CARTÃO TEF): ${item.tefPinpadModel || ""}
+ADQUIRENTE: ${item.tefAcquirer || ""}
+NOME COMPLETO DO PROPRIETÁRIO: ${item.tefOwnerName || ""}
+CPF DO PROPRIETÁRIO: ${item.tefOwnerCpf || ""}
+FONE PARA CONTATO: ${item.tefContactPhone || ""}
+E-MAIL: ${item.tefContactEmail || ""}
+VALOR COMBINADO: ${item.tefAgreedValue || ""}`;
+}
+
 function requestCopyText(item) {
-  return item.type === "cancelamento"
-    ? cancellationCopyText(item)
-    : programmingCopyText(item);
+  if (item.type === "cancelamento") return cancellationCopyText(item);
+  if (item.type === "tef_elgin") return tefCopyText(item);
+  return programmingCopyText(item);
 }
 
 async function copyText(text) {
@@ -1790,6 +2007,55 @@ function copyRequestById(id) {
   const item = state.requests.find((request) => request.id === id);
   if (!item) return;
   copyText(requestCopyText(item));
+}
+
+async function changeCurrentUserPassword(event) {
+  event.preventDefault();
+  showFormError(els.changePasswordError);
+
+  const currentPassword = els.currentPassword.value;
+  const newPassword = els.newPassword.value;
+  const confirmation = els.confirmNewPassword.value;
+
+  if (!currentPassword || !newPassword || !confirmation) {
+    showFormError(els.changePasswordError, "Preencha todos os campos.");
+    return;
+  }
+  if (newPassword.length < 6) {
+    showFormError(els.changePasswordError, "A nova senha deve possuir pelo menos 6 caracteres.");
+    return;
+  }
+  if (newPassword !== confirmation) {
+    showFormError(els.changePasswordError, "A confirmação da nova senha não confere.");
+    return;
+  }
+  if (currentPassword === newPassword) {
+    showFormError(els.changePasswordError, "A nova senha precisa ser diferente da senha atual.");
+    return;
+  }
+  if (!auth.currentUser?.email) {
+    showFormError(els.changePasswordError, "Não foi possível identificar o usuário conectado.");
+    return;
+  }
+
+  setButtonLoading(els.saveNewPasswordButton, true, "Alterando...");
+  try {
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+    await reauthenticateWithCredential(auth.currentUser, credential);
+    await updatePassword(auth.currentUser, newPassword);
+    els.changePasswordForm.reset();
+    [els.currentPassword, els.newPassword, els.confirmNewPassword].forEach((input) => { input.type = "password"; });
+    closeModal(els.changePasswordDialog);
+    showToast("Senha alterada com sucesso.");
+  } catch (error) {
+    console.error(error);
+    const message = ["auth/invalid-credential", "auth/wrong-password"].includes(error?.code)
+      ? "A senha atual está incorreta."
+      : firebaseErrorMessage(error);
+    showFormError(els.changePasswordError, message);
+  } finally {
+    setButtonLoading(els.saveNewPasswordButton, false);
+  }
 }
 
 function applyFilters() {
@@ -2334,6 +2600,19 @@ function setupEvents() {
   });
 
   els.logoutButton.addEventListener("click", () => signOut(auth));
+  els.changePasswordButton.addEventListener("click", () => {
+    els.changePasswordForm.reset();
+    showFormError(els.changePasswordError);
+    [els.currentPassword, els.newPassword, els.confirmNewPassword].forEach((input) => { input.type = "password"; });
+    els.changePasswordDialog.showModal();
+    window.setTimeout(() => els.currentPassword.focus(), 50);
+  });
+  els.changePasswordForm.addEventListener("submit", changeCurrentUserPassword);
+  els.showChangePasswords.addEventListener("change", () => {
+    const type = els.showChangePasswords.checked ? "text" : "password";
+    [els.currentPassword, els.newPassword, els.confirmNewPassword].forEach((input) => { input.type = type; });
+  });
+  $$(".close-change-password-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.changePasswordDialog)));
   els.newRequestButton.addEventListener("click", () => openNewRequestModal());
   els.helpButton.addEventListener("click", () => openHelpDialog());
   els.topHelpButton.addEventListener("click", () => openHelpDialog());
@@ -2350,7 +2629,10 @@ function setupEvents() {
 
   setupDocumentInput(els.requestClientCode, { required: false });
   setupDocumentInput(els.cancellationCnpjInput, { required: false });
+  setupSpecificDocumentInput(els.tefCnpj, "cnpj", { required: true });
+  setupSpecificDocumentInput(els.tefOwnerCpf, "cpf", { required: true });
   setupPhoneInput(els.requestContactPhone);
+  setupPhoneInput(els.tefContactPhone);
 
   els.requestForm.addEventListener("submit", saveRequest);
   els.requestType.addEventListener("change", updateRequestTypeFields);
@@ -2445,7 +2727,7 @@ function setupEvents() {
     }
   });
 
-  [els.requestDialog, els.resetDialog, els.helpDialog, els.userInviteDialog, els.editUserDialog, els.userStatusDialog].forEach((dialog) => {
+  [els.requestDialog, els.resetDialog, els.changePasswordDialog, els.helpDialog, els.userInviteDialog, els.editUserDialog, els.userStatusDialog].forEach((dialog) => {
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) dialog.close();
     });
