@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=16.0.0">
+  <link rel="stylesheet" href="styles.css?v=18.0.0">
 </head>
 <body>
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
@@ -142,6 +142,13 @@
           </div>
           <button id="change-password-button" class="icon-button" title="Alterar minha senha" aria-label="Alterar minha senha">🔑</button>
           <button id="logout-button" class="icon-button" title="Sair" aria-label="Sair">↪</button>
+        </div>
+        <div id="app-version-card" class="app-version-card" title="Informações da versão publicada">
+          <div class="app-version-main">
+            <span>VERSÃO</span>
+            <strong id="app-version-label">v18</strong>
+          </div>
+          <span id="app-version-details" class="app-version-details">Ambiente local</span>
         </div>
       </div>
     </aside>
@@ -921,6 +928,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=16.0.0"></script>
+  <script type="module" src="app.js?v=18.0.0"></script>
 </body>
 </html>

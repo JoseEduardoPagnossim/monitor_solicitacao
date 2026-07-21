@@ -2994,6 +2994,60 @@ function handleSignedOut() {
   }
 }
 
+
+async function loadAppVersion() {
+  const card = document.getElementById("app-version-card");
+  const versionLabel = document.getElementById("app-version-label");
+  const detailsLabel = document.getElementById("app-version-details");
+  if (!card || !versionLabel || !detailsLabel) return;
+
+  try {
+    const response = await fetch(`./version.json?t=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("version-file-unavailable");
+
+    const info = await response.json();
+    const release = String(info.release || "18").replace(/^v/i, "");
+    const isLocal = !info.build || String(info.build).toLowerCase() === "local";
+    const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
+
+    versionLabel.textContent = `v${release}`;
+
+    if (isLocal) {
+      detailsLabel.textContent = "Ambiente local";
+      card.title = `Versão v${release} - ambiente local`;
+      return;
+    }
+
+    let publishedText = "";
+    if (info.builtAt) {
+      const publishedAt = new Date(info.builtAt);
+      if (!Number.isNaN(publishedAt.getTime())) {
+        publishedText = publishedAt.toLocaleString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      }
+    }
+
+    detailsLabel.textContent = `Build ${info.build}${commit ? ` · ${commit}` : ""}`;
+    card.title = [
+      `Versão v${release}`,
+      `Build ${info.build}`,
+      commit ? `Commit ${commit}` : "",
+      publishedText ? `Publicado em ${publishedText}` : ""
+    ].filter(Boolean).join("\n");
+  } catch (error) {
+    console.warn("Não foi possível carregar os dados da versão.", error);
+    versionLabel.textContent = "v18";
+    detailsLabel.textContent = "Versão local";
+    card.title = "Informações da versão indisponíveis";
+  }
+}
+
+loadAppVersion();
 setupEvents();
 const rememberedEmail = localStorage.getItem("painel-email");
 if (rememberedEmail) {

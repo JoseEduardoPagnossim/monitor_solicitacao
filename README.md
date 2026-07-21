@@ -862,3 +862,26 @@ O painel acompanha o documento do perfil em tempo real. Ao detectar `active: fal
 - A roda do mouse e o touch permanecem limitados ao conteúdo do próprio diálogo.
 - Ao fechar o diálogo, a rolagem normal da página é restaurada automaticamente.
 - O bloqueio também funciona quando um segundo diálogo é aberto sobre outro, como a confirmação de exclusão.
+
+## Controle de versão no rodapé
+
+A partir da versão 18, o rodapé lateral mostra:
+
+- versão funcional do painel;
+- número automático do build;
+- commit publicado, ao posicionar o mouse;
+- data e horário da publicação, ao posicionar o mouse.
+
+O número funcional fica no arquivo `VERSION`. Para uma nova versão funcional, altere somente o número desse arquivo, por exemplo, de `18` para `19`.
+
+O arquivo `.github/workflows/pages.yml` gera automaticamente o `version.json` durante a publicação. A cada envio para a branch `main`, o GitHub Actions atualiza o build, o commit e a data sem exigir edição manual.
+
+Para usar essa automação:
+
+1. No GitHub, abra **Settings > Pages**.
+2. Em **Build and deployment > Source**, selecione **GitHub Actions**.
+3. Envie os arquivos, incluindo as pastas ocultas `.github/workflows`.
+4. Acompanhe a publicação pela aba **Actions**.
+
+Durante o teste pelo Live Server, o rodapé mostra `Ambiente local`. No GitHub Pages, exibe os dados reais gerados na publicação.
+

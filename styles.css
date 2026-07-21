@@ -1260,3 +1260,148 @@ dialog[open] {
 #request-dialog .modal-content {
   overscroll-behavior-y: contain;
 }
+
+/* =========================================================
+   Versao 17: rolagem independente em cada coluna do Kanban
+   ========================================================= */
+@media (min-width: 901px) {
+  .app-view {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .main-content {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #kanban-view:not([hidden]) {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #kanban-view > .topbar,
+  #kanban-view > .metrics-grid,
+  #kanban-view > .toolbar {
+    flex: 0 0 auto;
+  }
+
+  #kanban-view > .kanban-board {
+    flex: 1 1 auto;
+    min-height: 0;
+    align-items: stretch;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0;
+  }
+
+  #kanban-view .kanban-column {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #kanban-view .kanban-column > header {
+    flex: 0 0 auto;
+  }
+
+  #kanban-view .column-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  #users-view:not([hidden]) {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* Scroll discreto e individual em cada etapa. */
+.column-body {
+  scrollbar-width: thin;
+  scrollbar-color: #b8c1cf transparent;
+}
+
+.column-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.column-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.column-body::-webkit-scrollbar-thumb {
+  background: #b8c1cf;
+  border: 2px solid #eef1f6;
+  border-radius: 999px;
+}
+
+.column-body::-webkit-scrollbar-thumb:hover {
+  background: #98a2b3;
+}
+
+
+/* =========================================================
+   Versao 18: identificacao automatica da versao publicada
+   ========================================================= */
+.sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.app-version-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid #344054;
+  border-radius: 10px;
+  color: #d0d5dd;
+  background: rgba(255,255,255,.035);
+  cursor: help;
+}
+
+.app-version-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.app-version-main span {
+  color: #98a2b3;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .09em;
+}
+
+.app-version-main strong {
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.app-version-details {
+  min-width: 0;
+  overflow: hidden;
+  color: #98a2b3;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
