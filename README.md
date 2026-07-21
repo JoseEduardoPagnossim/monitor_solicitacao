@@ -6,7 +6,7 @@ O projeto foi preparado para ser publicado no **GitHub Pages** e utiliza o **Fir
 
 ---
 
-> Versão 11: inclui alteração de senha no painel, regra flexível de identificação no cancelamento e o novo formulário TEF Elgin.
+> Versão 12: inclui controle individual dos clientes já cancelados no CRM, disponível somente para administradores, com progresso exibido nos cartões.
 
 ## Funcionalidades disponíveis
 
@@ -116,6 +116,10 @@ Funcionamento:
 6. Após revisar a lista, salva a solicitação.
 
 O administrador possui a ação **Copiar dados**, que copia toda a relação de cancelamentos de uma vez.
+
+Depois que a solicitação é salva, a lista apresenta a coluna **Cancelado no CRM**. Somente administradores podem marcar ou desmarcar cada cliente. A alteração é salva imediatamente no Firestore, registra o administrador e a data da confirmação e não exige clicar novamente em **Salvar alterações**. As regras desta versão também impedem que um solicitante altere esse controle diretamente fora da interface.
+
+O cartão do Kanban mostra o andamento no formato `CRM 3/8`. Quando todos os clientes da lista estão marcados, o indicador fica verde. Marcar todos os clientes no CRM não altera automaticamente o status geral da solicitação no Kanban.
 
 
 ### Solicitação TEF Elgin
@@ -658,8 +662,9 @@ Campo opcional. Utilize imagens ou arquivos TXT que ajudem a demonstrar o cenár
 5. Repita para os demais clientes, quando necessário.
 6. Revise a lista.
 7. Clique em **Salvar solicitação**.
+8. O administrador abre a solicitação e marca **Cancelado no CRM** conforme cada cliente for processado.
 
-> Apenas preencher os campos não inclui o cliente na solicitação. É obrigatório clicar em **Adicionar cliente à lista**.
+> Apenas preencher os campos não inclui o cliente na solicitação. É obrigatório clicar em **Adicionar cliente à lista**. O controle do CRM somente aparece de forma interativa para administradores e é salvo a cada marcação.
 
 ---
 
@@ -816,6 +821,8 @@ O painel acompanha o documento do perfil em tempo real. Ao detectar `active: fal
 - [ ] Testar programação com anexo.
 - [ ] Testar cancelamento com um cliente.
 - [ ] Testar cancelamento com vários clientes.
+- [ ] Como administrador, marcar e desmarcar clientes como cancelados no CRM.
+- [ ] Confirmar o indicador de progresso `CRM concluídos/total` no cartão.
 - [ ] Testar cancelamento preenchendo somente o CPF/CNPJ.
 - [ ] Testar cancelamento preenchendo somente a Razão Social.
 - [ ] Testar solicitação TEF Elgin e a validação de CNPJ/CPF.
@@ -824,3 +831,34 @@ O painel acompanha o documento do perfil em tempo real. Ao detectar `active: fal
 - [ ] Confirmar que apenas o administrador pode excluir.
 - [ ] Testar alteração de senha dentro do painel.
 - [ ] Testar recuperação de senha por e-mail.
+
+## Ajuste da versão 13
+
+- A lista de cancelamentos foi ajustada para caber integralmente no modal, sem barra de rolagem horizontal.
+- As colunas agora distribuem o espaço disponível e quebram textos longos automaticamente.
+- Em telas menores, cada cancelamento é exibido como um cartão responsivo.
+- O controle individual “Cancelado no CRM” e a ação administrativa de remoção foram mantidos.
+
+
+## Versão 14 — Ajuste visual da lista de cancelamentos
+
+- Modal de cancelamentos ampliado em telas de computador.
+- Colunas preservadas sem compressão excessiva.
+- Botão **Remover** exibido em uma única linha, com estilo de ação secundária.
+- Em telas menores, a listagem continua responsiva no formato de cartões.
+
+
+## Versão 15 — Ajuda do TEF Elgin
+
+- Adicionada a opção **TEF Elgin** no menu lateral da Central de Ajuda.
+- Incluído um passo a passo para conferência dos dados técnicos, informações da adquirente e dados do proprietário.
+- Acrescentadas orientações individuais para todos os campos do formulário TEF Elgin.
+- Incluído alerta para revisão de CNPJ, CPF, número do estabelecimento e SAK antes do salvamento.
+
+
+## Versão 16 — bloqueio de rolagem do plano de fundo
+
+- Quando qualquer diálogo ou formulário está aberto, a página principal deixa de rolar.
+- A roda do mouse e o touch permanecem limitados ao conteúdo do próprio diálogo.
+- Ao fechar o diálogo, a rolagem normal da página é restaurada automaticamente.
+- O bloqueio também funciona quando um segundo diálogo é aberto sobre outro, como a confirmação de exclusão.

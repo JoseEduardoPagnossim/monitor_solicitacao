@@ -23,6 +23,11 @@
 
 * { box-sizing: border-box; }
 html, body { min-height: 100%; }
+html { scrollbar-gutter: stable; }
+html.modal-open, body.modal-open {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
 body {
   margin: 0;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -272,7 +277,7 @@ button { cursor: pointer; }
 .empty-state h2 { margin: 12px 0 5px; font-size: 18px; }
 .empty-state p { color: var(--muted); margin: 0; font-size: 13px; }
 
-.modal { border: 0; border-radius: 16px; padding: 0; width: min(760px, calc(100vw - 30px)); color: var(--text); box-shadow: 0 24px 70px rgba(16, 24, 40, .26); }
+.modal { border: 0; border-radius: 16px; padding: 0; width: min(760px, calc(100vw - 30px)); color: var(--text); box-shadow: 0 24px 70px rgba(16, 24, 40, .26); overscroll-behavior: contain; }
 .modal::backdrop { background: rgba(15, 23, 42, .58); backdrop-filter: blur(2px); }
 .modal-small { width: min(450px, calc(100vw - 30px)); }
 .modal-content { padding: 24px; }
@@ -911,3 +916,347 @@ button { cursor: pointer; }
 }
 .check-row input { accent-color: var(--primary); }
 .password-show-row { width: fit-content; }
+
+/* Controle individual de cancelamentos realizados no CRM */
+.tag.crm-progress { color: #9a3412; background: #fff7ed; }
+.tag.crm-progress.complete { color: #027a48; background: #ecfdf3; }
+.cancellation-table { min-width: 980px; }
+.cancellation-list-row.crm-cancelled { background: #f6fef9; }
+.cancellation-list-row.crm-cancelled:hover { background: #ecfdf3; }
+.cancellation-list-row.crm-cancelled .cancellation-row-number { color: #039855 !important; }
+.cancellation-row-crm { min-width: 205px; }
+.crm-status-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 9px;
+  background: #fff;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color .15s, background .15s, color .15s, box-shadow .15s;
+}
+.crm-status-control:hover { border-color: #98a2b3; box-shadow: 0 1px 3px rgba(16, 24, 40, .08); }
+.crm-status-control.checked { border-color: #75e0a7; background: #ecfdf3; color: #027a48; }
+.crm-status-control input { width: 16px; height: 16px; margin: 0; accent-color: #12b76a; cursor: pointer; }
+.crm-status-control input:disabled { cursor: wait; }
+.crm-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.crm-status-badge.complete { color: #027a48; background: #ecfdf3; }
+.crm-status-badge.pending { color: #b54708; background: #fffaeb; }
+.crm-status-meta { display: block; margin-top: 5px; color: #667085; font-size: 10px; line-height: 1.35; }
+
+
+/* Versão 13: lista de cancelamentos sem rolagem horizontal */
+.cancellation-table-wrap {
+  overflow-x: hidden;
+}
+.cancellation-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.cancellation-table th,
+.cancellation-table td {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.cancellation-table th:nth-child(1),
+.cancellation-table td:nth-child(1) { width: 4%; }
+.cancellation-table th:nth-child(2),
+.cancellation-table td:nth-child(2) { width: 16%; }
+.cancellation-table th:nth-child(3),
+.cancellation-table td:nth-child(3) { width: 19%; }
+.cancellation-table th:nth-child(4),
+.cancellation-table td:nth-child(4) { width: 29%; }
+.cancellation-table th:nth-child(5),
+.cancellation-table td:nth-child(5) { width: 24%; }
+.cancellation-table th:nth-child(6),
+.cancellation-table td:nth-child(6) { width: 8%; }
+.cancellation-row-reason,
+.cancellation-row-crm {
+  min-width: 0;
+}
+.crm-status-control {
+  width: 100%;
+  box-sizing: border-box;
+  align-items: flex-start;
+  white-space: normal;
+}
+.crm-status-control span {
+  min-width: 0;
+  line-height: 1.25;
+}
+.cancellation-row-action {
+  width: auto;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+.remove-cancellation-item {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .cancellation-table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+  .cancellation-table,
+  .cancellation-table tbody,
+  .cancellation-table tr,
+  .cancellation-table td {
+    display: block;
+    width: 100% !important;
+  }
+  .cancellation-table thead {
+    display: none;
+  }
+  .cancellation-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+  .cancellation-table .cancellation-list-row {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: white;
+  }
+  .cancellation-table .cancellation-list-row.crm-cancelled {
+    background: #f6fef9;
+  }
+  .cancellation-table td {
+    display: grid;
+    grid-template-columns: minmax(105px, 34%) 1fr;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #edf0f5;
+    text-align: left;
+  }
+  .cancellation-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .cancellation-table td:last-child {
+    border-bottom: 0;
+  }
+  .cancellation-row-number {
+    color: var(--text) !important;
+  }
+  .cancellation-row-action {
+    padding: 10px 12px !important;
+  }
+  .crm-status-control {
+    width: fit-content;
+    max-width: 100%;
+  }
+}
+
+
+/* Versao 14: modal de cancelamentos amplo e tabela sem compressao */
+#request-dialog.request-dialog-cancellation {
+  width: min(1280px, calc(100vw - 36px));
+}
+
+#request-dialog.request-dialog-cancellation .modal-content {
+  padding-left: 28px;
+  padding-right: 28px;
+}
+
+#request-dialog.request-dialog-cancellation .cancellation-table-wrap {
+  overflow-x: visible;
+}
+
+#request-dialog.request-dialog-cancellation .cancellation-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: auto;
+}
+
+#request-dialog.request-dialog-cancellation .cancellation-table th,
+#request-dialog.request-dialog-cancellation .cancellation-table td {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+#request-dialog.request-dialog-cancellation .cancellation-table th:nth-child(1),
+#request-dialog.request-dialog-cancellation .cancellation-table td:nth-child(1) {
+  width: 44px;
+}
+
+#request-dialog.request-dialog-cancellation .cancellation-table th:nth-child(2),
+#request-dialog.request-dialog-cancellation .cancellation-table td:nth-child(2) {
+  width: 168px;
+  white-space: nowrap;
+}
+
+#request-dialog.request-dialog-cancellation .cancellation-table th:nth-child(3),
+#request-dialog.request-dialog-cancellation .cancellation-table td:nth-child(3) {
+  width: 190px;
+}
+
+#request-dialog.request-dialog-cancellation .cancellation-table th:nth-child(4),
+#request-dialog.request-dialog-cancellation .cancellation-table td:nth-child(4) {
+  min-width: 300px;
+}
+
+#request-dialog.request-dialog-cancellation .cancellation-table th:nth-child(5),
+#request-dialog.request-dialog-cancellation .cancellation-table td:nth-child(5) {
+  width: 230px;
+  min-width: 230px;
+}
+
+#request-dialog.request-dialog-cancellation .cancellation-table th:nth-child(6),
+#request-dialog.request-dialog-cancellation .cancellation-table td:nth-child(6) {
+  width: 104px;
+  min-width: 104px;
+}
+
+#request-dialog.request-dialog-cancellation .crm-status-control {
+  width: 100%;
+  align-items: center;
+  white-space: nowrap;
+}
+
+#request-dialog.request-dialog-cancellation .crm-status-control span {
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+#request-dialog.request-dialog-cancellation .cancellation-row-action {
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+  text-align: center;
+}
+
+#request-dialog.request-dialog-cancellation .remove-cancellation-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 84px;
+  max-width: none;
+  padding: 7px 10px;
+  border: 1px solid #fda29b;
+  border-radius: 8px;
+  color: #b42318;
+  background: #fff;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  line-height: 1;
+}
+
+#request-dialog.request-dialog-cancellation .remove-cancellation-item:hover {
+  border-color: #f97066;
+  background: #fef3f2;
+}
+
+@media (max-width: 1080px) {
+  #request-dialog.request-dialog-cancellation {
+    width: min(920px, calc(100vw - 24px));
+  }
+
+  #request-dialog.request-dialog-cancellation .modal-content {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  #request-dialog.request-dialog-cancellation .cancellation-table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  #request-dialog.request-dialog-cancellation .cancellation-table,
+  #request-dialog.request-dialog-cancellation .cancellation-table tbody,
+  #request-dialog.request-dialog-cancellation .cancellation-table tr,
+  #request-dialog.request-dialog-cancellation .cancellation-table td {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  #request-dialog.request-dialog-cancellation .cancellation-table thead {
+    display: none;
+  }
+
+  #request-dialog.request-dialog-cancellation .cancellation-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  #request-dialog.request-dialog-cancellation .cancellation-table .cancellation-list-row {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: white;
+  }
+
+  #request-dialog.request-dialog-cancellation .cancellation-table .cancellation-list-row.crm-cancelled {
+    background: #f6fef9;
+  }
+
+  #request-dialog.request-dialog-cancellation .cancellation-table td {
+    display: grid;
+    grid-template-columns: minmax(125px, 30%) 1fr;
+    gap: 12px;
+    padding: 11px 14px;
+    border-bottom: 1px solid #edf0f5;
+    text-align: left;
+    white-space: normal;
+  }
+
+  #request-dialog.request-dialog-cancellation .cancellation-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+
+  #request-dialog.request-dialog-cancellation .cancellation-table td:last-child {
+    border-bottom: 0;
+  }
+
+  #request-dialog.request-dialog-cancellation .crm-status-control {
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  #request-dialog.request-dialog-cancellation .cancellation-row-action {
+    padding: 11px 14px !important;
+    text-align: left;
+  }
+}
+
+
+/* Versao 16: impede que o scroll do modal movimente a pagina ao fundo */
+dialog[open] {
+  overscroll-behavior: contain;
+}
+
+.modal-content,
+.help-modal-content,
+#request-dialog .modal-content {
+  overscroll-behavior-y: contain;
+}

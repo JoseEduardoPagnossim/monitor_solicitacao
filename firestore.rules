@@ -36,6 +36,38 @@ service cloud.firestore {
       return status in ['nova', 'analise', 'aguardando', 'concluida'];
     }
 
+    function validCancellationCrmData(data) {
+      return data.type != 'cancelamento'
+        || (data.keys().hasAll(['cancellationCrmStatus'])
+          && data.cancellationCrmStatus is map);
+    }
+
+    function emptyCancellationCrmOnCreate(data) {
+      return data.type != 'cancelamento'
+        || (validCancellationCrmData(data)
+          && data.cancellationCrmStatus.size() == 0);
+    }
+
+    function cancellationCrmUnchangedByRequester() {
+      let oldHas = resource.data.keys().hasAny(['cancellationCrmStatus']);
+      let newHas = request.resource.data.keys().hasAny(['cancellationCrmStatus']);
+      return (!oldHas
+          && (!newHas
+            || (request.resource.data.cancellationCrmStatus is map
+              && request.resource.data.cancellationCrmStatus.size() == 0)))
+        || (oldHas
+          && newHas
+          && request.resource.data.cancellationCrmStatus == resource.data.cancellationCrmStatus);
+    }
+
+    function cancellationListCanChangeByRequester() {
+      let hasTracking = resource.data.keys().hasAny(['cancellationCrmStatus']);
+      return resource.data.type != 'cancelamento'
+        || !hasTracking
+        || resource.data.cancellationCrmStatus.size() == 0
+        || request.resource.data.cancellationItems == resource.data.cancellationItems;
+    }
+
     function validTefData(data) {
       return data.type != 'tef_elgin'
         || (data.tefCnpj is string
@@ -92,7 +124,8 @@ service cloud.firestore {
         && data.description is string
         && data.description.size() > 0
         && data.description.size() <= 3000
-        && validTefData(data);
+        && validTefData(data)
+        && validCancellationCrmData(data);
     }
 
     function validAttachmentData(data) {
@@ -189,6 +222,7 @@ service cloud.firestore {
         && request.resource.data.requesterUid == request.auth.uid
         && request.resource.data.requesterEmail == request.auth.token.email
         && request.resource.data.status == 'nova'
+        && emptyCancellationCrmOnCreate(request.resource.data)
         && validRequestData(request.resource.data);
 
       allow update: if isAdmin() && validRequestData(request.resource.data);
@@ -200,6 +234,8 @@ service cloud.firestore {
         && request.resource.data.requesterUid == resource.data.requesterUid
         && request.resource.data.requesterEmail == resource.data.requesterEmail
         && request.resource.data.createdAt == resource.data.createdAt
+        && cancellationCrmUnchangedByRequester()
+        && cancellationListCanChangeByRequester()
         && validRequestData(request.resource.data);
 
       allow delete: if isAdmin();

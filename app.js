@@ -989,20 +989,49 @@ function subscribeRequests() {
   });
 }
 
+function createCancellationItemId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `cancel-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function cancellationCrmTracking(item) {
+  return item?.cancellationCrmStatus && typeof item.cancellationCrmStatus === "object"
+    ? item.cancellationCrmStatus
+    : {};
+}
+
 function cancellationItemsFromRequest(item) {
+  const tracking = cancellationCrmTracking(item);
+
   if (Array.isArray(item.cancellationItems) && item.cancellationItems.length) {
-    return item.cancellationItems.map((entry) => ({
-      clientName: entry?.clientName || entry?.companyName || "",
-      clientCnpj: entry?.clientCnpj || entry?.cnpj || "",
-      reason: entry?.reason || entry?.motivo || ""
-    }));
+    return item.cancellationItems.map((entry, index) => {
+      const itemId = entry?.itemId || `legacy-${index}`;
+      const crmEntry = tracking[itemId] || {};
+      return {
+        itemId,
+        clientName: entry?.clientName || entry?.companyName || "",
+        clientCnpj: entry?.clientCnpj || entry?.cnpj || "",
+        reason: entry?.reason || entry?.motivo || "",
+        crmCancelled: crmEntry.cancelled === true,
+        crmCancelledAt: crmEntry.cancelledAt || null,
+        crmCancelledByUid: crmEntry.cancelledByUid || "",
+        crmCancelledByName: crmEntry.cancelledByName || ""
+      };
+    });
   }
 
   if (item.type === "cancelamento") {
+    const itemId = "legacy-0";
+    const crmEntry = tracking[itemId] || {};
     return [{
+      itemId,
       clientName: item.clientName || "",
       clientCnpj: item.clientCode || "",
-      reason: item.description || ""
+      reason: item.description || "",
+      crmCancelled: crmEntry.cancelled === true,
+      crmCancelledAt: crmEntry.cancelledAt || null,
+      crmCancelledByUid: crmEntry.cancelledByUid || "",
+      crmCancelledByName: crmEntry.cancelledByName || ""
     }];
   }
 
@@ -1120,6 +1149,11 @@ function cardHtml(item, isOldest) {
     ? `<button class="card-copy-button" type="button" data-copy-id="${escapeHtml(item.id)}" title="Copiar dados da solicitação">⧉ Copiar</button>`
     : "";
   const attachmentCount = Array.isArray(item.attachments) ? item.attachments.length : 0;
+  const cancellationEntries = item.type === "cancelamento" ? cancellationItemsFromRequest(item) : [];
+  const cancellationDone = cancellationEntries.filter((entry) => entry.crmCancelled === true).length;
+  const crmProgressTag = cancellationEntries.length
+    ? `<span class="tag crm-progress ${cancellationDone === cancellationEntries.length ? "complete" : ""}">CRM ${cancellationDone}/${cancellationEntries.length}</span>`
+    : "";
 
   return `
     <article class="request-card ${ageClass} ${isOldest ? "oldest" : ""}" data-id="${escapeHtml(item.id)}" draggable="${draggable}" tabindex="0" role="button" aria-label="Abrir solicitação ${escapeHtml(title)}">
@@ -1128,6 +1162,7 @@ function cardHtml(item, isOldest) {
           <span class="tag ${item.type}">${TYPE_LABELS[item.type] || "Solicitação"}</span>
           ${item.type === "programacao" ? `<span class="tag ${item.priority}">${PRIORITY_LABELS[item.priority] || "Normal"}</span>` : ""}
           ${attachmentCount ? `<span class="tag attachment">📎 ${attachmentCount}</span>` : ""}
+          ${crmProgressTag}
         </div>
         <span class="card-time ${ageHours >= 48 && item.status !== "concluida" ? "critical" : ""}" data-created-at="${timestampToDate(item.createdAt)?.toISOString() || ""}" data-completed-at="${timestampToDate(item.completedAt)?.toISOString() || ""}" data-status="${item.status}">◷ ${formatElapsed(age, true)}</span>
       </div>
@@ -1306,17 +1341,47 @@ function renderUser() {
 }
 
 function blankCancellationItem() {
-  return { clientName: "", clientCnpj: "", reason: "" };
+  return {
+    itemId: createCancellationItemId(),
+    clientName: "",
+    clientCnpj: "",
+    reason: "",
+    crmCancelled: false,
+    crmCancelledAt: null,
+    crmCancelledByUid: "",
+    crmCancelledByName: ""
+  };
+}
+
+function cancellationCrmStatusHtml(item, index) {
+  const checked = item.crmCancelled === true;
+  const canToggle = isAdmin() && Boolean(els.requestId.value);
+  const statusLabel = checked ? "Cancelado" : "Pendente";
+  const metadata = checked && item.crmCancelledAt
+    ? `<small class="crm-status-meta">${escapeHtml(item.crmCancelledByName || "Administrador")} · ${escapeHtml(formatDateTime(item.crmCancelledAt))}</small>`
+    : "";
+
+  if (!canToggle) {
+    return `<span class="crm-status-badge ${checked ? "complete" : "pending"}">${checked ? "✓" : "○"} ${statusLabel}</span>${metadata}`;
+  }
+
+  return `
+    <label class="crm-status-control ${checked ? "checked" : ""}">
+      <input class="crm-cancellation-checkbox" type="checkbox" data-index="${index}" ${checked ? "checked" : ""}>
+      <span>${checked ? "✓ Cancelado" : "Marcar como cancelado"}</span>
+    </label>
+    ${metadata}`;
 }
 
 function cancellationItemHtml(item, index, editable) {
   return `
-    <tr class="cancellation-list-row" data-cancellation-index="${index}">
-      <td class="cancellation-row-number">${index + 1}</td>
-      <td><strong>${escapeHtml(item.clientCnpj || "—")}</strong></td>
-      <td><strong>${escapeHtml(item.clientName || "—")}</strong></td>
-      <td class="cancellation-row-reason">${escapeHtml(item.reason || "—")}</td>
-      ${editable ? `<td class="cancellation-row-action"><button class="remove-cancellation-item" type="button" data-index="${index}" aria-label="Remover cliente ${index + 1}">Remover</button></td>` : ""}
+    <tr class="cancellation-list-row ${item.crmCancelled === true ? "crm-cancelled" : ""}" data-cancellation-index="${index}">
+      <td class="cancellation-row-number" data-label="#">${index + 1}</td>
+      <td data-label="CPF/CNPJ"><strong>${escapeHtml(item.clientCnpj || "—")}</strong></td>
+      <td data-label="Razão Social"><strong>${escapeHtml(item.clientName || "—")}</strong></td>
+      <td class="cancellation-row-reason" data-label="Motivo">${escapeHtml(item.reason || "—")}</td>
+      <td class="cancellation-row-crm" data-label="Cancelado no CRM">${cancellationCrmStatusHtml(item, index)}</td>
+      ${editable ? `<td class="cancellation-row-action" data-label="Ação"><button class="remove-cancellation-item" type="button" data-index="${index}" aria-label="Remover cliente ${index + 1}">✕ Remover</button></td>` : ""}
     </tr>`;
 }
 
@@ -1328,10 +1393,15 @@ function updateCancellationListCount() {
 function renderCancellationItems(items = state.modalCancellationItems, editable = state.modalEditable) {
   state.modalCancellationItems = (Array.isArray(items) ? items : [])
     .slice(0, MAX_CANCELLATION_ITEMS)
-    .map((item) => ({
+    .map((item, index) => ({
+      itemId: sanitizeText(item.itemId || `legacy-${index}`),
       clientName: sanitizeText(item.clientName || ""),
       clientCnpj: sanitizeText(item.clientCnpj || ""),
-      reason: sanitizeText(item.reason || "")
+      reason: sanitizeText(item.reason || ""),
+      crmCancelled: item.crmCancelled === true,
+      crmCancelledAt: item.crmCancelledAt || null,
+      crmCancelledByUid: sanitizeText(item.crmCancelledByUid || ""),
+      crmCancelledByName: sanitizeText(item.crmCancelledByName || "")
     }));
 
   if (!state.modalCancellationItems.length) {
@@ -1350,6 +1420,7 @@ function renderCancellationItems(items = state.modalCancellationItems, editable 
               <th>CPF/CNPJ</th>
               <th>Razão Social</th>
               <th>Motivo</th>
+              <th>Cancelado no CRM</th>
               ${editable ? "<th>Ação</th>" : ""}
             </tr>
           </thead>
@@ -1359,6 +1430,14 @@ function renderCancellationItems(items = state.modalCancellationItems, editable 
         </table>
       </div>`;
   }
+
+  $$(".crm-cancellation-checkbox", els.cancellationList).forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const index = Number(checkbox.dataset.index);
+      if (Number.isNaN(index)) return;
+      toggleCancellationCrmStatus(index, checkbox.checked, checkbox);
+    });
+  });
 
   $$(".remove-cancellation-item", els.cancellationList).forEach((button) => {
     button.addEventListener("click", () => {
@@ -1374,15 +1453,95 @@ function renderCancellationItems(items = state.modalCancellationItems, editable 
   updateCancellationListCount();
 }
 
+async function toggleCancellationCrmStatus(index, checked, checkbox) {
+  if (!isAdmin()) {
+    checkbox.checked = !checked;
+    showToast("Somente administradores podem atualizar o controle do CRM.", "error");
+    return;
+  }
+
+  const requestId = els.requestId.value;
+  const requestItem = state.requests.find((item) => item.id === requestId);
+  if (!requestId || !requestItem || requestItem.type !== "cancelamento") {
+    checkbox.checked = !checked;
+    showToast("Salve a solicitação antes de controlar os cancelamentos no CRM.", "warning");
+    return;
+  }
+
+  const previousItems = state.modalCancellationItems.map((item) => ({ ...item }));
+  const targetItem = previousItems[index];
+  if (!targetItem?.itemId) {
+    checkbox.checked = !checked;
+    showToast("Não foi possível identificar este cliente na lista.", "error");
+    return;
+  }
+
+  const previousTracking = { ...cancellationCrmTracking(requestItem) };
+  const updatedTracking = { ...previousTracking };
+  const trackingDate = checked ? Timestamp.now() : null;
+
+  if (checked) {
+    updatedTracking[targetItem.itemId] = {
+      cancelled: true,
+      cancelledAt: trackingDate,
+      cancelledByUid: state.user.uid,
+      cancelledByName: state.profile.name || state.user.email
+    };
+  } else {
+    delete updatedTracking[targetItem.itemId];
+  }
+
+  const updatedItems = previousItems.map((item, itemIndex) => itemIndex === index
+    ? {
+        ...item,
+        crmCancelled: checked,
+        crmCancelledAt: trackingDate,
+        crmCancelledByUid: checked ? state.user.uid : "",
+        crmCancelledByName: checked ? (state.profile.name || state.user.email) : ""
+      }
+    : item);
+
+  checkbox.disabled = true;
+
+  try {
+    await updateDoc(doc(db, "requests", requestId), {
+      cancellationCrmStatus: updatedTracking,
+      updatedAt: serverTimestamp(),
+      updatedByUid: state.user.uid,
+      updatedByName: state.profile.name || state.user.email
+    });
+    state.modalCancellationItems = updatedItems;
+    requestItem.cancellationCrmStatus = updatedTracking;
+    renderCancellationItems(updatedItems, state.modalEditable);
+    renderAll();
+    const done = updatedItems.filter((item) => item.crmCancelled === true).length;
+    showToast(checked
+      ? `Cancelamento marcado no CRM (${done}/${updatedItems.length}).`
+      : `Cancelamento reaberto no controle do CRM (${done}/${updatedItems.length}).`);
+  } catch (error) {
+    console.error(error);
+    checkbox.checked = !checked;
+    checkbox.disabled = false;
+    state.modalCancellationItems = previousItems;
+    requestItem.cancellationCrmStatus = previousTracking;
+    showToast(firebaseErrorMessage(error), "error");
+  }
+}
+
 function getCancellationItemsFromForm() {
   return state.modalCancellationItems.map((item) => ({ ...item }));
 }
 
 function getCancellationDraft() {
   return {
+    itemId: createCancellationItemId(),
     clientCnpj: sanitizeText(els.cancellationCnpjInput.value),
     clientName: sanitizeText(els.cancellationClientNameInput.value),
-    reason: sanitizeText(els.cancellationReasonInput.value)
+    reason: sanitizeText(els.cancellationReasonInput.value),
+    crmCancelled: false,
+    crmCancelledAt: null,
+    crmCancelledByUid: "",
+    crmCancelledByName: ""
   };
 }
 
@@ -1443,6 +1602,8 @@ function updateRequestTypeFields() {
   const isProgramming = type === "programacao";
   const isCancellation = type === "cancelamento";
   const isTef = type === "tef_elgin";
+
+  els.requestDialog.classList.toggle("request-dialog-cancellation", isCancellation);
 
   els.programmingFields.hidden = !isProgramming;
   els.cancellationFields.hidden = !isCancellation;
@@ -1521,7 +1682,9 @@ function openRequestModal(id) {
   if (!item) return;
 
   resetRequestForm();
-  const editable = isAdmin() || canRequesterEdit(item);
+  const crmTrackingStarted = item.type === "cancelamento"
+    && Object.keys(cancellationCrmTracking(item)).length > 0;
+  const editable = isAdmin() || (canRequesterEdit(item) && !crmTrackingStarted);
   state.modalEditable = editable;
 
   els.requestId.value = item.id;
@@ -1638,7 +1801,12 @@ function buildCancellationPayload() {
     return { error: "Há dados preenchidos que ainda não foram adicionados. Clique em Adicionar à lista antes de salvar." };
   }
 
-  const cancellationItems = getCancellationItemsFromForm();
+  const cancellationItems = getCancellationItemsFromForm().map((entry) => ({
+    itemId: entry.itemId || createCancellationItemId(),
+    clientName: entry.clientName || "",
+    clientCnpj: entry.clientCnpj || "",
+    reason: entry.reason || ""
+  }));
   if (!cancellationItems.length) {
     return { error: "Adicione pelo menos um cliente para cancelamento." };
   }
@@ -1801,6 +1969,14 @@ async function saveRequest(event) {
     updatedByName: state.profile.name || state.user.email
   };
 
+  if (type === "cancelamento") {
+    const existingTracking = cancellationCrmTracking(existing);
+    const validItemIds = new Set((typeResult.data.cancellationItems || []).map((entry) => entry.itemId));
+    payload.cancellationCrmStatus = Object.fromEntries(
+      Object.entries(existingTracking).filter(([itemId]) => validItemIds.has(itemId))
+    );
+  }
+
   setButtonLoading(els.saveRequestButton, true, "Salvando...");
 
   try {
@@ -1951,7 +2127,8 @@ function cancellationCopyText(item) {
   const blocks = entries.map((entry, index) => `Cliente ${index + 1}
 Razão Social: ${entry.clientName || ""}
 CPF/CNPJ: ${entry.clientCnpj || ""}
-Motivo: ${entry.reason || ""}`);
+Motivo: ${entry.reason || ""}
+Status no CRM: ${entry.crmCancelled === true ? "Cancelado" : "Pendente"}`);
   return `=== CHAMADOS PARA CANCELAMENTO ===\n\n${blocks.join("\n\n------------------------------\n\n")}`;
 }
 
@@ -2078,8 +2255,28 @@ function clearFilters() {
   renderBoard();
 }
 
+function syncModalScrollLock() {
+  const hasOpenDialog = Boolean(document.querySelector("dialog[open]"));
+  document.documentElement.classList.toggle("modal-open", hasOpenDialog);
+  document.body.classList.toggle("modal-open", hasOpenDialog);
+}
+
+function setupModalScrollLock() {
+  const dialogs = Array.from(document.querySelectorAll("dialog"));
+  const observer = new MutationObserver(syncModalScrollLock);
+
+  dialogs.forEach((dialog) => {
+    observer.observe(dialog, { attributes: true, attributeFilter: ["open"] });
+    dialog.addEventListener("close", syncModalScrollLock);
+    dialog.addEventListener("cancel", () => requestAnimationFrame(syncModalScrollLock));
+  });
+
+  syncModalScrollLock();
+}
+
 function closeModal(dialog) {
   if (dialog.open) dialog.close();
+  requestAnimationFrame(syncModalScrollLock);
 }
 
 function showHelpSection(targetId = "help-overview") {
@@ -2734,6 +2931,7 @@ function setupEvents() {
   });
 
   setupDropzones();
+  setupModalScrollLock();
 }
 
 async function handleAuthenticated(user) {

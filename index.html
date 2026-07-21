@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=11.0.0">
+  <link rel="stylesheet" href="styles.css?v=16.0.0">
 </head>
 <body>
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
@@ -650,6 +650,10 @@
             <span class="help-tab-icon">⊘</span>
             <span><strong>Cancelamento</strong><small>Como montar a lista</small></span>
           </button>
+          <button class="help-tab" type="button" data-help-target="help-tef">
+            <span class="help-tab-icon">▤</span>
+            <span><strong>TEF Elgin</strong><small>Dados para configuração</small></span>
+          </button>
           <button class="help-tab" type="button" data-help-target="help-kanban">
             <span class="help-tab-icon">▦</span>
             <span><strong>Kanban e ações</strong><small>Status, filtros e cópia</small></span>
@@ -739,6 +743,8 @@
               <article><span>3</span><div><strong>Repita quando necessário</strong><p>Cadastre um ou mais clientes usando sempre os mesmos campos fixos.</p></div></article>
               <div class="help-flow-arrow">↓</div>
               <article><span>4</span><div><strong>Revise e salve</strong><p>Confira a lista, remova algum item incorreto e depois clique em Salvar solicitação.</p></div></article>
+              <div class="help-flow-arrow">↓</div>
+              <article><span>5</span><div><strong>Acompanhe o cancelamento no CRM</strong><p>Depois que a solicitação estiver salva, o administrador pode marcar individualmente cada cliente que já foi cancelado no CRM.</p></div></article>
             </div>
 
             <div class="help-form-block">
@@ -752,7 +758,7 @@
 
             <div class="help-warning">
               <strong>Atenção</strong>
-              <p>Preencher os campos não adiciona o cliente automaticamente. É obrigatório clicar em <strong>Adicionar cliente à lista</strong> antes de salvar.</p>
+              <p>Preencher os campos não adiciona o cliente automaticamente. É obrigatório clicar em <strong>Adicionar cliente à lista</strong> antes de salvar. O controle <strong>Cancelado no CRM</strong> aparece na lista salva e somente administradores podem alterá-lo.</p>
             </div>
           </section>
 
@@ -761,16 +767,36 @@
               <span class="help-section-number">04</span>
               <div><span class="eyebrow">TEF ELGIN</span><h3>Como preencher a solicitação</h3></div>
             </div>
+
+            <div class="help-steps">
+              <article class="help-step"><span>1</span><div><strong>Confirme os dados técnicos</strong><p>Valide o sistema operacional, a memória da máquina e o sistema Soften utilizado antes de registrar a solicitação.</p></div></article>
+              <article class="help-step"><span>2</span><div><strong>Solicite os dados à adquirente</strong><p>O número do estabelecimento e o número lógico do PIN Pad (SAK) normalmente são fornecidos pela adquirente.</p></div></article>
+              <article class="help-step"><span>3</span><div><strong>Revise os dados do proprietário</strong><p>Confira CPF, telefone com DDD e e-mail, pois esses dados serão usados para contato durante a configuração.</p></div></article>
+              <article class="help-step"><span>4</span><div><strong>Salve e acompanhe</strong><p>Depois de salvar, a solicitação ficará disponível no Kanban e poderá ser copiada pelo administrador.</p></div></article>
+            </div>
+
             <div class="help-form-block">
-              <div class="help-field-list single-column">
-                <div><strong>CNPJ</strong><p>Informe um CNPJ válido do estabelecimento que receberá a configuração.</p></div>
-                <div><strong>Sistema operacional e memória RAM</strong><p>Registre a versão do sistema operacional e selecione a memória disponível. A máquina precisa possuir mais de 4 GB.</p></div>
-                <div><strong>Sistema utilizado</strong><p>Selecione o produto Soften utilizado pelo cliente.</p></div>
-                <div><strong>Número do estabelecimento e SAK</strong><p>Solicite essas informações à adquirente do cliente e confira os números antes de salvar.</p></div>
-                <div><strong>PIN Pad e adquirente</strong><p>Informe o modelo da máquina TEF e a empresa com a qual o cliente negociou as taxas.</p></div>
-                <div><strong>Dados do proprietário</strong><p>Preencha nome, CPF válido, telefone com DDD e e-mail de contato.</p></div>
-                <div><strong>Valor combinado</strong><p>Registre o valor comercial acordado com o cliente.</p></div>
+              <div class="help-form-block-title"><span>✓</span><div><strong>O que informar em cada campo</strong><small>Preencha com os dados confirmados com o cliente e a adquirente.</small></div></div>
+              <div class="help-field-list">
+                <div><strong>CNPJ</strong><p>Informe o CNPJ válido do estabelecimento que receberá a configuração do TEF.</p></div>
+                <div><strong>Sistema operacional</strong><p>Informe o sistema e, quando possível, a versão instalada. Exemplo: Windows 11 Pro 64 bits.</p></div>
+                <div><strong>Memória RAM</strong><p>Selecione uma opção acima de 4 GB. Caso a máquina tenha 4 GB ou menos, oriente o cliente antes de prosseguir.</p></div>
+                <div><strong>Sistema utilizado</strong><p>Selecione o sistema Soften no qual o TEF será configurado.</p></div>
+                <div><strong>Número do estabelecimento</strong><p>Informe o código fornecido pela adquirente para identificar o estabelecimento comercial.</p></div>
+                <div><strong>Número lógico do PIN Pad (SAK)</strong><p>Informe o número lógico fornecido pela adquirente. Não confunda com o número de série físico do equipamento.</p></div>
+                <div><strong>Modelo do PIN Pad</strong><p>Informe a marca e o modelo da máquina utilizada no TEF.</p></div>
+                <div><strong>Adquirente</strong><p>Informe a empresa com a qual o cliente negociou as taxas e contratou a operação do TEF.</p></div>
+                <div><strong>Nome do proprietário</strong><p>Preencha o nome completo do responsável pelo estabelecimento.</p></div>
+                <div><strong>CPF do proprietário</strong><p>Informe um CPF válido. O painel sinalizará documentos inválidos.</p></div>
+                <div><strong>Telefone para contato</strong><p>Informe telefone fixo ou celular com DDD. O campo aplica máscara e valida a quantidade de dígitos.</p></div>
+                <div><strong>E-mail</strong><p>Informe um endereço válido e revise a digitação antes de salvar.</p></div>
+                <div class="help-field-wide"><strong>Valor combinado</strong><p>Registre o valor comercial acordado para o serviço, conforme informado ao cliente.</p></div>
               </div>
+            </div>
+
+            <div class="help-warning">
+              <strong>Antes de salvar</strong>
+              <p>Confirme especialmente o CNPJ, o CPF do proprietário, o número do estabelecimento e o SAK. Dados incorretos podem impedir ou atrasar a configuração do TEF.</p>
             </div>
           </section>
 
@@ -895,6 +921,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=11.0.0"></script>
+  <script type="module" src="app.js?v=16.0.0"></script>
 </body>
 </html>
