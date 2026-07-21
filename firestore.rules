@@ -33,7 +33,7 @@ service cloud.firestore {
     }
 
     function validStatus(status) {
-      return status in ['nova', 'analise', 'aguardando', 'concluida'];
+      return status in ['nova', 'analise', 'aguardando', 'bloqueio', 'concluida'];
     }
 
     function validCancellationCrmData(data) {
@@ -175,6 +175,78 @@ service cloud.firestore {
         && data.createdAt == request.time;
     }
 
+    function isRequestParticipant(data) {
+      return isActive()
+        && (data.requesterUid == request.auth.uid
+          || (data.keys().hasAny(['assigneeUid'])
+            && data.assigneeUid == request.auth.uid));
+    }
+
+    function canReadActiveRequest(requestId) {
+      let path = /databases/$(database)/documents/requests/$(requestId);
+      return exists(path)
+        && (isAdmin() || isRequestParticipant(get(path).data));
+    }
+
+    function canReadArchivedRequest(requestId) {
+      return isAdmin()
+        && exists(/databases/$(database)/documents/archivedRequests/$(requestId));
+    }
+
+    function validCommentData(data) {
+      return data.requestId is string
+        && data.requestId.size() > 0
+        && data.requestTitle is string
+        && data.requestTitle.size() <= 140
+        && data.text is string
+        && data.text.size() > 0
+        && data.text.size() <= 2000
+        && data.authorUid == request.auth.uid
+        && data.authorName is string
+        && data.authorName.size() > 0
+        && data.authorName.size() <= 160
+        && data.authorEmail == request.auth.token.email
+        && data.mentionUid is string
+        && data.mentionName is string
+        && (data.mentionUid == ''
+          || (isAdmin()
+            && exists(/databases/$(database)/documents/users/$(data.mentionUid))
+            && get(/databases/$(database)/documents/users/$(data.mentionUid)).data.active == true))
+        && data.createdAt == request.time;
+    }
+
+    function commentCountIncremented() {
+      let oldHasCount = resource.data.keys().hasAny(['commentCount']);
+      return request.resource.data.commentCount is int
+        && ((oldHasCount && request.resource.data.commentCount == resource.data.commentCount + 1)
+          || (!oldHasCount && request.resource.data.commentCount == 1));
+    }
+
+    function validNotificationData(data) {
+      let requestPath = /databases/$(database)/documents/requests/$(data.requestId);
+      return isAdmin()
+        && data.targetUid is string
+        && data.targetUid.size() > 0
+        && exists(/databases/$(database)/documents/users/$(data.targetUid))
+        && get(/databases/$(database)/documents/users/$(data.targetUid)).data.active == true
+        && data.createdByUid == request.auth.uid
+        && data.createdByName is string
+        && data.requestId is string
+        && data.requestId.size() > 0
+        && exists(requestPath)
+        && (get(requestPath).data.requesterUid == data.targetUid
+          || (get(requestPath).data.keys().hasAny(['assigneeUid'])
+            && get(requestPath).data.assigneeUid == data.targetUid))
+        && data.requestTitle is string
+        && data.requestTitle.size() <= 140
+        && data.message is string
+        && data.message.size() > 0
+        && data.message.size() <= 300
+        && data.type == 'mention'
+        && data.read == false
+        && data.createdAt == request.time;
+    }
+
     match /users/{userId} {
       allow get: if signedIn() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
@@ -215,17 +287,24 @@ service cloud.firestore {
     }
 
     match /requests/{requestId} {
-      allow read: if isAdmin()
-        || (isActive() && resource.data.requesterUid == request.auth.uid);
+      allow read: if isAdmin() || isRequestParticipant(resource.data);
 
-      allow create: if isActive()
-        && request.resource.data.requesterUid == request.auth.uid
-        && request.resource.data.requesterEmail == request.auth.token.email
-        && request.resource.data.status == 'nova'
-        && emptyCancellationCrmOnCreate(request.resource.data)
-        && validRequestData(request.resource.data);
+      allow create: if (isAdmin() && validRequestData(request.resource.data))
+        || (isActive()
+          && request.resource.data.requesterUid == request.auth.uid
+          && request.resource.data.requesterEmail == request.auth.token.email
+          && request.resource.data.status == 'nova'
+          && emptyCancellationCrmOnCreate(request.resource.data)
+          && validRequestData(request.resource.data));
 
       allow update: if isAdmin() && validRequestData(request.resource.data);
+
+      allow update: if isRequestParticipant(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['commentCount', 'updatedAt', 'updatedByUid', 'updatedByName'])
+        && commentCountIncremented()
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
 
       allow update: if isActive()
         && resource.data.requesterUid == request.auth.uid
@@ -241,9 +320,47 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    match /requestAttachments/{attachmentId} {
+    match /archivedRequests/{requestId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && validRequestData(request.resource.data)
+        && request.resource.data.archivedAt == request.time
+        && request.resource.data.archivedByUid == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /requestComments/{commentId} {
+      allow read: if canReadActiveRequest(resource.data.requestId)
+        || canReadArchivedRequest(resource.data.requestId);
+
+      allow create: if isActive()
+        && validCommentData(request.resource.data)
+        && canReadActiveRequest(request.resource.data.requestId);
+
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
       allow read: if isAdmin()
-        || (isActive() && resource.data.ownerUid == request.auth.uid);
+        || (isActive() && resource.data.targetUid == request.auth.uid);
+
+      allow create: if validNotificationData(request.resource.data);
+
+      allow update: if isActive()
+        && resource.data.targetUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt'])
+        && request.resource.data.read == true
+        && request.resource.data.readAt == request.time;
+
+      allow delete: if isAdmin()
+        || (isActive() && resource.data.targetUid == request.auth.uid);
+    }
+
+    match /requestAttachments/{attachmentId} {
+      allow read: if canReadActiveRequest(resource.data.requestId)
+        || canReadArchivedRequest(resource.data.requestId);
 
       allow create: if validAttachmentData(request.resource.data)
         && (isAdmin()

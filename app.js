@@ -29,6 +29,7 @@ import {
   serverTimestamp,
   Timestamp,
   Bytes,
+  increment,
   writeBatch
 } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
@@ -37,6 +38,7 @@ const STATUS_LABELS = {
   nova: "Nova",
   analise: "Em análise",
   aguardando: "Aguardando",
+  bloqueio: "Bloqueio",
   concluida: "Concluída"
 };
 
@@ -73,10 +75,15 @@ const state = {
   user: null,
   profile: null,
   requests: [],
+  archivedRequests: [],
   users: [],
   invites: [],
+  notifications: [],
+  currentComments: [],
   unsubscribeRequests: null,
   unsubscribeProfile: null,
+  unsubscribeNotifications: null,
+  unsubscribeComments: null,
   elapsedTimer: null,
   currentView: "kanban",
   userFilters: { search: "", status: "all", role: "all" },
@@ -90,7 +97,12 @@ const state = {
   modalCancellationItems: [],
   modalExistingAttachments: [],
   modalNewAttachments: [],
-  modalRemovedAttachmentKeys: []
+  modalRemovedAttachmentKeys: [],
+  modalArchived: false,
+  archiveAction: null,
+  archivedLoaded: false,
+  archivedFilters: { search: "", type: "all" },
+  indicatorFilters: { start: "", end: "", type: "all" }
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -135,6 +147,12 @@ const els = {
   newRequestButton: $("#new-request-button"),
   helpButton: $("#help-button"),
   topHelpButton: $("#top-help-button"),
+  notificationButton: $("#notification-button"),
+  notificationBadge: $("#notification-badge"),
+  notificationPopover: $("#notification-popover"),
+  notificationList: $("#notification-list"),
+  closeNotificationsButton: $("#close-notifications-button"),
+  markAllNotificationsRead: $("#mark-all-notifications-read"),
   helpDialog: $("#help-dialog"),
   refreshButton: $("#refresh-button"),
   metricOpen: $("#metric-open"),
@@ -150,7 +168,11 @@ const els = {
   emptyState: $("#empty-state"),
   kanbanView: $("#kanban-view"),
   usersView: $("#users-view"),
+  indicatorsView: $("#indicators-view"),
+  archivedView: $("#archived-view"),
   usersNavButton: $("#users-nav-button"),
+  indicatorsNavButton: $("#indicators-nav-button"),
+  archivedNavButton: $("#archived-nav-button"),
   refreshUsersButton: $("#refresh-users-button"),
   newUserInviteButton: $("#new-user-invite-button"),
   metricActiveUsers: $("#metric-active-users"),
@@ -191,9 +213,41 @@ const els = {
   userStatusDialogWarningText: $("#user-status-dialog-warning-text"),
   userStatusTargetId: $("#user-status-target-id"),
   confirmUserStatusButton: $("#confirm-user-status-button"),
+  refreshIndicatorsButton: $("#refresh-indicators-button"),
+  indicatorStartDate: $("#indicator-start-date"),
+  indicatorEndDate: $("#indicator-end-date"),
+  indicatorTypeFilter: $("#indicator-type-filter"),
+  indicatorClearFilter: $("#indicator-clear-filter"),
+  indicatorCreated: $("#indicator-created"),
+  indicatorCompleted: $("#indicator-completed"),
+  indicatorAverageTime: $("#indicator-average-time"),
+  indicatorBlocked: $("#indicator-blocked"),
+  indicatorCompletionRate: $("#indicator-completion-rate"),
+  indicatorArchived: $("#indicator-archived"),
+  indicatorStatusBars: $("#indicator-status-bars"),
+  indicatorTypeBars: $("#indicator-type-bars"),
+  indicatorRequesterTable: $("#indicator-requester-table"),
+  refreshArchivedButton: $("#refresh-archived-button"),
+  archiveOldRequestsButton: $("#archive-old-requests-button"),
+  archivedSearchInput: $("#archived-search-input"),
+  archivedTypeFilter: $("#archived-type-filter"),
+  archivedTableBody: $("#archived-table-body"),
+  archivedEmptyState: $("#archived-empty-state"),
   requestDialog: $("#request-dialog"),
   requestForm: $("#request-form"),
   requestModalTitle: $("#request-modal-title"),
+  requestDetailsTab: $("#request-details-tab"),
+  requestCommentsTab: $("#request-comments-tab"),
+  requestDetailsPanel: $("#request-details-panel"),
+  requestCommentsPanel: $("#request-comments-panel"),
+  requestCommentCount: $("#request-comment-count"),
+  requestCommentsList: $("#request-comments-list"),
+  commentComposer: $("#comment-composer"),
+  requestCommentText: $("#request-comment-text"),
+  requestCommentMention: $("#request-comment-mention"),
+  commentMentionField: $("#comment-mention-field"),
+  requestCommentError: $("#request-comment-error"),
+  addRequestCommentButton: $("#add-request-comment-button"),
   requestId: $("#request-id"),
   requestType: $("#request-type"),
   priorityField: $("#priority-field"),
@@ -243,7 +297,12 @@ const els = {
   requestError: $("#request-error"),
   saveRequestButton: $("#save-request-button"),
   copyRequestButton: $("#copy-request-button"),
+  archiveRequestButton: $("#archive-request-button"),
   deleteRequestButton: $("#delete-request-button"),
+  archiveConfirmDialog: $("#archive-confirm-dialog"),
+  archiveConfirmTitle: $("#archive-confirm-title"),
+  archiveConfirmMessage: $("#archive-confirm-message"),
+  confirmArchiveButton: $("#confirm-archive-button"),
   deleteConfirmDialog: $("#delete-confirm-dialog"),
   deleteConfirmMessage: $("#delete-confirm-message"),
   confirmDeleteButton: $("#confirm-delete-button"),
@@ -973,20 +1032,58 @@ function subscribeRequests() {
   renderLoadingCards();
 
   const base = collection(db, "requests");
-  const requestsQuery = isAdmin()
-    ? base
-    : query(base, where("requesterUid", "==", state.user.uid));
+  if (isAdmin()) {
+    state.unsubscribeRequests = onSnapshot(base, (snapshot) => {
+      state.requests = snapshot.docs.map((documentSnapshot) => ({
+        id: documentSnapshot.id,
+        ...documentSnapshot.data()
+      }));
+      renderAll();
+      if (state.currentView === "indicators") renderIndicators();
+    }, (error) => {
+      console.error(error);
+      showToast(firebaseErrorMessage(error), "error");
+    });
+    return;
+  }
 
-  state.unsubscribeRequests = onSnapshot(requestsQuery, (snapshot) => {
-    state.requests = snapshot.docs.map((documentSnapshot) => ({
-      id: documentSnapshot.id,
-      ...documentSnapshot.data()
-    }));
+  const sourceMaps = { requester: new Map(), assignee: new Map() };
+  const sync = () => {
+    const merged = new Map([...sourceMaps.requester, ...sourceMaps.assignee]);
+    state.requests = [...merged.values()];
     renderAll();
-  }, (error) => {
+  };
+  const handleSnapshot = (source) => (snapshot) => {
+    sourceMaps[source] = new Map(snapshot.docs.map((documentSnapshot) => [
+      documentSnapshot.id,
+      { id: documentSnapshot.id, ...documentSnapshot.data() }
+    ]));
+    sync();
+  };
+  const handleError = (error) => {
     console.error(error);
     showToast(firebaseErrorMessage(error), "error");
-  });
+  };
+  const unsubscribeRequester = onSnapshot(
+    query(base, where("requesterUid", "==", state.user.uid)),
+    handleSnapshot("requester"),
+    handleError
+  );
+  const unsubscribeAssignee = onSnapshot(
+    query(base, where("assigneeUid", "==", state.user.uid)),
+    handleSnapshot("assignee"),
+    handleError
+  );
+  state.unsubscribeRequests = () => {
+    unsubscribeRequester();
+    unsubscribeAssignee();
+  };
+}
+
+function requestIsAccessible(item) {
+  return Boolean(item) && (isAdmin()
+    || item.requesterUid === state.user?.uid
+    || item.assigneeUid === state.user?.uid);
 }
 
 function createCancellationItemId() {
@@ -1149,6 +1246,7 @@ function cardHtml(item, isOldest) {
     ? `<button class="card-copy-button" type="button" data-copy-id="${escapeHtml(item.id)}" title="Copiar dados da solicitação">⧉ Copiar</button>`
     : "";
   const attachmentCount = Array.isArray(item.attachments) ? item.attachments.length : 0;
+  const commentCount = Number(item.commentCount || 0);
   const cancellationEntries = item.type === "cancelamento" ? cancellationItemsFromRequest(item) : [];
   const cancellationDone = cancellationEntries.filter((entry) => entry.crmCancelled === true).length;
   const crmProgressTag = cancellationEntries.length
@@ -1162,6 +1260,8 @@ function cardHtml(item, isOldest) {
           <span class="tag ${item.type}">${TYPE_LABELS[item.type] || "Solicitação"}</span>
           ${item.type === "programacao" ? `<span class="tag ${item.priority}">${PRIORITY_LABELS[item.priority] || "Normal"}</span>` : ""}
           ${attachmentCount ? `<span class="tag attachment">📎 ${attachmentCount}</span>` : ""}
+          ${commentCount ? `<span class="tag comments">💬 ${commentCount}</span>` : ""}
+          ${item.status === "bloqueio" ? `<span class="tag blocked">BLOQUEIO</span>` : ""}
           ${crmProgressTag}
         </div>
         <span class="card-time ${ageHours >= 48 && item.status !== "concluida" ? "critical" : ""}" data-created-at="${timestampToDate(item.createdAt)?.toISOString() || ""}" data-completed-at="${timestampToDate(item.completedAt)?.toISOString() || ""}" data-status="${item.status}">◷ ${formatElapsed(age, true)}</span>
@@ -1355,7 +1455,7 @@ function blankCancellationItem() {
 
 function cancellationCrmStatusHtml(item, index) {
   const checked = item.crmCancelled === true;
-  const canToggle = isAdmin() && Boolean(els.requestId.value);
+  const canToggle = isAdmin() && Boolean(els.requestId.value) && !state.modalArchived;
   const statusLabel = checked ? "Cancelado" : "Pendente";
   const metadata = checked && item.crmCancelledAt
     ? `<small class="crm-status-meta">${escapeHtml(item.crmCancelledByName || "Administrador")} · ${escapeHtml(formatDateTime(item.crmCancelledAt))}</small>`
@@ -1619,11 +1719,15 @@ function updateRequestTypeFields() {
   if (isCancellation) renderCancellationItems(state.modalCancellationItems, state.modalEditable);
 
   els.requestType.disabled = !state.modalEditable;
-  els.requestStatus.disabled = !isAdmin();
-  els.requestAssignee.disabled = !isAdmin();
+  els.requestStatus.disabled = !isAdmin() || state.modalArchived;
+  els.requestAssignee.disabled = !isAdmin() || state.modalArchived;
 }
 
 function resetRequestForm() {
+  if (state.unsubscribeComments) state.unsubscribeComments();
+  state.unsubscribeComments = null;
+  state.currentComments = [];
+  state.modalArchived = false;
   els.requestForm.reset();
   setDocumentValidity(els.requestClientCode, { required: false, showMessage: false });
   els.requestClientCode.classList.remove("input-invalid", "input-valid");
@@ -1645,7 +1749,15 @@ function resetRequestForm() {
   els.saveRequestButton.textContent = "Salvar solicitação";
   els.saveRequestButton.hidden = false;
   els.copyRequestButton.hidden = true;
+  els.archiveRequestButton.hidden = true;
   els.deleteRequestButton.hidden = true;
+  els.requestCommentsTab.disabled = true;
+  els.requestCommentCount.textContent = "0";
+  els.requestCommentText.value = "";
+  els.requestCommentMention.innerHTML = '<option value="">Não enviar notificação</option>';
+  showFormError(els.requestCommentError);
+  switchRequestTab("details");
+  renderRequestComments();
   els.requestAudit.hidden = true;
   state.modalCancellationItems = [];
   state.modalExistingAttachments = [];
@@ -1677,14 +1789,18 @@ function canRequesterEdit(item) {
     && item.status === "nova";
 }
 
-function openRequestModal(id) {
-  const item = state.requests.find((request) => request.id === id);
-  if (!item) return;
+function openRequestModal(id, source = "active") {
+  const archived = source === "archived";
+  const item = archived
+    ? state.archivedRequests.find((request) => request.id === id)
+    : state.requests.find((request) => request.id === id);
+  if (!item || (!archived && !requestIsAccessible(item))) return;
 
   resetRequestForm();
+  state.modalArchived = archived;
   const crmTrackingStarted = item.type === "cancelamento"
     && Object.keys(cancellationCrmTracking(item)).length > 0;
-  const editable = isAdmin() || (canRequesterEdit(item) && !crmTrackingStarted);
+  const editable = !archived && (isAdmin() || (canRequesterEdit(item) && !crmTrackingStarted));
   state.modalEditable = editable;
 
   els.requestId.value = item.id;
@@ -1728,19 +1844,26 @@ function openRequestModal(id) {
     editable
   );
 
-  els.requestModalTitle.textContent = "Detalhes da solicitação";
+  els.requestModalTitle.textContent = archived ? "Solicitação arquivada" : "Detalhes da solicitação";
   els.saveRequestButton.textContent = "Salvar alterações";
   els.saveRequestButton.hidden = !editable;
   els.copyRequestButton.hidden = !isAdmin();
-  els.deleteRequestButton.hidden = !isAdmin();
+  els.deleteRequestButton.hidden = !isAdmin() || archived;
+  els.archiveRequestButton.hidden = !isAdmin() || (!archived && item.status !== "concluida");
+  els.archiveRequestButton.textContent = archived ? "↶ Restaurar" : "▣ Arquivar";
+  els.requestCommentsTab.disabled = false;
+  els.commentComposer.hidden = archived;
   els.requestAudit.hidden = false;
   els.requestAudit.innerHTML = `
     <strong>Solicitado por:</strong> ${escapeHtml(item.requesterName || item.requesterEmail || "—")}<br>
     <strong>Criado em:</strong> ${formatDateTime(item.createdAt)} · <strong>Tempo:</strong> ${formatElapsed(requestAge(item))}<br>
     <strong>Última atualização:</strong> ${formatDateTime(item.updatedAt)}${item.updatedByName ? ` por ${escapeHtml(item.updatedByName)}` : ""}
+    ${archived ? `<br><strong>Arquivado em:</strong> ${formatDateTime(item.archivedAt)}${item.archivedByName ? ` por ${escapeHtml(item.archivedByName)}` : ""}` : ""}
   `;
 
+  populateCommentMentionOptions(item);
   updateRequestTypeFields();
+  subscribeRequestComments(item.id, archived);
   els.requestDialog.showModal();
 }
 
@@ -2075,11 +2198,17 @@ async function confirmDeleteRequest() {
 
   setButtonLoading(els.confirmDeleteButton, true, "Excluindo...");
   try {
+    const [commentSnapshots, notificationSnapshots] = await Promise.all([
+      getDocs(query(collection(db, "requestComments"), where("requestId", "==", id))),
+      getDocs(query(collection(db, "notifications"), where("requestId", "==", id)))
+    ]);
     const batch = writeBatch(db);
     (Array.isArray(item.attachments) ? item.attachments : []).forEach((attachment) => {
       const reference = firestoreAttachmentReference(normalizeAttachment(attachment));
       if (reference) batch.delete(reference);
     });
+    commentSnapshots.docs.forEach((snapshotDoc) => batch.delete(snapshotDoc.ref));
+    notificationSnapshots.docs.forEach((snapshotDoc) => batch.delete(snapshotDoc.ref));
     batch.delete(doc(db, "requests", id));
     await batch.commit();
     closeModal(els.deleteConfirmDialog);
@@ -2181,9 +2310,451 @@ async function copyText(text) {
 
 function copyRequestById(id) {
   if (!isAdmin()) return;
-  const item = state.requests.find((request) => request.id === id);
+  const item = state.requests.find((request) => request.id === id)
+    || state.archivedRequests.find((request) => request.id === id);
   if (!item) return;
   copyText(requestCopyText(item));
+}
+
+
+function switchRequestTab(tab = "details") {
+  const showComments = tab === "comments" && !els.requestCommentsTab.disabled;
+  els.requestDetailsTab.classList.toggle("active", !showComments);
+  els.requestCommentsTab.classList.toggle("active", showComments);
+  els.requestDetailsTab.setAttribute("aria-selected", String(!showComments));
+  els.requestCommentsTab.setAttribute("aria-selected", String(showComments));
+  els.requestDetailsPanel.hidden = showComments;
+  els.requestCommentsPanel.hidden = !showComments;
+  els.requestDetailsPanel.classList.toggle("active", !showComments);
+  els.requestCommentsPanel.classList.toggle("active", showComments);
+}
+
+function populateCommentMentionOptions(item) {
+  const targetIds = [...new Set([item.requesterUid, item.assigneeUid].filter(Boolean))]
+    .filter((uid) => uid !== state.user?.uid)
+    .filter((uid) => {
+      const user = state.users.find((entry) => entry.uid === uid);
+      return !user || user.active !== false;
+    });
+  const options = targetIds.map((uid) => {
+    const user = state.users.find((entry) => entry.uid === uid);
+    const fallbackName = uid === item.requesterUid
+      ? item.requesterName || item.requesterEmail
+      : item.assigneeName;
+    const name = user?.name || user?.email || fallbackName || "Técnico";
+    return `<option value="${escapeHtml(uid)}">${escapeHtml(name)}</option>`;
+  }).join("");
+  els.requestCommentMention.innerHTML = `<option value="">Não enviar notificação</option>${options}`;
+  els.commentMentionField.hidden = !isAdmin() || !targetIds.length || state.modalArchived;
+}
+
+function renderRequestComments() {
+  const comments = [...state.currentComments].sort((a, b) =>
+    (timestampToDate(a.createdAt)?.getTime() || 0) - (timestampToDate(b.createdAt)?.getTime() || 0));
+  els.requestCommentCount.textContent = String(comments.length);
+
+  if (!comments.length) {
+    els.requestCommentsList.innerHTML = `<div class="comments-empty"><strong>Nenhum comentário interno.</strong><span>Os comentários aparecerão aqui em ordem cronológica.</span></div>`;
+    return;
+  }
+
+  els.requestCommentsList.innerHTML = comments.map((comment) => `
+    <article class="comment-item ${comment.authorUid === state.user?.uid ? "own" : ""}">
+      <div class="comment-avatar">${escapeHtml(initials(comment.authorName || comment.authorEmail))}</div>
+      <div class="comment-body">
+        <header><strong>${escapeHtml(comment.authorName || comment.authorEmail || "Usuário")}</strong><span>${escapeHtml(formatDateTime(comment.createdAt))}</span></header>
+        <p>${escapeHtml(comment.text || "").replaceAll("\n", "<br>")}</p>
+        ${comment.mentionName ? `<div class="comment-mention">♢ Notificação enviada para <strong>${escapeHtml(comment.mentionName)}</strong></div>` : ""}
+      </div>
+    </article>`).join("");
+  els.requestCommentsList.scrollTop = els.requestCommentsList.scrollHeight;
+}
+
+function subscribeRequestComments(requestId, archived = false) {
+  if (state.unsubscribeComments) state.unsubscribeComments();
+  state.currentComments = [];
+  renderRequestComments();
+  state.unsubscribeComments = onSnapshot(
+    query(collection(db, "requestComments"), where("requestId", "==", requestId)),
+    (snapshot) => {
+      state.currentComments = snapshot.docs.map((snapshotDoc) => ({ id: snapshotDoc.id, ...snapshotDoc.data() }));
+      renderRequestComments();
+    },
+    (error) => {
+      console.error(error);
+      showFormError(els.requestCommentError, firebaseErrorMessage(error));
+    }
+  );
+  els.commentComposer.hidden = archived;
+}
+
+async function addRequestComment() {
+  const requestId = els.requestId.value;
+  const item = state.requests.find((request) => request.id === requestId);
+  const text = sanitizeText(els.requestCommentText.value);
+  showFormError(els.requestCommentError);
+
+  if (!item || state.modalArchived) {
+    showFormError(els.requestCommentError, "Comentários não podem ser adicionados a uma solicitação arquivada.");
+    return;
+  }
+  if (!requestIsAccessible(item)) {
+    showFormError(els.requestCommentError, "Você não possui acesso a esta solicitação.");
+    return;
+  }
+  if (!text) {
+    showFormError(els.requestCommentError, "Escreva um comentário antes de enviar.");
+    els.requestCommentText.focus();
+    return;
+  }
+
+  const mentionUid = isAdmin() ? els.requestCommentMention.value : "";
+  const mentionUser = mentionUid ? state.users.find((user) => user.uid === mentionUid && user.active !== false) : null;
+  setButtonLoading(els.addRequestCommentButton, true, "Enviando...");
+
+  try {
+    const batch = writeBatch(db);
+    const commentRef = doc(collection(db, "requestComments"));
+    batch.set(commentRef, {
+      requestId,
+      requestTitle: requestCardTitle(item).slice(0, 140),
+      text,
+      authorUid: state.user.uid,
+      authorName: state.profile.name || state.user.email,
+      authorEmail: state.user.email,
+      mentionUid: mentionUser?.uid || "",
+      mentionName: mentionUser?.name || mentionUser?.email || "",
+      createdAt: serverTimestamp()
+    });
+    batch.update(doc(db, "requests", requestId), {
+      commentCount: increment(1),
+      updatedAt: serverTimestamp(),
+      updatedByUid: state.user.uid,
+      updatedByName: state.profile.name || state.user.email
+    });
+
+    if (mentionUser && mentionUser.uid !== state.user.uid) {
+      const notificationRef = doc(collection(db, "notifications"));
+      batch.set(notificationRef, {
+        targetUid: mentionUser.uid,
+        targetName: mentionUser.name || mentionUser.email || "Técnico",
+        createdByUid: state.user.uid,
+        createdByName: state.profile.name || state.user.email,
+        requestId,
+        requestTitle: requestCardTitle(item).slice(0, 140),
+        message: text.slice(0, 300),
+        type: "mention",
+        read: false,
+        createdAt: serverTimestamp(),
+        readAt: null
+      });
+    }
+
+    await batch.commit();
+    els.requestCommentText.value = "";
+    els.requestCommentMention.value = "";
+    showToast(mentionUser ? "Comentário enviado e técnico notificado." : "Comentário interno enviado.");
+  } catch (error) {
+    console.error(error);
+    showFormError(els.requestCommentError, firebaseErrorMessage(error));
+  } finally {
+    setButtonLoading(els.addRequestCommentButton, false);
+  }
+}
+
+function subscribeNotifications() {
+  if (state.unsubscribeNotifications) state.unsubscribeNotifications();
+  state.unsubscribeNotifications = onSnapshot(
+    query(collection(db, "notifications"), where("targetUid", "==", state.user.uid)),
+    (snapshot) => {
+      state.notifications = snapshot.docs
+        .map((snapshotDoc) => ({ id: snapshotDoc.id, ...snapshotDoc.data() }))
+        .sort((a, b) => (timestampToDate(b.createdAt)?.getTime() || 0) - (timestampToDate(a.createdAt)?.getTime() || 0));
+      renderNotifications();
+    },
+    (error) => console.error("Falha ao carregar notificações", error)
+  );
+}
+
+function renderNotifications() {
+  const unread = state.notifications.filter((notification) => notification.read !== true).length;
+  els.notificationBadge.textContent = String(unread);
+  els.notificationBadge.hidden = unread === 0;
+  els.markAllNotificationsRead.disabled = unread === 0;
+
+  if (!state.notifications.length) {
+    els.notificationList.innerHTML = `<div class="notification-empty"><strong>Nenhuma notificação.</strong><span>Menções e pendências aparecerão aqui.</span></div>`;
+    return;
+  }
+
+  els.notificationList.innerHTML = state.notifications.slice(0, 30).map((notification) => `
+    <button class="notification-item ${notification.read === true ? "" : "unread"}" type="button" data-notification-id="${escapeHtml(notification.id)}" data-request-id="${escapeHtml(notification.requestId || "")}">
+      <span class="notification-dot"></span>
+      <span class="notification-copy"><strong>${escapeHtml(notification.requestTitle || "Solicitação")}</strong><span>${escapeHtml(notification.createdByName || "Usuário")}: ${escapeHtml(notification.message || "Novo alinhamento interno.")}</span><small>${escapeHtml(formatDateTime(notification.createdAt))}</small></span>
+    </button>`).join("");
+}
+
+function toggleNotifications(force) {
+  const shouldOpen = typeof force === "boolean" ? force : els.notificationPopover.hidden;
+  els.notificationPopover.hidden = !shouldOpen;
+}
+
+async function openNotification(notificationId, requestId) {
+  const notification = state.notifications.find((item) => item.id === notificationId);
+  try {
+    if (notification && notification.read !== true) {
+      await updateDoc(doc(db, "notifications", notificationId), { read: true, readAt: serverTimestamp() });
+    }
+  } catch (error) {
+    console.error(error);
+  }
+  toggleNotifications(false);
+  const active = state.requests.find((item) => item.id === requestId);
+  if (active) {
+    openRequestModal(requestId);
+    switchRequestTab("comments");
+    return;
+  }
+  if (isAdmin()) {
+    await loadArchivedRequests();
+    const archived = state.archivedRequests.find((item) => item.id === requestId);
+    if (archived) {
+      openRequestModal(requestId, "archived");
+      switchRequestTab("comments");
+      return;
+    }
+  }
+  showToast("A solicitação desta notificação não está mais disponível no Kanban.", "warning");
+}
+
+async function markAllNotificationsAsRead() {
+  const unread = state.notifications.filter((notification) => notification.read !== true);
+  if (!unread.length) return;
+  const batch = writeBatch(db);
+  unread.slice(0, 400).forEach((notification) => {
+    batch.update(doc(db, "notifications", notification.id), { read: true, readAt: serverTimestamp() });
+  });
+  try {
+    await batch.commit();
+    showToast("Notificações marcadas como lidas.");
+  } catch (error) {
+    console.error(error);
+    showToast(firebaseErrorMessage(error), "error");
+  }
+}
+
+async function loadArchivedRequests(force = false) {
+  if (!isAdmin()) return;
+  if (state.archivedLoaded && !force) return;
+  const snapshots = await getDocs(collection(db, "archivedRequests"));
+  state.archivedRequests = snapshots.docs.map((snapshotDoc) => ({ id: snapshotDoc.id, ...snapshotDoc.data() }));
+  state.archivedLoaded = true;
+}
+
+function archivedFilteredRequests() {
+  const term = state.archivedFilters.search.toLocaleLowerCase("pt-BR");
+  return state.archivedRequests.filter((item) => {
+    const haystack = [item.title, item.clientName, item.clientCode, item.requesterName, item.requesterEmail]
+      .filter(Boolean).join(" ").toLocaleLowerCase("pt-BR");
+    return (!term || haystack.includes(term))
+      && (state.archivedFilters.type === "all" || item.type === state.archivedFilters.type);
+  }).sort((a, b) => (timestampToDate(b.archivedAt)?.getTime() || 0) - (timestampToDate(a.archivedAt)?.getTime() || 0));
+}
+
+function renderArchivedRequests() {
+  const items = archivedFilteredRequests();
+  els.archivedTableBody.innerHTML = items.map((item) => `
+    <tr>
+      <td><div class="archived-title"><strong>${escapeHtml(requestCardTitle(item))}</strong><span>${escapeHtml(item.clientName || item.clientCode || "—")}</span></div></td>
+      <td><span class="tag ${escapeHtml(item.type)}">${escapeHtml(TYPE_LABELS[item.type] || "Solicitação")}</span></td>
+      <td>${escapeHtml(item.requesterName || item.requesterEmail || "—")}</td>
+      <td>${escapeHtml(formatDateTime(item.completedAt))}</td>
+      <td>${escapeHtml(formatDateTime(item.archivedAt))}</td>
+      <td><div class="archived-actions"><button class="user-action-button primary" type="button" data-archive-action="view" data-id="${escapeHtml(item.id)}">Abrir</button><button class="user-action-button success" type="button" data-archive-action="restore" data-id="${escapeHtml(item.id)}">Restaurar</button></div></td>
+    </tr>`).join("");
+  els.archivedEmptyState.hidden = items.length > 0;
+  $(".archived-table-wrap")?.toggleAttribute("hidden", items.length === 0);
+}
+
+function requestDataWithoutId(item) {
+  const { id, ...data } = item;
+  return data;
+}
+
+function openArchiveConfirmation(action, item) {
+  if (!isAdmin() || !item) return;
+  state.archiveAction = { action, id: item.id };
+  const restoring = action === "restore";
+  els.archiveConfirmTitle.textContent = restoring ? "Restaurar solicitação?" : "Arquivar solicitação?";
+  els.archiveConfirmMessage.textContent = restoring
+    ? `A solicitação “${requestCardTitle(item)}” voltará para o Kanban na etapa Concluída.`
+    : `A solicitação “${requestCardTitle(item)}” sairá do Kanban e ficará disponível no histórico.`;
+  els.confirmArchiveButton.textContent = restoring ? "Restaurar solicitação" : "Arquivar solicitação";
+  if (!els.archiveConfirmDialog.open) els.archiveConfirmDialog.showModal();
+}
+
+async function archiveRequestDocument(item) {
+  if (!isAdmin() || !item || item.status !== "concluida") throw { code: "permission-denied" };
+  const batch = writeBatch(db);
+  batch.set(doc(db, "archivedRequests", item.id), {
+    ...requestDataWithoutId(item),
+    archivedAt: serverTimestamp(),
+    archivedByUid: state.user.uid,
+    archivedByName: state.profile.name || state.user.email
+  });
+  batch.delete(doc(db, "requests", item.id));
+  await batch.commit();
+  state.archivedLoaded = false;
+}
+
+async function restoreArchivedRequest(item) {
+  if (!isAdmin() || !item) throw { code: "permission-denied" };
+  const data = requestDataWithoutId(item);
+  delete data.archivedAt;
+  delete data.archivedByUid;
+  delete data.archivedByName;
+  const batch = writeBatch(db);
+  batch.set(doc(db, "requests", item.id), {
+    ...data,
+    status: "concluida",
+    updatedAt: serverTimestamp(),
+    updatedByUid: state.user.uid,
+    updatedByName: state.profile.name || state.user.email
+  });
+  batch.delete(doc(db, "archivedRequests", item.id));
+  await batch.commit();
+  state.archivedLoaded = false;
+}
+
+async function confirmArchiveAction() {
+  const action = state.archiveAction;
+  if (!action || !isAdmin()) return;
+  setButtonLoading(els.confirmArchiveButton, true, action.action === "restore" ? "Restaurando..." : "Arquivando...");
+  try {
+    if (action.action === "restore") {
+      const item = state.archivedRequests.find((entry) => entry.id === action.id);
+      await restoreArchivedRequest(item);
+      showToast("Solicitação restaurada para o Kanban.");
+    } else {
+      const item = state.requests.find((entry) => entry.id === action.id);
+      await archiveRequestDocument(item);
+      showToast("Solicitação arquivada com sucesso.");
+    }
+    closeModal(els.archiveConfirmDialog);
+    closeModal(els.requestDialog);
+    if (state.currentView === "archived") {
+      await loadArchivedRequests(true);
+      renderArchivedRequests();
+    }
+    if (state.currentView === "indicators") renderIndicators();
+  } catch (error) {
+    console.error(error);
+    showToast(firebaseErrorMessage(error), "error");
+  } finally {
+    state.archiveAction = null;
+    setButtonLoading(els.confirmArchiveButton, false);
+  }
+}
+
+async function archiveOldCompletedRequests() {
+  if (!isAdmin()) return;
+  const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
+  const eligible = state.requests.filter((item) => item.status === "concluida"
+    && (timestampToDate(item.completedAt)?.getTime() || 0) <= cutoff);
+  if (!eligible.length) {
+    showToast("Não há solicitações concluídas há mais de 30 dias.", "warning");
+    return;
+  }
+  setButtonLoading(els.archiveOldRequestsButton, true, "Arquivando...");
+  try {
+    for (const item of eligible) await archiveRequestDocument(item);
+    await loadArchivedRequests(true);
+    renderArchivedRequests();
+    showToast(`${eligible.length} solicitação${eligible.length === 1 ? " foi arquivada" : " foram arquivadas"}.`);
+  } catch (error) {
+    console.error(error);
+    showToast(firebaseErrorMessage(error), "error");
+  } finally {
+    setButtonLoading(els.archiveOldRequestsButton, false);
+  }
+}
+
+function setIndicatorDefaultDates() {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - 29);
+  const iso = (date) => date.toISOString().slice(0, 10);
+  els.indicatorStartDate.value = iso(start);
+  els.indicatorEndDate.value = iso(end);
+  state.indicatorFilters.start = els.indicatorStartDate.value;
+  state.indicatorFilters.end = els.indicatorEndDate.value;
+  state.indicatorFilters.type = els.indicatorTypeFilter.value;
+}
+
+function indicatorSourceRequests() {
+  const start = state.indicatorFilters.start ? new Date(`${state.indicatorFilters.start}T00:00:00`) : null;
+  const end = state.indicatorFilters.end ? new Date(`${state.indicatorFilters.end}T23:59:59.999`) : null;
+  return [...state.requests, ...state.archivedRequests].filter((item) => {
+    const created = timestampToDate(item.createdAt);
+    return created
+      && (!start || created >= start)
+      && (!end || created <= end)
+      && (state.indicatorFilters.type === "all" || item.type === state.indicatorFilters.type);
+  });
+}
+
+function reportBarsHtml(entries, total) {
+  const max = Math.max(1, ...entries.map(([, value]) => value));
+  return entries.map(([label, value, className = "blue"]) => `
+    <div class="report-bar-row"><div class="report-bar-label"><span>${escapeHtml(label)}</span><strong>${value}</strong></div><div class="report-bar-track"><span class="${escapeHtml(className)}" style="width:${Math.round((value / max) * 100)}%"></span></div><small>${total ? Math.round((value / total) * 100) : 0}% do período</small></div>`).join("");
+}
+
+function renderIndicators() {
+  if (!isAdmin()) return;
+  const items = indicatorSourceRequests();
+  const completed = items.filter((item) => item.status === "concluida" || Boolean(item.archivedAt));
+  const blocked = items.filter((item) => item.status === "bloqueio");
+  const durations = completed.map((item) => {
+    const created = timestampToDate(item.createdAt);
+    const completedAt = timestampToDate(item.completedAt);
+    return created && completedAt ? Math.max(0, completedAt - created) : null;
+  }).filter((value) => value !== null);
+  const average = durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : null;
+
+  els.indicatorCreated.textContent = items.length;
+  els.indicatorCompleted.textContent = completed.length;
+  els.indicatorAverageTime.textContent = average === null ? "—" : formatElapsed(average, true);
+  els.indicatorBlocked.textContent = blocked.length;
+  els.indicatorCompletionRate.textContent = `${items.length ? Math.round((completed.length / items.length) * 100) : 0}%`;
+  els.indicatorArchived.textContent = items.filter((item) => Boolean(item.archivedAt)).length;
+
+  const statusEntries = VALID_STATUSES.map((status) => [
+    STATUS_LABELS[status],
+    items.filter((item) => item.status === status).length,
+    status === "concluida" ? "green" : status === "bloqueio" ? "red" : status === "aguardando" ? "amber" : status === "analise" ? "purple" : "blue"
+  ]);
+  const typeEntries = VALID_TYPES.map((type) => [
+    TYPE_LABELS[type],
+    items.filter((item) => item.type === type).length,
+    type === "cancelamento" ? "red" : type === "tef_elgin" ? "amber" : "blue"
+  ]);
+  els.indicatorStatusBars.innerHTML = reportBarsHtml(statusEntries, items.length);
+  els.indicatorTypeBars.innerHTML = reportBarsHtml(typeEntries, items.length);
+
+  const requesterMap = new Map();
+  items.forEach((item) => {
+    const key = item.requesterUid || item.requesterEmail || "sem-solicitante";
+    if (!requesterMap.has(key)) requesterMap.set(key, { name: item.requesterName || item.requesterEmail || "Não identificado", total: 0, completed: 0, open: 0, blocked: 0 });
+    const entry = requesterMap.get(key);
+    entry.total += 1;
+    if (item.status === "concluida" || item.archivedAt) entry.completed += 1;
+    else entry.open += 1;
+    if (item.status === "bloqueio") entry.blocked += 1;
+  });
+  const requesterRows = [...requesterMap.values()].sort((a, b) => b.total - a.total);
+  els.indicatorRequesterTable.innerHTML = requesterRows.length
+    ? requesterRows.map((entry) => `<tr><td><strong>${escapeHtml(entry.name)}</strong></td><td>${entry.total}</td><td>${entry.completed}</td><td>${entry.open}</td><td>${entry.blocked}</td></tr>`).join("")
+    : `<tr><td colspan="5" class="report-empty-row">Nenhuma solicitação no período selecionado.</td></tr>`;
 }
 
 async function changeCurrentUserPassword(event) {
@@ -2517,13 +3088,35 @@ function renderUserManagement() {
   els.usersTableBody.closest(".users-table-wrap").hidden = entries.length === 0;
 }
 
-function switchAppView(view = "kanban") {
-  if (view === "users" && !isAdmin()) view = "kanban";
+async function switchAppView(view = "kanban") {
+  if (["users", "indicators", "archived"].includes(view) && !isAdmin()) view = "kanban";
   state.currentView = view;
   els.kanbanView.hidden = view !== "kanban";
   els.usersView.hidden = view !== "users";
+  els.indicatorsView.hidden = view !== "indicators";
+  els.archivedView.hidden = view !== "archived";
   $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
-  if (view === "users") refreshUserManagement();
+
+  if (view === "users") await refreshUserManagement();
+  if (view === "indicators") {
+    if (!els.indicatorStartDate.value) setIndicatorDefaultDates();
+    try {
+      await loadArchivedRequests();
+      renderIndicators();
+    } catch (error) {
+      console.error(error);
+      showToast(firebaseErrorMessage(error), "error");
+    }
+  }
+  if (view === "archived") {
+    try {
+      await loadArchivedRequests();
+      renderArchivedRequests();
+    } catch (error) {
+      console.error(error);
+      showToast(firebaseErrorMessage(error), "error");
+    }
+  }
   els.sidebar.classList.remove("open");
 }
 
@@ -2731,7 +3324,7 @@ function subscribeCurrentProfile() {
     state.profile = { uid: snapshot.id, ...snapshot.data() };
     renderUser();
     if (previousRole && previousRole !== state.profile.role) {
-      if (!isAdmin() && state.currentView === "users") switchAppView("kanban");
+      if (!isAdmin() && ["users", "indicators", "archived"].includes(state.currentView)) switchAppView("kanban");
       await loadUsers();
       subscribeRequests();
     }
@@ -2813,6 +3406,17 @@ function setupEvents() {
   els.newRequestButton.addEventListener("click", () => openNewRequestModal());
   els.helpButton.addEventListener("click", () => openHelpDialog());
   els.topHelpButton.addEventListener("click", () => openHelpDialog());
+  els.notificationButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleNotifications();
+  });
+  els.closeNotificationsButton.addEventListener("click", () => toggleNotifications(false));
+  els.markAllNotificationsRead.addEventListener("click", markAllNotificationsAsRead);
+  els.notificationList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-notification-id]");
+    if (!button) return;
+    openNotification(button.dataset.notificationId, button.dataset.requestId);
+  });
   $$(".help-tab").forEach((tab) => {
     tab.addEventListener("click", () => showHelpSection(tab.dataset.helpTarget));
   });
@@ -2836,6 +3440,17 @@ function setupEvents() {
   els.requestAttachments.addEventListener("change", handleAttachmentSelection);
   els.addCancellationItem.addEventListener("click", addCancellationItem);
   els.copyRequestButton.addEventListener("click", () => copyRequestById(els.requestId.value));
+  els.requestDetailsTab.addEventListener("click", () => switchRequestTab("details"));
+  els.requestCommentsTab.addEventListener("click", () => switchRequestTab("comments"));
+  els.addRequestCommentButton.addEventListener("click", addRequestComment);
+  els.archiveRequestButton.addEventListener("click", () => {
+    const item = state.modalArchived
+      ? state.archivedRequests.find((entry) => entry.id === els.requestId.value)
+      : state.requests.find((entry) => entry.id === els.requestId.value);
+    openArchiveConfirmation(state.modalArchived ? "restore" : "archive", item);
+  });
+  els.confirmArchiveButton.addEventListener("click", confirmArchiveAction);
+  $$(".close-archive-confirm").forEach((button) => button.addEventListener("click", () => closeModal(els.archiveConfirmDialog)));
   els.deleteRequestButton.addEventListener("click", deleteRequest);
   els.confirmDeleteButton.addEventListener("click", confirmDeleteRequest);
   $$(".close-delete-confirm").forEach((button) => button.addEventListener("click", () => closeModal(els.deleteConfirmDialog)));
@@ -2853,8 +3468,8 @@ function setupEvents() {
         els.sidebar.classList.remove("open");
         return;
       }
-      if (button.dataset.view === "users") {
-        switchAppView("users");
+      if (["users", "indicators", "archived"].includes(button.dataset.view)) {
+        switchAppView(button.dataset.view);
         return;
       }
       switchAppView("kanban");
@@ -2878,6 +3493,11 @@ function setupEvents() {
       && !els.sidebar.contains(event.target)
       && !event.target.closest(".mobile-menu")) {
       els.sidebar.classList.remove("open");
+    }
+    if (!els.notificationPopover.hidden
+      && !els.notificationPopover.contains(event.target)
+      && !els.notificationButton.contains(event.target)) {
+      toggleNotifications(false);
     }
   });
 
@@ -2904,6 +3524,46 @@ function setupEvents() {
     renderUserManagement();
   });
 
+  els.refreshIndicatorsButton.addEventListener("click", async () => {
+    await loadArchivedRequests(true);
+    renderIndicators();
+    showToast("Indicadores atualizados.");
+  });
+  [els.indicatorStartDate, els.indicatorEndDate, els.indicatorTypeFilter].forEach((control) => {
+    control.addEventListener("change", () => {
+      state.indicatorFilters.start = els.indicatorStartDate.value;
+      state.indicatorFilters.end = els.indicatorEndDate.value;
+      state.indicatorFilters.type = els.indicatorTypeFilter.value;
+      renderIndicators();
+    });
+  });
+  els.indicatorClearFilter.addEventListener("click", () => {
+    els.indicatorTypeFilter.value = "all";
+    setIndicatorDefaultDates();
+    renderIndicators();
+  });
+  els.refreshArchivedButton.addEventListener("click", async () => {
+    await loadArchivedRequests(true);
+    renderArchivedRequests();
+    showToast("Histórico atualizado.");
+  });
+  els.archiveOldRequestsButton.addEventListener("click", archiveOldCompletedRequests);
+  els.archivedSearchInput.addEventListener("input", () => {
+    state.archivedFilters.search = els.archivedSearchInput.value.trim();
+    renderArchivedRequests();
+  });
+  els.archivedTypeFilter.addEventListener("change", () => {
+    state.archivedFilters.type = els.archivedTypeFilter.value;
+    renderArchivedRequests();
+  });
+  els.archivedTableBody.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-archive-action]");
+    if (!button) return;
+    const item = state.archivedRequests.find((entry) => entry.id === button.dataset.id);
+    if (button.dataset.archiveAction === "view") openRequestModal(button.dataset.id, "archived");
+    if (button.dataset.archiveAction === "restore") openArchiveConfirmation("restore", item);
+  });
+
   els.forgotPassword.addEventListener("click", () => {
     els.resetEmail.value = els.loginEmail.value.trim();
     showFormError(els.resetError);
@@ -2924,10 +3584,16 @@ function setupEvents() {
     }
   });
 
-  [els.requestDialog, els.resetDialog, els.changePasswordDialog, els.helpDialog, els.userInviteDialog, els.editUserDialog, els.userStatusDialog].forEach((dialog) => {
+  [els.requestDialog, els.resetDialog, els.changePasswordDialog, els.helpDialog, els.userInviteDialog, els.editUserDialog, els.userStatusDialog, els.archiveConfirmDialog].forEach((dialog) => {
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) dialog.close();
     });
+  });
+
+  els.requestDialog.addEventListener("close", () => {
+    if (state.unsubscribeComments) state.unsubscribeComments();
+    state.unsubscribeComments = null;
+    state.currentComments = [];
   });
 
   setupDropzones();
@@ -2950,9 +3616,10 @@ async function handleAuthenticated(user) {
     els.appView.hidden = false;
     showLoginCard();
     renderUser();
-    switchAppView("kanban");
+    await switchAppView("kanban");
     await loadUsers();
     subscribeRequests();
+    subscribeNotifications();
     subscribeCurrentProfile();
 
     if (state.elapsedTimer) clearInterval(state.elapsedTimer);
@@ -2970,14 +3637,25 @@ async function handleAuthenticated(user) {
 function handleSignedOut() {
   if (state.unsubscribeRequests) state.unsubscribeRequests();
   if (state.unsubscribeProfile) state.unsubscribeProfile();
+  if (state.unsubscribeNotifications) state.unsubscribeNotifications();
+  if (state.unsubscribeComments) state.unsubscribeComments();
   if (state.elapsedTimer) clearInterval(state.elapsedTimer);
   state.unsubscribeRequests = null;
   state.unsubscribeProfile = null;
+  state.unsubscribeNotifications = null;
+  state.unsubscribeComments = null;
   state.user = null;
   state.profile = null;
   state.requests = [];
+  state.archivedRequests = [];
+  state.archivedLoaded = false;
   state.users = [];
   state.invites = [];
+  state.notifications = [];
+  state.currentComments = [];
+  toggleNotifications(false);
+  els.notificationList.innerHTML = "";
+  els.notificationBadge.hidden = true;
   els.appView.hidden = true;
   els.loginView.hidden = false;
   els.loginPassword.value = "";
@@ -3006,7 +3684,7 @@ async function loadAppVersion() {
     if (!response.ok) throw new Error("version-file-unavailable");
 
     const info = await response.json();
-    const release = String(info.release || "18").replace(/^v/i, "");
+    const release = String(info.release || "19").replace(/^v/i, "");
     const isLocal = !info.build || String(info.build).toLowerCase() === "local";
     const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
 
@@ -3041,7 +3719,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v18";
+    versionLabel.textContent = "v19";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }

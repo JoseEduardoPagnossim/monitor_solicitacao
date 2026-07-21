@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=18.0.0">
+  <link rel="stylesheet" href="styles.css?v=19.0.0">
 </head>
 <body>
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
@@ -124,6 +124,12 @@
         <button class="nav-item" data-filter-type="tef_elgin">
           <span class="nav-icon">▤</span> TEF Elgin
         </button>
+        <button id="indicators-nav-button" class="nav-item admin-only" data-view="indicators" type="button">
+          <span class="nav-icon">◫</span> Indicadores
+        </button>
+        <button id="archived-nav-button" class="nav-item admin-only" data-view="archived" type="button">
+          <span class="nav-icon">▣</span> Arquivados
+        </button>
         <button id="users-nav-button" class="nav-item admin-only" data-view="users" type="button">
           <span class="nav-icon">♙</span> Usuários
         </button>
@@ -146,7 +152,7 @@
         <div id="app-version-card" class="app-version-card" title="Informações da versão publicada">
           <div class="app-version-main">
             <span>VERSÃO</span>
-            <strong id="app-version-label">v18</strong>
+            <strong id="app-version-label">v19</strong>
           </div>
           <span id="app-version-details" class="app-version-details">Ambiente local</span>
         </div>
@@ -163,6 +169,9 @@
           <p id="welcome-message">Acompanhe as demandas da equipe em tempo real.</p>
         </div>
         <div class="topbar-actions">
+          <div class="notification-anchor">
+            <button id="notification-button" class="button button-secondary notification-button" type="button" title="Notificações">♢ Notificações <span id="notification-badge" class="notification-badge" hidden>0</span></button>
+          </div>
           <button id="top-help-button" class="button button-secondary" type="button" title="Abrir ajuda">? Ajuda</button>
           <button id="refresh-button" class="button button-secondary" type="button" title="Atualizar">↻ Atualizar</button>
           <button id="new-request-button" class="button button-primary" type="button">+ Nova solicitação</button>
@@ -224,6 +233,10 @@
         <div class="kanban-column" data-status="aguardando">
           <header><div><span class="status-dot waiting"></span><h2>Aguardando</h2></div><span class="column-count" data-count="aguardando">0</span></header>
           <div class="column-body" data-dropzone="aguardando"></div>
+        </div>
+        <div class="kanban-column" data-status="bloqueio">
+          <header><div><span class="status-dot blocked"></span><h2>Bloqueio</h2></div><span class="column-count" data-count="bloqueio">0</span></header>
+          <div class="column-body" data-dropzone="bloqueio"></div>
         </div>
         <div class="kanban-column" data-status="concluida">
           <header><div><span class="status-dot done"></span><h2>Concluídas</h2></div><span class="column-count" data-count="concluida">0</span></header>
@@ -289,8 +302,99 @@
           </div>
         </section>
       </section>
+
+      <section id="indicators-view" class="app-section admin-view" hidden>
+        <header class="topbar">
+          <div>
+            <button class="icon-button mobile-menu" type="button" aria-label="Abrir menu">☰</button>
+            <span class="eyebrow">GESTÃO</span>
+            <h1>Indicadores gerenciais</h1>
+            <p>Acompanhe volume, desempenho, gargalos e distribuição das solicitações.</p>
+          </div>
+          <div class="topbar-actions">
+            <button id="refresh-indicators-button" class="button button-secondary" type="button">↻ Atualizar</button>
+          </div>
+        </header>
+
+        <section class="toolbar reports-toolbar">
+          <label class="compact-field"><span>De</span><input id="indicator-start-date" type="date"></label>
+          <label class="compact-field"><span>Até</span><input id="indicator-end-date" type="date"></label>
+          <select id="indicator-type-filter" class="select-control" aria-label="Filtrar indicadores por tipo">
+            <option value="all">Todos os tipos</option>
+            <option value="programacao">Programação</option>
+            <option value="cancelamento">Cancelamento</option>
+            <option value="tef_elgin">TEF Elgin</option>
+          </select>
+          <button id="indicator-clear-filter" class="link-button" type="button">Últimos 30 dias</button>
+        </section>
+
+        <section class="metrics-grid indicator-metrics-grid" aria-label="Indicadores gerenciais">
+          <article class="metric-card"><div class="metric-icon blue">▣</div><div><span>Criadas no período</span><strong id="indicator-created">0</strong></div></article>
+          <article class="metric-card"><div class="metric-icon green">✓</div><div><span>Concluídas</span><strong id="indicator-completed">0</strong></div></article>
+          <article class="metric-card"><div class="metric-icon amber">◷</div><div><span>Tempo médio</span><strong id="indicator-average-time">—</strong></div></article>
+          <article class="metric-card"><div class="metric-icon red">!</div><div><span>Em bloqueio</span><strong id="indicator-blocked">0</strong></div></article>
+          <article class="metric-card"><div class="metric-icon purple">%</div><div><span>Taxa de conclusão</span><strong id="indicator-completion-rate">0%</strong></div></article>
+          <article class="metric-card"><div class="metric-icon gray">▣</div><div><span>Arquivadas</span><strong id="indicator-archived">0</strong></div></article>
+        </section>
+
+        <section class="reports-grid">
+          <article class="report-card">
+            <header><div><span class="eyebrow">DISTRIBUIÇÃO</span><h2>Por status</h2></div></header>
+            <div id="indicator-status-bars" class="report-bars"></div>
+          </article>
+          <article class="report-card">
+            <header><div><span class="eyebrow">VOLUME</span><h2>Por tipo</h2></div></header>
+            <div id="indicator-type-bars" class="report-bars"></div>
+          </article>
+          <article class="report-card report-card-wide">
+            <header><div><span class="eyebrow">EQUIPE</span><h2>Solicitações por técnico</h2></div></header>
+            <div class="report-table-wrap"><table class="report-table"><thead><tr><th>Técnico</th><th>Criadas</th><th>Concluídas</th><th>Em aberto</th><th>Bloqueadas</th></tr></thead><tbody id="indicator-requester-table"></tbody></table></div>
+          </article>
+        </section>
+      </section>
+
+      <section id="archived-view" class="app-section admin-view" hidden>
+        <header class="topbar">
+          <div>
+            <button class="icon-button mobile-menu" type="button" aria-label="Abrir menu">☰</button>
+            <span class="eyebrow">HISTÓRICO</span>
+            <h1>Solicitações arquivadas</h1>
+            <p>Consulte registros antigos sem sobrecarregar o Kanban principal.</p>
+          </div>
+          <div class="topbar-actions">
+            <button id="archive-old-requests-button" class="button button-secondary" type="button">Arquivar concluídas há 30 dias</button>
+            <button id="refresh-archived-button" class="button button-secondary" type="button">↻ Atualizar</button>
+          </div>
+        </header>
+
+        <section class="toolbar archived-toolbar">
+          <div class="search-box"><span>⌕</span><input id="archived-search-input" type="search" placeholder="Buscar cliente, CNPJ, título ou solicitante..."></div>
+          <select id="archived-type-filter" class="select-control" aria-label="Filtrar arquivados por tipo">
+            <option value="all">Todos os tipos</option>
+            <option value="programacao">Programação</option>
+            <option value="cancelamento">Cancelamento</option>
+            <option value="tef_elgin">TEF Elgin</option>
+          </select>
+        </section>
+
+        <section class="archived-panel">
+          <div class="archived-table-wrap">
+            <table class="archived-table">
+              <thead><tr><th>Solicitação</th><th>Tipo</th><th>Solicitante</th><th>Concluída</th><th>Arquivada</th><th>Ações</th></tr></thead>
+              <tbody id="archived-table-body"></tbody>
+            </table>
+          </div>
+          <div id="archived-empty-state" class="users-empty-state" hidden><div>▣</div><h2>Nenhuma solicitação arquivada</h2><p>As solicitações concluídas podem ser arquivadas pelo administrador.</p></div>
+        </section>
+      </section>
     </main>
   </div>
+
+  <aside id="notification-popover" class="notification-popover" hidden aria-label="Notificações internas">
+    <header><div><span class="eyebrow">INTERNO</span><h2>Notificações</h2></div><button id="close-notifications-button" class="icon-button" type="button" aria-label="Fechar notificações">×</button></header>
+    <div id="notification-list" class="notification-list"></div>
+    <button id="mark-all-notifications-read" class="notification-footer-button" type="button">Marcar todas como lidas</button>
+  </aside>
 
   <dialog id="request-dialog" class="modal">
     <form id="request-form" method="dialog" class="modal-content">
@@ -302,6 +406,11 @@
         <button class="icon-button close-modal" type="button" aria-label="Fechar">×</button>
       </div>
 
+      <div class="request-tabs" role="tablist" aria-label="Conteúdo da solicitação">
+        <button id="request-details-tab" class="request-tab active" type="button" data-request-tab="details" role="tab" aria-selected="true">Detalhes</button>
+        <button id="request-comments-tab" class="request-tab" type="button" data-request-tab="comments" role="tab" aria-selected="false" disabled>Comentários <span id="request-comment-count" class="request-tab-count">0</span></button>
+      </div>
+      <section id="request-details-panel" class="request-tab-panel active" data-request-panel="details">
       <input id="request-id" type="hidden">
       <div class="form-grid">
         <label class="field">
@@ -541,6 +650,7 @@
             <option value="nova">Nova</option>
             <option value="analise">Em análise</option>
             <option value="aguardando">Aguardando</option>
+            <option value="bloqueio">Bloqueio</option>
             <option value="concluida">Concluída</option>
           </select>
         </label>
@@ -557,6 +667,7 @@
       <div class="modal-actions">
         <div class="modal-actions-left admin-only">
           <button id="copy-request-button" class="button button-copy" type="button" hidden>⧉ Copiar dados</button>
+          <button id="archive-request-button" class="button button-secondary admin-only" type="button" hidden>▣ Arquivar</button>
           <button id="delete-request-button" class="button button-danger admin-only" type="button" hidden>Excluir</button>
         </div>
         <div class="modal-actions-right">
@@ -564,6 +675,20 @@
           <button id="save-request-button" class="button button-primary" type="submit">Salvar solicitação</button>
         </div>
       </div>
+      </section>
+
+      <section id="request-comments-panel" class="request-tab-panel comments-panel" data-request-panel="comments" hidden>
+        <div class="comments-header">
+          <div><span class="eyebrow">ALINHAMENTO INTERNO</span><h3>Comentários da solicitação</h3><p>Use este espaço para registrar pendências e alinhar informações com o técnico.</p></div>
+        </div>
+        <div id="request-comments-list" class="comments-list"><div class="comments-empty"><strong>Nenhum comentário interno.</strong><span>Os comentários aparecerão aqui em ordem cronológica.</span></div></div>
+        <div id="comment-composer" class="comment-composer">
+          <label class="field"><span>Novo comentário *</span><textarea id="request-comment-text" rows="4" maxlength="2000" placeholder="Escreva o alinhamento ou a informação que está faltando..."></textarea></label>
+          <label id="comment-mention-field" class="field admin-only"><span>Notificar técnico (opcional)</span><select id="request-comment-mention"><option value="">Não enviar notificação</option></select><small>O técnico receberá uma notificação interna no painel.</small></label>
+          <p id="request-comment-error" class="form-error" hidden></p>
+          <div class="comment-actions"><button id="add-request-comment-button" class="button button-primary" type="button">Enviar comentário</button></div>
+        </div>
+      </section>
     </form>
   </dialog>
 
@@ -668,6 +793,10 @@
           <button class="help-tab admin-only" type="button" data-help-target="help-users">
             <span class="help-tab-icon">♙</span>
             <span><strong>Usuários</strong><small>Convites e permissões</small></span>
+          </button>
+          <button class="help-tab admin-only" type="button" data-help-target="help-management">
+            <span class="help-tab-icon">◫</span>
+            <span><strong>Gestão</strong><small>Indicadores e arquivamento</small></span>
           </button>
         </nav>
 
@@ -816,8 +945,9 @@
             <div class="help-status-grid">
               <article><span class="status-dot new"></span><div><strong>Nova</strong><p>Solicitação cadastrada e ainda não iniciada.</p></div></article>
               <article><span class="status-dot analysis"></span><div><strong>Em análise</strong><p>Demanda sendo avaliada pelo responsável.</p></div></article>
-              <article><span class="status-dot waiting"></span><div><strong>Aguardando</strong><p>Existe uma dependência, retorno ou informação pendente.</p></div></article>
-              <article><span class="status-dot done"></span><div><strong>Concluída</strong><p>Solicitação finalizada e mantida no histórico.</p></div></article>
+              <article><span class="status-dot waiting"></span><div><strong>Aguardando</strong><p>Existe uma dependência ou retorno externo pendente.</p></div></article>
+              <article><span class="status-dot blocked"></span><div><strong>Bloqueio</strong><p>Falta informação, validação ou ação necessária para continuar.</p></div></article>
+              <article><span class="status-dot done"></span><div><strong>Concluída</strong><p>Solicitação finalizada e pronta para arquivamento.</p></div></article>
             </div>
 
             <div class="help-form-block">
@@ -826,6 +956,9 @@
                 <div><strong>Responsável</strong><p>O administrador pode atribuir a demanda para um usuário cadastrado.</p></div>
                 <div><strong>Mover no Kanban</strong><p>O administrador pode arrastar o cartão entre as colunas para atualizar o status.</p></div>
                 <div><strong>Botão Copiar dados</strong><p>Disponível para o administrador. Em Programação, copia o formulário formatado; em Cancelamento, copia a lista; em TEF Elgin, copia todos os dados da configuração.</p></div>
+                <div><strong>Comentários internos</strong><p>Na aba Comentários, registre alinhamentos. O administrador pode selecionar o técnico para gerar uma notificação interna quando faltar alguma informação.</p></div>
+                <div><strong>Bloqueio</strong><p>Use a coluna Bloqueio quando a solicitação não puder avançar por falta de dados, retorno ou validação.</p></div>
+                <div><strong>Arquivamento</strong><p>Solicitações concluídas podem ser arquivadas pelo administrador, retirando registros antigos do Kanban sem perder o histórico.</p></div>
                 <div><strong>Editar e excluir</strong><p>O solicitante pode editar uma demanda própria enquanto ela estiver em Nova. A exclusão de solicitações é permitida exclusivamente para usuários com perfil Administrador.</p></div>
               </div>
             </div>
@@ -849,12 +982,40 @@
             </div>
             <div class="help-warning"><strong>Importante</strong><p>Desativar mantém o histórico do usuário, mas bloqueia seu acesso. O administrador não pode desativar ou remover o próprio perfil administrativo.</p></div>
           </section>
+
+          <section id="help-management" class="help-section admin-only">
+            <div class="help-section-title">
+              <span class="help-section-number">07</span>
+              <div><span class="eyebrow">GESTÃO</span><h3>Indicadores e arquivamento</h3></div>
+            </div>
+            <div class="help-form-block">
+              <div class="help-field-list single-column">
+                <div><strong>Indicadores gerenciais</strong><p>Disponíveis apenas para administradores. Use o período e o tipo para analisar solicitações criadas, concluídas, bloqueadas, tempo médio e desempenho por técnico.</p></div>
+                <div><strong>Arquivar uma solicitação</strong><p>Abra uma solicitação concluída e clique em Arquivar. Ela sairá do Kanban principal, mas continuará com dados, comentários e anexos no histórico.</p></div>
+                <div><strong>Arquivamento em lote</strong><p>Na tela Arquivados, o administrador pode mover de uma vez as solicitações concluídas há mais de 30 dias.</p></div>
+                <div><strong>Restaurar</strong><p>Use Restaurar para devolver uma solicitação arquivada ao Kanban, na coluna Concluídas.</p></div>
+              </div>
+            </div>
+            <div class="help-notice"><strong>Melhoria de desempenho</strong><p>O Kanban carrega somente solicitações ativas. Registros arquivados são consultados apenas quando o administrador abre o histórico ou os indicadores.</p></div>
+          </section>
         </div>
       </div>
 
       <div class="modal-actions help-modal-actions">
         <span>Estas orientações podem ser consultadas a qualquer momento pelo menu <strong>Ajuda</strong>.</span>
         <button class="button button-primary close-help-modal" type="button">Entendi</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="archive-confirm-dialog" class="modal modal-small confirm-dialog">
+    <div class="modal-content confirm-dialog-content">
+      <div class="confirm-dialog-icon archive-icon" aria-hidden="true">▣</div>
+      <div class="confirm-dialog-copy"><span class="eyebrow">ARQUIVAMENTO</span><h2 id="archive-confirm-title">Arquivar solicitação?</h2><p id="archive-confirm-message">O registro sairá do Kanban principal e continuará disponível no histórico.</p></div>
+      <div class="confirm-dialog-warning"><strong>O histórico será preservado.</strong><span>Comentários, anexos e dados da solicitação continuarão disponíveis para administradores.</span></div>
+      <div class="modal-actions modal-actions-end confirm-dialog-actions">
+        <button class="button button-secondary close-archive-confirm" type="button">Cancelar</button>
+        <button id="confirm-archive-button" class="button button-primary" type="button">Arquivar solicitação</button>
       </div>
     </div>
   </dialog>
@@ -928,6 +1089,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=18.0.0"></script>
+  <script type="module" src="app.js?v=19.0.0"></script>
 </body>
 </html>

@@ -6,7 +6,7 @@ O projeto foi preparado para ser publicado no **GitHub Pages** e utiliza o **Fir
 
 ---
 
-> Versão 12: inclui controle individual dos clientes já cancelados no CRM, disponível somente para administradores, com progresso exibido nos cartões.
+> Versão 19: inclui comentários internos com menção e notificação, coluna Bloqueio, indicadores gerenciais exclusivos para administradores e arquivamento de solicitações concluídas.
 
 ## Funcionalidades disponíveis
 
@@ -33,6 +33,7 @@ O projeto foi preparado para ser publicado no **GitHub Pages** e utiliza o **Fir
   - **Nova**;
   - **Em análise**;
   - **Aguardando**;
+  - **Bloqueio**;
   - **Concluída**.
 - Atualização em tempo real pelo Cloud Firestore.
 - Arrastar e soltar cartões entre as colunas, disponível para administradores.
@@ -46,6 +47,46 @@ O projeto foi preparado para ser publicado no **GitHub Pages** e utiliza o **Fir
 - Filtros por tipo, prioridade e solicitante.
 - Campo para definição do responsável.
 - Layout responsivo para computador e celular.
+- Cada coluna possui rolagem independente.
+- A etapa **Bloqueio** identifica solicitações paradas por falta de informação, validação ou retorno.
+
+### Comentários internos e notificações
+
+Cada solicitação salva possui uma aba **Comentários**, destinada exclusivamente ao alinhamento interno da equipe.
+
+- Administradores e usuários que possuem acesso à solicitação podem registrar comentários.
+- O administrador pode selecionar o técnico solicitante ou o responsável pela demanda para enviar uma notificação interna.
+- O usuário notificado visualiza um contador no botão **Notificações**.
+- Ao abrir a notificação, o painel direciona para a aba de comentários da solicitação.
+- Os comentários registram autor, data, horário e eventual usuário mencionado.
+- Comentários permanecem vinculados à solicitação mesmo após o arquivamento.
+
+### Indicadores gerenciais
+
+A tela **Indicadores** é exibida somente para administradores e apresenta:
+
+- solicitações criadas no período;
+- solicitações concluídas;
+- tempo médio de conclusão;
+- solicitações em Bloqueio;
+- taxa de conclusão;
+- quantidade de solicitações arquivadas;
+- distribuição por status;
+- distribuição por tipo;
+- volume criado, concluído, em aberto e bloqueado por técnico.
+
+É possível filtrar por período e tipo de solicitação. Os indicadores consideram solicitações ativas e arquivadas.
+
+### Arquivamento
+
+O arquivamento mantém o Kanban principal mais leve, pois solicitações antigas são movidas da coleção ativa para uma coleção de histórico.
+
+- Somente administradores podem arquivar ou restaurar.
+- Apenas solicitações concluídas podem ser arquivadas.
+- A solicitação deixa de aparecer no Kanban, mas preserva dados, comentários e anexos.
+- A tela **Arquivados** permite pesquisar, abrir e restaurar registros.
+- Existe uma ação para arquivar em lote solicitações concluídas há mais de 30 dias.
+- Ao restaurar, a solicitação retorna para a coluna **Concluídas**.
 
 ### Solicitação de programação
 
@@ -199,7 +240,11 @@ O painel possui uma tela **Ajuda**, disponível no menu lateral e no topo, com o
 - funcionamento do Kanban;
 - filtros, responsável e movimentação dos cartões;
 - botão de copiar;
-- regras de edição e exclusão.
+- regras de edição e exclusão;
+- comentários internos e notificações;
+- uso da etapa Bloqueio;
+- indicadores gerenciais;
+- arquivamento e restauração.
 
 ### Exclusão
 
@@ -233,7 +278,10 @@ O administrador pode:
 - arrastar cartões entre as etapas;
 - copiar os dados formatados;
 - abrir e remover anexos;
-- excluir solicitações e seus anexos.
+- excluir solicitações e seus anexos;
+- registrar comentários internos e notificar o técnico;
+- acessar indicadores gerenciais;
+- arquivar e restaurar solicitações concluídas.
 
 ### Solicitante
 
@@ -244,6 +292,9 @@ O solicitante pode:
 - editar somente as próprias solicitações enquanto estiverem na etapa **Nova**;
 - adicionar ou remover anexos enquanto a solicitação puder ser editada;
 - acompanhar o andamento e o tempo em aberto;
+- visualizar e responder aos comentários internos das solicitações acessíveis;
+- receber notificações quando for mencionado;
+- visualizar solicitações em que foi definido como responsável;
 - alterar a própria senha pelo ícone de chave no perfil, confirmando a senha atual.
 
 O solicitante não pode:
@@ -261,7 +312,7 @@ O GitHub Pages hospeda apenas arquivos estáticos e não fornece autenticação 
 
 - **GitHub Pages**: hospedagem da página;
 - **Firebase Authentication**: login por e-mail e senha, alteração da senha no painel e recuperação por e-mail;
-- **Cloud Firestore**: usuários, solicitações e anexos;
+- **Cloud Firestore**: usuários, solicitações, comentários, notificações, histórico e anexos;
 - **Firestore Security Rules**: controle efetivo de leitura, criação, edição e exclusão.
 
 ### Coleções utilizadas
@@ -270,6 +321,9 @@ O GitHub Pages hospeda apenas arquivos estáticos e não fornece autenticação 
 users
 userInvites
 requests
+archivedRequests
+requestComments
+notifications
 requestAttachments
 ```
 
@@ -284,6 +338,18 @@ Armazena convites temporários criados pelos administradores. O link contém um 
 #### `requests`
 
 Armazena as solicitações de programação, cancelamento e TEF Elgin.
+
+#### `archivedRequests`
+
+Armazena solicitações concluídas retiradas do Kanban principal. Esta separação reduz o volume carregado em tempo real pela tela operacional.
+
+#### `requestComments`
+
+Armazena os comentários internos vinculados pelo campo `requestId`.
+
+#### `notifications`
+
+Armazena notificações internas de menção destinadas a um usuário específico.
 
 #### `requestAttachments`
 
@@ -863,6 +929,19 @@ O painel acompanha o documento do perfil em tempo real. Ao detectar `active: fal
 - Ao fechar o diálogo, a rolagem normal da página é restaurada automaticamente.
 - O bloqueio também funciona quando um segundo diálogo é aberto sobre outro, como a confirmação de exclusão.
 
+## Versão 19 — comentários, indicadores, arquivamento e Bloqueio
+
+- Criada a aba **Comentários** dentro de cada solicitação.
+- Incluída menção ao técnico solicitante ou responsável, com notificação interna.
+- Adicionado contador de notificações não lidas.
+- Usuários responsáveis também passam a visualizar as solicitações atribuídas a eles.
+- Criada a coluna **Bloqueio** no Kanban.
+- Criada a tela administrativa **Indicadores** com filtros por período e tipo.
+- Criada a tela **Arquivados** para consulta e restauração.
+- Incluído arquivamento em lote de solicitações concluídas há mais de 30 dias.
+- O Kanban principal passa a consultar somente a coleção ativa `requests`, melhorando o desempenho conforme o histórico aumenta.
+- Atualizadas as regras do Firestore para comentários, notificações, responsáveis e histórico.
+
 ## Controle de versão no rodapé
 
 A partir da versão 18, o rodapé lateral mostra:
@@ -872,7 +951,7 @@ A partir da versão 18, o rodapé lateral mostra:
 - commit publicado, ao posicionar o mouse;
 - data e horário da publicação, ao posicionar o mouse.
 
-O número funcional fica no arquivo `VERSION`. Para uma nova versão funcional, altere somente o número desse arquivo, por exemplo, de `18` para `19`.
+O número funcional fica no arquivo `VERSION`. Para uma nova versão funcional, altere somente o número desse arquivo, por exemplo, de `19` para `20`.
 
 O arquivo `.github/workflows/pages.yml` gera automaticamente o `version.json` durante a publicação. A cada envio para a branch `main`, o GitHub Actions atualiza o build, o commit e a data sem exigir edição manual.
 
