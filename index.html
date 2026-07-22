@@ -5,17 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Kanban interno para solicitações de programação, cancelamento e TEF Elgin.">
   <title>Painel de Solicitações</title>
+  <link rel="icon" type="image/png" href="logo-soften.png?v=25.0.0">
+  <meta name="theme-color" content="#2563eb">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=22.0.0">
+  <link rel="stylesheet" href="styles.css?v=25.0.0">
 </head>
 <body>
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <section id="login-view" class="login-view">
     <div class="login-visual">
-      <div class="brand-mark">PS</div>
+      <div class="brand-mark"><img src="logo-soften.png?v=25.0.0" alt="Logo Soften"></div>
       <div>
         <span class="eyebrow">CONTROLE INTERNO</span>
         <h1>Solicitações organizadas, prioridades visíveis.</h1>
@@ -31,7 +33,7 @@
     <div class="login-panel">
       <form id="login-form" class="auth-card" autocomplete="on">
         <div class="auth-header">
-          <span class="mobile-logo">PS</span>
+          <span class="mobile-logo"><img src="logo-soften.png?v=25.0.0" alt="Logo Soften"></span>
           <h2>Entrar no painel</h2>
           <p>Use o e-mail e a senha cadastrados pelo administrador.</p>
         </div>
@@ -62,7 +64,7 @@
 
       <form id="invite-registration-form" class="auth-card" autocomplete="on" hidden>
         <div class="auth-header">
-          <span class="mobile-logo">PS</span>
+          <span class="mobile-logo"><img src="logo-soften.png?v=25.0.0" alt="Logo Soften"></span>
           <span class="eyebrow">CONVITE DE ACESSO</span>
           <h2>Concluir cadastro</h2>
           <p>Confira seus dados e crie uma senha para acessar o painel.</p>
@@ -104,7 +106,7 @@
   <div id="app-view" class="app-view" hidden>
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <div class="brand-mark small">PS</div>
+        <div class="brand-mark small"><img src="logo-soften.png?v=25.0.0" alt="Logo Soften"></div>
         <div>
           <strong>Painel</strong>
           <span>Solicitações</span>
@@ -152,7 +154,7 @@
         <div id="app-version-card" class="app-version-card" title="Informações da versão publicada">
           <div class="app-version-main">
             <span>VERSÃO</span>
-            <strong id="app-version-label">v19</strong>
+            <strong id="app-version-label">v25</strong>
           </div>
           <span id="app-version-details" class="app-version-details">Ambiente local</span>
         </div>
@@ -172,6 +174,7 @@
           <div class="notification-anchor">
             <button id="notification-button" class="button button-secondary notification-button" type="button" title="Notificações">♢ Notificações <span id="notification-badge" class="notification-badge" hidden>0</span></button>
           </div>
+          <button id="expand-kanban-button" class="button button-secondary kanban-expand-button" type="button" title="Exibir somente o Kanban" aria-label="Exibir somente o Kanban">⛶</button>
           <button id="top-help-button" class="button button-secondary" type="button" title="Abrir ajuda">? Ajuda</button>
           <button id="refresh-button" class="button button-secondary" type="button" title="Atualizar">↻ Atualizar</button>
           <button id="new-request-button" class="button button-primary" type="button">+ Nova solicitação</button>
@@ -220,6 +223,14 @@
         </select>
         <button id="clear-filters" class="link-button" type="button">Limpar filtros</button>
       </section>
+
+      <header id="kanban-focus-header" class="kanban-focus-header" hidden>
+        <div class="kanban-focus-title">
+          <img src="logo-soften.png?v=25.0.0" alt="Logo Soften">
+          <div><strong>Kanban de solicitações</strong><span>Visualização ampliada das etapas</span></div>
+        </div>
+        <button id="exit-kanban-focus-button" class="kanban-focus-exit" type="button" title="Voltar ao painel" aria-label="Voltar ao painel">✕ Voltar ao painel</button>
+      </header>
 
       <section id="kanban-board" class="kanban-board" aria-label="Quadro Kanban">
         <div class="kanban-column" data-status="nova">
@@ -1089,6 +1100,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=22.0.0"></script>
+  <script type="module" src="app.js?v=25.0.0"></script>
 </body>
 </html>

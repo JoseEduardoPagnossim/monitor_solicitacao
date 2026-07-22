@@ -989,3 +989,30 @@ Durante o teste pelo Live Server, o rodapé mostra `Ambiente local`. No GitHub P
 - A descrição completa continua disponível ao abrir a solicitação.
 - Atualizado o controle de cache dos arquivos CSS e JavaScript para a versão 22.
 
+
+
+## Alterações da versão 23
+
+- Cards de Programação exibem o CNPJ completo em uma linha própria, abaixo do cliente.
+- Removido o corte por reticências no CNPJ dos cards de Programação.
+- Adicionado favicon próprio do Painel de Solicitações (`favicon.svg`).
+- Atualizado o controle de cache dos arquivos CSS e JavaScript para a versão 23.
+
+## Alterações da versão 24
+
+- Substituídas todas as marcações textuais `PS` pela logo oficial enviada.
+- A logo passou a ser usada na tela de login, no cadastro por convite e no cabeçalho lateral do painel.
+- O favicon agora utiliza a mesma identidade visual por meio do arquivo `logo-soften.png`.
+- Atualizado o controle de cache dos arquivos CSS e JavaScript para a versão 24.
+
+
+
+## Alteracoes da versao 25
+
+- Adicionado o botao **Expandir Kanban** na barra superior da tela principal.
+- O modo ampliado oculta menu lateral, indicadores, filtros e demais controles, exibindo somente o quadro Kanban.
+- Incluido cabecalho compacto com a logo, identificacao do quadro e botao **Voltar ao painel**.
+- Cada coluna continua com rolagem vertical independente no modo ampliado.
+- O quadro utiliza toda a largura e altura disponiveis, mantendo rolagem horizontal apenas quando a tela nao comportar as cinco etapas.
+- A tecla `Esc` tambem encerra o modo ampliado.
+- Nao houve alteracao nas regras do Firestore.

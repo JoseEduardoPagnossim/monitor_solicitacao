@@ -155,6 +155,9 @@ const els = {
   markAllNotificationsRead: $("#mark-all-notifications-read"),
   helpDialog: $("#help-dialog"),
   refreshButton: $("#refresh-button"),
+  expandKanbanButton: $("#expand-kanban-button"),
+  exitKanbanFocusButton: $("#exit-kanban-focus-button"),
+  kanbanFocusHeader: $("#kanban-focus-header"),
   metricOpen: $("#metric-open"),
   metricOldest: $("#metric-oldest"),
   metricProgramming: $("#metric-programming"),
@@ -1284,7 +1287,12 @@ function cardHtml(item, isOldest) {
         <span class="card-time ${ageHours >= 48 && item.status !== "concluida" ? "critical" : ""}" data-created-at="${timestampToDate(item.createdAt)?.toISOString() || ""}" data-completed-at="${timestampToDate(item.completedAt)?.toISOString() || ""}" data-status="${item.status}">◷ ${formatElapsed(age, true)}</span>
       </div>
       <h3 class="card-title">${escapeHtml(title)}</h3>
-      <p class="card-client"><strong>${escapeHtml(cardClient.name)}</strong>${cardClient.code ? ` · ${escapeHtml(cardClient.code)}` : ""}</p>
+      ${item.type === "programacao"
+        ? `<div class="program-card-client">
+            <p class="card-client"><strong>${escapeHtml(cardClient.name)}</strong></p>
+            <p class="card-cnpj"><span>CNPJ:</span> ${escapeHtml(cardClient.code || "Não informado")}</p>
+          </div>`
+        : `<p class="card-client"><strong>${escapeHtml(cardClient.name)}</strong>${cardClient.code ? ` · ${escapeHtml(cardClient.code)}` : ""}</p>`}
       ${cardDescriptionHtml}
       <footer class="card-footer">
         <div class="card-person" title="Solicitado por ${escapeHtml(item.requesterName || item.requesterEmail || "")}">
@@ -3128,9 +3136,17 @@ function renderUserManagement() {
   els.usersTableBody.closest(".users-table-wrap").hidden = entries.length === 0;
 }
 
+function setKanbanFocusMode(active) {
+  const enabled = Boolean(active) && state.currentView === "kanban";
+  document.body.classList.toggle("kanban-focus-mode", enabled);
+  if (els.kanbanFocusHeader) els.kanbanFocusHeader.hidden = !enabled;
+  if (els.expandKanbanButton) els.expandKanbanButton.setAttribute("aria-pressed", String(enabled));
+}
+
 async function switchAppView(view = "kanban") {
   if (["users", "indicators", "archived"].includes(view) && !isAdmin()) view = "kanban";
   state.currentView = view;
+  if (view !== "kanban") setKanbanFocusMode(false);
   els.kanbanView.hidden = view !== "kanban";
   els.usersView.hidden = view !== "users";
   els.indicatorsView.hidden = view !== "indicators";
@@ -3500,6 +3516,13 @@ function setupEvents() {
     control.addEventListener(control === els.searchInput ? "input" : "change", applyFilters);
   });
   els.clearFilters.addEventListener("click", clearFilters);
+  els.expandKanbanButton?.addEventListener("click", () => setKanbanFocusMode(true));
+  els.exitKanbanFocusButton?.addEventListener("click", () => setKanbanFocusMode(false));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && document.body.classList.contains("kanban-focus-mode")) {
+      setKanbanFocusMode(false);
+    }
+  });
 
   $$(".nav-item").forEach((button) => {
     button.addEventListener("click", () => {
@@ -3724,7 +3747,7 @@ async function loadAppVersion() {
     if (!response.ok) throw new Error("version-file-unavailable");
 
     const info = await response.json();
-    const release = String(info.release || "19").replace(/^v/i, "");
+    const release = String(info.release || "25").replace(/^v/i, "");
     const isLocal = !info.build || String(info.build).toLowerCase() === "local";
     const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
 
