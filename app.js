@@ -1265,6 +1265,10 @@ function cardHtml(item, isOldest) {
   const crmProgressTag = cancellationEntries.length
     ? `<span class="tag crm-progress ${cancellationDone === cancellationEntries.length ? "complete" : ""}">CRM ${cancellationDone}/${cancellationEntries.length}</span>`
     : "";
+  const cardDescription = requestCardDescription(item);
+  const cardDescriptionHtml = item.type !== "programacao" && cardDescription
+    ? `<p class="card-description">${escapeHtml(cardDescription)}</p>`
+    : "";
 
   return `
     <article class="request-card ${ageClass} ${isOldest ? "oldest" : ""}" data-id="${escapeHtml(item.id)}" draggable="${draggable}" tabindex="0" role="button" aria-label="Abrir solicitação ${escapeHtml(title)}">
@@ -1281,7 +1285,7 @@ function cardHtml(item, isOldest) {
       </div>
       <h3 class="card-title">${escapeHtml(title)}</h3>
       <p class="card-client"><strong>${escapeHtml(cardClient.name)}</strong>${cardClient.code ? ` · ${escapeHtml(cardClient.code)}` : ""}</p>
-      <p class="card-description">${escapeHtml(requestCardDescription(item))}</p>
+      ${cardDescriptionHtml}
       <footer class="card-footer">
         <div class="card-person" title="Solicitado por ${escapeHtml(item.requesterName || item.requesterEmail || "")}">
           <span class="mini-avatar">${initials(item.requesterName || item.requesterEmail)}</span>

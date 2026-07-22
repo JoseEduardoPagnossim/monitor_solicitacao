@@ -981,3 +981,11 @@ Durante o teste pelo Live Server, o rodapé mostra `Ambiente local`. No GitHub P
 - Corrigido o selo **Mais antiga** nos cartões do Kanban.
 - O selo agora fica inteiramente dentro do cartão e não é cortado pela área de rolagem da coluna.
 - Atualizado o controle de cache dos arquivos CSS e JavaScript para a versão 21.
+
+## Alterações da versão 22
+
+- Os cartões de **Programação** agora mostram somente o título, o cliente e o CNPJ.
+- O início da descrição deixou de ser exibido no cartão, mantendo o Kanban mais limpo e objetivo.
+- A descrição completa continua disponível ao abrir a solicitação.
+- Atualizado o controle de cache dos arquivos CSS e JavaScript para a versão 22.
+
