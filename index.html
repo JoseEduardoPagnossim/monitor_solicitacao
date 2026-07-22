@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=19.0.0">
+  <link rel="stylesheet" href="styles.css?v=21.0.0">
 </head>
 <body>
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
@@ -444,8 +444,8 @@
               <input id="request-client" type="text" maxlength="120" placeholder="Razão social ou nome fantasia" required>
             </label>
             <label class="field">
-              <span>CPF/CNPJ</span>
-              <input id="request-client-code" class="cpf-cnpj-input" type="text" maxlength="18" placeholder="CPF ou CNPJ" data-validation-message="request-client-code-error" aria-describedby="request-client-code-error">
+              <span>CNPJ *</span>
+              <input id="request-client-code" class="cpf-cnpj-input" type="text" inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00" data-validation-message="request-client-code-error" aria-describedby="request-client-code-error" required>
               <small id="request-client-code-error" class="field-validation-message" hidden></small>
             </label>
             <label class="field">
@@ -837,7 +837,7 @@
               <div class="help-field-list">
                 <div><strong>Prioridade</strong><p>Selecione conforme o impacto real. Use Urgente somente quando a operação estiver parada ou houver risco imediato.</p></div>
                 <div><strong>Razão Social</strong><p>Informe o nome empresarial ou nome fantasia pelo qual o cliente é reconhecido.</p></div>
-                <div><strong>CPF/CNPJ</strong><p>Informe um documento válido para facilitar a localização do cadastro.</p></div>
+                <div><strong>CNPJ</strong><p>Campo obrigatório. Informe um CNPJ válido para identificar e localizar corretamente o cadastro do cliente.</p></div>
                 <div><strong>Solicitante</strong><p>Nome da pessoa do cliente que pediu a melhoria.</p></div>
                 <div><strong>Cargo</strong><p>Função do solicitante na empresa, como proprietário, financeiro, faturista ou contador.</p></div>
                 <div><strong>E-mail e telefone</strong><p>Dados de contato do solicitante. Revise antes de salvar.</p></div>
@@ -1089,6 +1089,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=19.0.0"></script>
+  <script type="module" src="app.js?v=21.0.0"></script>
 </body>
 </html>

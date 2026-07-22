@@ -90,12 +90,15 @@ O arquivamento mantém o Kanban principal mais leve, pois solicitações antigas
 
 ### Solicitação de programação
 
+O CNPJ do cliente é obrigatório e validado antes do salvamento. Depois que a solicitação é criada, o tipo não pode mais ser alterado.
+
+
 O formulário possui os seguintes campos:
 
 #### Informações do cliente
 
 - Razão Social;
-- CPF/CNPJ;
+- CNPJ obrigatório;
 - Solicitante;
 - Cargo;
 - E-mail;
@@ -118,7 +121,7 @@ Título:
 
 === Informações do Cliente ===
 Razão Social:
-CPF/CNPJ:
+CNPJ:
 
 === Dados do Solicitante ===
 Solicitante:
@@ -964,3 +967,17 @@ Para usar essa automação:
 
 Durante o teste pelo Live Server, o rodapé mostra `Ambiente local`. No GitHub Pages, exibe os dados reais gerados na publicação.
 
+
+
+## Alterações da versão 20
+
+- O CNPJ passou a ser obrigatório nas solicitações de programação.
+- A solicitação de cancelamento mantém a regra de aceitar CPF/CNPJ ou Razão Social.
+- Corrigida a validação do telefone ao editar uma solicitação já salva.
+- O tipo da solicitação é bloqueado após o primeiro salvamento, tanto na interface quanto nas regras do Firestore.
+
+## Alterações da versão 21
+
+- Corrigido o selo **Mais antiga** nos cartões do Kanban.
+- O selo agora fica inteiramente dentro do cartão e não é cortado pela área de rolagem da coluna.
+- Atualizado o controle de cache dos arquivos CSS e JavaScript para a versão 21.

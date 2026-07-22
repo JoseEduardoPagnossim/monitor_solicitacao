@@ -507,6 +507,19 @@ function setupSpecificDocumentInput(input, kind, options = {}) {
   });
 }
 
+function clearFieldValidation(input) {
+  input.setCustomValidity("");
+  input.classList.remove("input-invalid", "input-valid");
+  input.setAttribute("aria-invalid", "false");
+  const messageElement = input.dataset.validationMessage
+    ? document.getElementById(input.dataset.validationMessage)
+    : null;
+  if (messageElement) {
+    messageElement.textContent = "";
+    messageElement.hidden = true;
+  }
+}
+
 function phoneDigits(value = "") {
   return String(value).replace(/\D/g, "").slice(0, 11);
 }
@@ -1718,7 +1731,11 @@ function updateRequestTypeFields() {
   if (isProgramming) renderAttachmentList();
   if (isCancellation) renderCancellationItems(state.modalCancellationItems, state.modalEditable);
 
-  els.requestType.disabled = !state.modalEditable;
+  const isExistingRequest = Boolean(els.requestId.value);
+  els.requestType.disabled = !state.modalEditable || isExistingRequest;
+  els.requestType.title = isExistingRequest
+    ? "O tipo da solicitação não pode ser alterado após o primeiro salvamento."
+    : "";
   els.requestStatus.disabled = !isAdmin() || state.modalArchived;
   els.requestAssignee.disabled = !isAdmin() || state.modalArchived;
 }
@@ -1729,16 +1746,11 @@ function resetRequestForm() {
   state.currentComments = [];
   state.modalArchived = false;
   els.requestForm.reset();
-  setDocumentValidity(els.requestClientCode, { required: false, showMessage: false });
-  els.requestClientCode.classList.remove("input-invalid", "input-valid");
-  setPhoneValidity(els.requestContactPhone, { showMessage: false });
-  els.requestContactPhone.classList.remove("input-invalid", "input-valid");
-  setSpecificDocumentValidity(els.tefCnpj, "cnpj", { required: true, showMessage: false });
-  els.tefCnpj.classList.remove("input-invalid", "input-valid");
-  setSpecificDocumentValidity(els.tefOwnerCpf, "cpf", { required: true, showMessage: false });
-  els.tefOwnerCpf.classList.remove("input-invalid", "input-valid");
-  setPhoneValidity(els.tefContactPhone, { showMessage: false });
-  els.tefContactPhone.classList.remove("input-invalid", "input-valid");
+  clearFieldValidation(els.requestClientCode);
+  clearFieldValidation(els.requestContactPhone);
+  clearFieldValidation(els.tefCnpj);
+  clearFieldValidation(els.tefOwnerCpf);
+  clearFieldValidation(els.tefContactPhone);
   state.modalEditable = true;
   els.requestId.value = "";
   els.requestType.value = "programacao";
@@ -1831,6 +1843,26 @@ function openRequestModal(id, source = "active") {
   els.tefContactPhone.value = formatPhone(item.tefContactPhone || "");
   els.tefContactEmail.value = item.tefContactEmail || "";
   els.tefAgreedValue.value = item.tefAgreedValue || "";
+
+  // Valores preenchidos por código não disparam eventos input/blur.
+  // Recalcula a validade para evitar mensagens incorretas no primeiro salvamento.
+  if (item.type === "programacao") {
+    setSpecificDocumentValidity(els.requestClientCode, "cnpj", { required: true, showMessage: false });
+    setPhoneValidity(els.requestContactPhone, { showMessage: false });
+  } else {
+    clearFieldValidation(els.requestClientCode);
+    clearFieldValidation(els.requestContactPhone);
+  }
+  if (item.type === "tef_elgin") {
+    setSpecificDocumentValidity(els.tefCnpj, "cnpj", { required: true, showMessage: false });
+    setSpecificDocumentValidity(els.tefOwnerCpf, "cpf", { required: true, showMessage: false });
+    setPhoneValidity(els.tefContactPhone, { showMessage: false });
+  } else {
+    clearFieldValidation(els.tefCnpj);
+    clearFieldValidation(els.tefOwnerCpf);
+    clearFieldValidation(els.tefContactPhone);
+  }
+
   state.modalExistingAttachments = Array.isArray(item.attachments)
     ? item.attachments.map(normalizeAttachment)
     : [];
@@ -1876,7 +1908,7 @@ function buildProgrammingPayload() {
 
   const data = {
     clientName: sanitizeText(els.requestClient.value),
-    clientCode: formatCpfCnpj(els.requestClientCode.value),
+    clientCode: formatCnpj(els.requestClientCode.value),
     contactName: sanitizeText(els.requestContactName.value),
     contactRole: sanitizeText(els.requestContactRole.value),
     contactEmail: sanitizeText(els.requestContactEmail.value),
@@ -1891,9 +1923,9 @@ function buildProgrammingPayload() {
     cancellationItems: []
   };
 
-  if (data.clientCode && !setDocumentValidity(els.requestClientCode, { showMessage: true })) {
+  if (!setSpecificDocumentValidity(els.requestClientCode, "cnpj", { required: true, showMessage: true })) {
     els.requestClientCode.focus();
-    return { error: "Informe um CPF ou CNPJ válido para o cliente." };
+    return { error: "Informe um CNPJ válido para o cliente." };
   }
 
   if (!setPhoneValidity(els.requestContactPhone, { showMessage: true })) {
@@ -1902,6 +1934,7 @@ function buildProgrammingPayload() {
   }
 
   if (!data.clientName
+    || !data.clientCode
     || !data.contactName
     || !data.contactRole
     || !data.contactEmail
@@ -2050,9 +2083,12 @@ async function saveRequest(event) {
 
   const id = els.requestId.value;
   const existing = state.requests.find((request) => request.id === id);
-  const type = VALID_TYPES.includes(els.requestType.value)
+  const selectedType = VALID_TYPES.includes(els.requestType.value)
     ? els.requestType.value
     : "programacao";
+  const type = existing && VALID_TYPES.includes(existing.type)
+    ? existing.type
+    : selectedType;
   const typeResult = type === "programacao"
     ? buildProgrammingPayload()
     : type === "cancelamento"
@@ -2228,7 +2264,7 @@ function programmingCopyText(item) {
 
 === Informações do Cliente ===
 Razão Social: ${item.clientName || ""}
-CPF/CNPJ: ${item.clientCode || ""}
+CNPJ: ${item.clientCode || ""}
 
 === Dados do Solicitante ===
 Solicitante: ${item.contactName || ""}
@@ -3428,7 +3464,7 @@ function setupEvents() {
     showToast("Painel atualizado.");
   });
 
-  setupDocumentInput(els.requestClientCode, { required: false });
+  setupSpecificDocumentInput(els.requestClientCode, "cnpj", { required: true });
   setupDocumentInput(els.cancellationCnpjInput, { required: false });
   setupSpecificDocumentInput(els.tefCnpj, "cnpj", { required: true });
   setupSpecificDocumentInput(els.tefOwnerCpf, "cpf", { required: true });

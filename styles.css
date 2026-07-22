@@ -1606,3 +1606,17 @@ dialog[open] {
   .request-tabs { position: sticky; top: -18px; z-index: 5; padding-top: 8px; background: white; }
   .comment-body header { align-items: flex-start; flex-direction: column; gap: 3px; }
 }
+
+/* =========================================================
+   Versao 21: correcao do selo da solicitacao mais antiga
+   ========================================================= */
+/* O selo ficava parcialmente escondido pelo limite da coluna com scroll. */
+.request-card.oldest {
+  padding-top: 31px;
+}
+
+.request-card.oldest::before {
+  top: 9px;
+  right: 12px;
+  z-index: 3;
+}

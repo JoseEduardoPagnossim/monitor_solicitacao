@@ -68,6 +68,12 @@ service cloud.firestore {
         || request.resource.data.cancellationItems == resource.data.cancellationItems;
     }
 
+    function validProgrammingData(data) {
+      return data.type != 'programacao'
+        || (data.clientCode is string
+          && data.clientCode.size() == 18);
+    }
+
     function validTefData(data) {
       return data.type != 'tef_elgin'
         || (data.tefCnpj is string
@@ -124,6 +130,7 @@ service cloud.firestore {
         && data.description is string
         && data.description.size() > 0
         && data.description.size() <= 3000
+        && validProgrammingData(data)
         && validTefData(data)
         && validCancellationCrmData(data);
     }
@@ -297,7 +304,9 @@ service cloud.firestore {
           && emptyCancellationCrmOnCreate(request.resource.data)
           && validRequestData(request.resource.data));
 
-      allow update: if isAdmin() && validRequestData(request.resource.data);
+      allow update: if isAdmin()
+        && request.resource.data.type == resource.data.type
+        && validRequestData(request.resource.data);
 
       allow update: if isRequestParticipant(resource.data)
         && request.resource.data.diff(resource.data).affectedKeys()
@@ -313,6 +322,7 @@ service cloud.firestore {
         && request.resource.data.requesterUid == resource.data.requesterUid
         && request.resource.data.requesterEmail == resource.data.requesterEmail
         && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.type == resource.data.type
         && cancellationCrmUnchangedByRequester()
         && cancellationListCanChangeByRequester()
         && validRequestData(request.resource.data);
