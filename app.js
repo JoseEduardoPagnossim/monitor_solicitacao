@@ -66,6 +66,17 @@ const MAX_IMAGE_DIMENSION = 1600;
 const ALLOWED_ATTACHMENT_TYPES = new Set(["image/jpeg", "image/png", "text/plain"]);
 const INVITE_VALID_DAYS = 7;
 const VALID_USER_ROLES = ["admin", "solicitante"];
+const PAUSED_STATUSES = new Set(["aguardando", "bloqueio"]);
+const SESSION_INACTIVITY_MS = 3 * 60 * 60 * 1000;
+const SESSION_WARNING_MS = 5 * 60 * 1000;
+const AUTO_PAUSE_ALERT_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_COMMENT_TEMPLATES = [
+  { id: "default-video", title: "Aguardando vídeo", text: "Aguardando o envio do vídeo com o cenário completo para prosseguir com a análise." },
+  { id: "default-document", title: "Documento pendente", text: "É necessário enviar o documento ou dado solicitado para que a demanda possa seguir." },
+  { id: "default-invalid-cnpj", title: "CNPJ inválido", text: "O CNPJ informado está inválido. Por favor, confirme o número correto para prosseguirmos." },
+  { id: "default-analysis", title: "Em análise", text: "Solicitação recebida e encaminhada para análise. Avisaremos quando houver atualização." },
+  { id: "default-tef", title: "Dados TEF pendentes", text: "Para prosseguir com o TEF, confirme o número do estabelecimento, o SAK e o modelo do PIN Pad." }
+];
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -102,7 +113,21 @@ const state = {
   archiveAction: null,
   archivedLoaded: false,
   archivedFilters: { search: "", type: "all" },
-  indicatorFilters: { start: "", end: "", type: "all" }
+  indicatorFilters: { start: "", end: "", type: "all" },
+  currentHistory: [],
+  unsubscribeHistory: null,
+  savedFilters: [],
+  commentTemplates: [],
+  bulkMode: false,
+  bulkSelected: new Set(),
+  accessLogs: [],
+  deferredInstallPrompt: null,
+  sessionWarningTimer: null,
+  sessionExpireTimer: null,
+  sessionCountdownTimer: null,
+  sessionExpiresAt: null,
+  lastActivityAt: Date.now(),
+  automaticAlertRunning: false
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -153,6 +178,13 @@ const els = {
   notificationList: $("#notification-list"),
   closeNotificationsButton: $("#close-notifications-button"),
   markAllNotificationsRead: $("#mark-all-notifications-read"),
+  themeToggleButton: $("#theme-toggle-button"),
+  installAppButton: $("#install-app-button"),
+  securityNavButton: $("#security-nav-button"),
+  securityView: $("#security-view"),
+  downloadBackupButton: $("#download-backup-button"),
+  refreshAccessLogsButton: $("#refresh-access-logs-button"),
+  accessLogTable: $("#access-log-table"),
   helpDialog: $("#help-dialog"),
   refreshButton: $("#refresh-button"),
   expandKanbanButton: $("#expand-kanban-button"),
@@ -167,6 +199,22 @@ const els = {
   priorityFilter: $("#priority-filter"),
   requesterFilter: $("#requester-filter"),
   clearFilters: $("#clear-filters"),
+  savedFilterSelect: $("#saved-filter-select"),
+  saveCurrentFilterButton: $("#save-current-filter-button"),
+  deleteSavedFilterButton: $("#delete-saved-filter-button"),
+  savedFilterDialog: $("#saved-filter-dialog"),
+  savedFilterForm: $("#saved-filter-form"),
+  savedFilterName: $("#saved-filter-name"),
+  savedFilterError: $("#saved-filter-error"),
+  confirmSaveFilterButton: $("#confirm-save-filter-button"),
+  bulkModeButton: $("#bulk-mode-button"),
+  bulkActionsBar: $("#bulk-actions-bar"),
+  bulkSelectedCount: $("#bulk-selected-count"),
+  bulkStatusSelect: $("#bulk-status-select"),
+  bulkAssigneeSelect: $("#bulk-assignee-select"),
+  bulkCrmButton: $("#bulk-crm-button"),
+  bulkArchiveButton: $("#bulk-archive-button"),
+  bulkClearButton: $("#bulk-clear-button"),
   kanbanBoard: $("#kanban-board"),
   emptyState: $("#empty-state"),
   kanbanView: $("#kanban-view"),
@@ -227,6 +275,10 @@ const els = {
   indicatorBlocked: $("#indicator-blocked"),
   indicatorCompletionRate: $("#indicator-completion-rate"),
   indicatorArchived: $("#indicator-archived"),
+  indicatorPausedTime: $("#indicator-paused-time"),
+  indicatorVolumeChange: $("#indicator-volume-change"),
+  indicatorComparison: $("#indicator-comparison"),
+  indicatorTypeTimeBars: $("#indicator-type-time-bars"),
   indicatorStatusBars: $("#indicator-status-bars"),
   indicatorTypeBars: $("#indicator-type-bars"),
   indicatorRequesterTable: $("#indicator-requester-table"),
@@ -241,8 +293,12 @@ const els = {
   requestModalTitle: $("#request-modal-title"),
   requestDetailsTab: $("#request-details-tab"),
   requestCommentsTab: $("#request-comments-tab"),
+  requestHistoryTab: $("#request-history-tab"),
   requestDetailsPanel: $("#request-details-panel"),
   requestCommentsPanel: $("#request-comments-panel"),
+  requestHistoryPanel: $("#request-history-panel"),
+  requestHistoryCount: $("#request-history-count"),
+  requestHistoryList: $("#request-history-list"),
   requestCommentCount: $("#request-comment-count"),
   requestCommentsList: $("#request-comments-list"),
   commentComposer: $("#comment-composer"),
@@ -251,6 +307,15 @@ const els = {
   commentMentionField: $("#comment-mention-field"),
   requestCommentError: $("#request-comment-error"),
   addRequestCommentButton: $("#add-request-comment-button"),
+  commentTemplateSelect: $("#comment-template-select"),
+  manageCommentTemplatesButton: $("#manage-comment-templates-button"),
+  commentTemplateDialog: $("#comment-template-dialog"),
+  commentTemplateForm: $("#comment-template-form"),
+  commentTemplateTitle: $("#comment-template-title"),
+  commentTemplateText: $("#comment-template-text"),
+  commentTemplateError: $("#comment-template-error"),
+  addCommentTemplateButton: $("#add-comment-template-button"),
+  commentTemplateList: $("#comment-template-list"),
   requestId: $("#request-id"),
   requestType: $("#request-type"),
   priorityField: $("#priority-field"),
@@ -303,6 +368,10 @@ const els = {
   archiveRequestButton: $("#archive-request-button"),
   deleteRequestButton: $("#delete-request-button"),
   archiveConfirmDialog: $("#archive-confirm-dialog"),
+  sessionWarningDialog: $("#session-warning-dialog"),
+  sessionCountdown: $("#session-countdown"),
+  continueSessionButton: $("#continue-session-button"),
+  logoutSessionButton: $("#logout-session-button"),
   archiveConfirmTitle: $("#archive-confirm-title"),
   archiveConfirmMessage: $("#archive-confirm-message"),
   confirmArchiveButton: $("#confirm-archive-button"),
@@ -327,6 +396,22 @@ function isConfigReady() {
 
 function isAdmin() {
   return state.profile?.role === "admin";
+}
+
+function isSolicitante() {
+  return state.profile?.role === "solicitante";
+}
+
+function requestIsParticipant(item) {
+  return Boolean(item) && (item.requesterUid === state.user?.uid || item.assigneeUid === state.user?.uid);
+}
+
+function canViewProgrammingRequest(item) {
+  return Boolean(item) && isSolicitante() && item.type === "programacao";
+}
+
+function canCommentOnRequest(item) {
+  return Boolean(item) && (isAdmin() || requestIsParticipant(item));
 }
 
 function showToast(message, type = "success") {
@@ -1041,6 +1126,28 @@ function populateUserOptions() {
 
   els.requesterFilter.innerHTML = `<option value="all">Todos os solicitantes</option>${allUsers}`;
   els.requestAssignee.innerHTML = `<option value="">Não atribuído</option>${activeUsers}`;
+  if (els.bulkAssigneeSelect) els.bulkAssigneeSelect.innerHTML = `<option value="">Definir responsável...</option>${activeUsers}`;
+}
+
+function populateRequesterFilterForViewer() {
+  if (isAdmin()) return;
+  const selected = state.filters.requester || "all";
+  const requesters = new Map();
+  state.requests.forEach((item) => {
+    if (!item.requesterUid) return;
+    requesters.set(item.requesterUid, item.requesterName || item.requesterEmail || "Usuário");
+  });
+  const options = [...requesters.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1], "pt-BR"))
+    .map(([uid, name]) => `<option value="${escapeHtml(uid)}">${escapeHtml(name)}</option>`)
+    .join("");
+  els.requesterFilter.innerHTML = `<option value="all">Todos os solicitantes</option>${options}`;
+  if (selected !== "all" && requesters.has(selected)) {
+    els.requesterFilter.value = selected;
+  } else {
+    state.filters.requester = "all";
+    els.requesterFilter.value = "all";
+  }
 }
 
 function subscribeRequests() {
@@ -1055,6 +1162,7 @@ function subscribeRequests() {
         ...documentSnapshot.data()
       }));
       renderAll();
+      checkAutomaticAlerts();
       if (state.currentView === "indicators") renderIndicators();
     }, (error) => {
       console.error(error);
@@ -1063,10 +1171,15 @@ function subscribeRequests() {
     return;
   }
 
-  const sourceMaps = { requester: new Map(), assignee: new Map() };
+  const sourceMaps = { requester: new Map(), assignee: new Map(), programming: new Map() };
   const sync = () => {
-    const merged = new Map([...sourceMaps.requester, ...sourceMaps.assignee]);
+    const merged = new Map([
+      ...sourceMaps.requester,
+      ...sourceMaps.assignee,
+      ...sourceMaps.programming
+    ]);
     state.requests = [...merged.values()];
+    populateRequesterFilterForViewer();
     renderAll();
   };
   const handleSnapshot = (source) => (snapshot) => {
@@ -1090,16 +1203,20 @@ function subscribeRequests() {
     handleSnapshot("assignee"),
     handleError
   );
+  const unsubscribeProgramming = onSnapshot(
+    query(base, where("type", "==", "programacao")),
+    handleSnapshot("programming"),
+    handleError
+  );
   state.unsubscribeRequests = () => {
     unsubscribeRequester();
     unsubscribeAssignee();
+    unsubscribeProgramming();
   };
 }
 
 function requestIsAccessible(item) {
-  return Boolean(item) && (isAdmin()
-    || item.requesterUid === state.user?.uid
-    || item.assigneeUid === state.user?.uid);
+  return Boolean(item) && (isAdmin() || requestIsParticipant(item) || canViewProgrammingRequest(item));
 }
 
 function createCancellationItemId() {
@@ -1199,8 +1316,37 @@ function filteredRequests() {
   });
 }
 
+function requestPausedDuration(item, endAt = null) {
+  let paused = Number(item?.pausedDurationMs || 0);
+  if (item?.pauseStartedAt) {
+    const started = timestampToDate(item.pauseStartedAt);
+    const end = endAt ? timestampToDate(endAt) : new Date();
+    if (started && end) paused += Math.max(0, end.getTime() - started.getTime());
+  }
+  return paused;
+}
+
 function requestAge(item) {
-  return elapsedMs(item.createdAt, item.status === "concluida" ? item.completedAt : null);
+  const end = item.status === "concluida" ? item.completedAt : null;
+  return Math.max(0, elapsedMs(item.createdAt, end) - requestPausedDuration(item, end));
+}
+
+function statusTransitionUpdate(item, newStatus) {
+  const oldStatus = item?.status || "nova";
+  const oldPaused = PAUSED_STATUSES.has(oldStatus);
+  const newPaused = PAUSED_STATUSES.has(newStatus);
+  const update = { status: newStatus, lastStatusChangedAt: serverTimestamp() };
+  if (!oldPaused && newPaused) { update.pauseStartedAt = serverTimestamp(); update.pauseAlert24SentAt = null; }
+  if (oldPaused && !newPaused) {
+    const started = timestampToDate(item.pauseStartedAt);
+    const extra = started ? Math.max(0, Date.now() - started.getTime()) : 0;
+    update.pausedDurationMs = Number(item.pausedDurationMs || 0) + extra;
+    update.pauseStartedAt = null;
+  }
+  if (oldPaused && newPaused) update.pauseStartedAt = item.pauseStartedAt || serverTimestamp();
+  if (newStatus === "concluida" && oldStatus !== "concluida") update.completedAt = serverTimestamp();
+  if (newStatus !== "concluida" && oldStatus === "concluida") update.completedAt = null;
+  return update;
 }
 
 function requestCardTitle(item) {
@@ -1273,8 +1419,13 @@ function cardHtml(item, isOldest) {
     ? `<p class="card-description">${escapeHtml(cardDescription)}</p>`
     : "";
 
+  const paused = PAUSED_STATUSES.has(item.status);
+  const bulkSelector = isAdmin() && state.bulkMode
+    ? `<label class="bulk-card-check" title="Selecionar solicitação"><input type="checkbox" data-bulk-id="${escapeHtml(item.id)}" ${state.bulkSelected.has(item.id) ? "checked" : ""}><span>Selecionar</span></label>`
+    : "";
   return `
-    <article class="request-card ${ageClass} ${isOldest ? "oldest" : ""}" data-id="${escapeHtml(item.id)}" draggable="${draggable}" tabindex="0" role="button" aria-label="Abrir solicitação ${escapeHtml(title)}">
+    <article class="request-card ${ageClass} ${isOldest ? "oldest" : ""} ${state.bulkSelected.has(item.id) ? "bulk-selected" : ""}" data-id="${escapeHtml(item.id)}" draggable="${draggable}" tabindex="0" role="button" aria-label="Abrir solicitação ${escapeHtml(title)}">
+      ${bulkSelector}
       <div class="card-top">
         <div class="card-tags">
           <span class="tag ${item.type}">${TYPE_LABELS[item.type] || "Solicitação"}</span>
@@ -1282,9 +1433,10 @@ function cardHtml(item, isOldest) {
           ${attachmentCount ? `<span class="tag attachment">📎 ${attachmentCount}</span>` : ""}
           ${commentCount ? `<span class="tag comments">💬 ${commentCount}</span>` : ""}
           ${item.status === "bloqueio" ? `<span class="tag blocked">BLOQUEIO</span>` : ""}
+          ${paused ? `<span class="tag paused">⏸ TEMPO PAUSADO</span>` : ""}
           ${crmProgressTag}
         </div>
-        <span class="card-time ${ageHours >= 48 && item.status !== "concluida" ? "critical" : ""}" data-created-at="${timestampToDate(item.createdAt)?.toISOString() || ""}" data-completed-at="${timestampToDate(item.completedAt)?.toISOString() || ""}" data-status="${item.status}">◷ ${formatElapsed(age, true)}</span>
+        <span class="card-time ${ageHours >= 48 && item.status !== "concluida" ? "critical" : ""}" data-created-at="${timestampToDate(item.createdAt)?.toISOString() || ""}" data-completed-at="${timestampToDate(item.completedAt)?.toISOString() || ""}" data-status="${item.status}" data-paused-ms="${Number(item.pausedDurationMs || 0)}" data-pause-started-at="${timestampToDate(item.pauseStartedAt)?.toISOString() || ""}">${paused ? "⏸" : "◷"} ${formatElapsed(age, true)}</span>
       </div>
       <h3 class="card-title">${escapeHtml(title)}</h3>
       ${item.type === "programacao"
@@ -1333,6 +1485,7 @@ function renderBoard() {
 
     renderedCount += items.length;
     $(`[data-count="${status}"]`).textContent = items.length;
+    updateBulkColumnSelector(status, items);
     column.innerHTML = items.length
       ? items.map((item) => cardHtml(item, item.id === oldestId)).join("")
       : `<div class="column-empty">Nenhuma solicitação nesta etapa</div>`;
@@ -1365,17 +1518,25 @@ function renderLoadingCards() {
 function updateElapsedLabels(updateMetrics = true) {
   $$('[data-created-at]').forEach((element) => {
     if (!element.dataset.createdAt) return;
-    const end = element.dataset.status === "concluida" && element.dataset.completedAt
-      ? new Date(element.dataset.completedAt)
-      : null;
-    element.textContent = `◷ ${formatElapsed(elapsedMs(new Date(element.dataset.createdAt), end), true)}`;
+    const end = element.dataset.status === "concluida" && element.dataset.completedAt ? new Date(element.dataset.completedAt) : null;
+    let paused = Number(element.dataset.pausedMs || 0);
+    if (element.dataset.pauseStartedAt) paused += Math.max(0, (end || new Date()).getTime() - new Date(element.dataset.pauseStartedAt).getTime());
+    const activeElapsed = Math.max(0, elapsedMs(new Date(element.dataset.createdAt), end) - paused);
+    const isPaused = PAUSED_STATUSES.has(element.dataset.status);
+    element.textContent = `${isPaused ? "⏸" : "◷"} ${formatElapsed(activeElapsed, true)}`;
   });
   if (updateMetrics) renderMetrics();
 }
 
 function bindCardEvents() {
   $$(".request-card").forEach((card) => {
-    const open = () => openRequestModal(card.dataset.id);
+    const open = () => {
+      if (state.bulkMode) {
+        toggleBulkSelection(card.dataset.id);
+        return;
+      }
+      openRequestModal(card.dataset.id);
+    };
     card.addEventListener("click", open);
     card.addEventListener("keydown", (event) => {
       if (["Enter", " "].includes(event.key)) {
@@ -1384,7 +1545,14 @@ function bindCardEvents() {
       }
     });
 
-    if (isAdmin()) {
+    const bulkCheckbox = card.querySelector("[data-bulk-id]");
+    bulkCheckbox?.addEventListener("click", (event) => event.stopPropagation());
+    bulkCheckbox?.addEventListener("change", (event) => {
+      event.stopPropagation();
+      setBulkSelection(card.dataset.id, event.target.checked);
+    });
+
+    if (isAdmin() && !state.bulkMode) {
       card.addEventListener("dragstart", (event) => {
         state.draggedId = card.dataset.id;
         card.classList.add("dragging");
@@ -1429,15 +1597,14 @@ function setupDropzones() {
 
       try {
         const update = {
-          status: newStatus,
+          ...statusTransitionUpdate(item, newStatus),
           updatedAt: serverTimestamp(),
           updatedByUid: state.user.uid,
           updatedByName: state.profile.name || state.user.email
         };
-        if (newStatus === "concluida") update.completedAt = serverTimestamp();
-        else if (item.status === "concluida") update.completedAt = null;
-
         await updateDoc(doc(db, "requests", id), update);
+        await recordHistory(item, "status", `Status alterado de ${STATUS_LABELS[item.status]} para ${STATUS_LABELS[newStatus]}.`, { from: item.status, to: newStatus });
+        await notifyStatusChange(item, newStatus);
         showToast(`Solicitação movida para ${STATUS_LABELS[newStatus]}.`);
       } catch (error) {
         console.error(error);
@@ -1640,9 +1807,8 @@ async function toggleCancellationCrmStatus(index, checked, checkbox) {
     renderCancellationItems(updatedItems, state.modalEditable);
     renderAll();
     const done = updatedItems.filter((item) => item.crmCancelled === true).length;
-    showToast(checked
-      ? `Cancelamento marcado no CRM (${done}/${updatedItems.length}).`
-      : `Cancelamento reaberto no controle do CRM (${done}/${updatedItems.length}).`);
+    await recordHistory(requestItem, "crm", checked ? `Cliente marcado como cancelado no CRM: ${targetItem.clientName || targetItem.clientCnpj}.` : `Cliente reaberto no controle do CRM: ${targetItem.clientName || targetItem.clientCnpj}.`, { itemId: targetItem.itemId, cancelled: checked });
+    showToast(checked ? `Cancelamento marcado no CRM (${done}/${updatedItems.length}).` : `Cancelamento reaberto no controle do CRM (${done}/${updatedItems.length}).`);
   } catch (error) {
     console.error(error);
     checkbox.checked = !checked;
@@ -1754,8 +1920,11 @@ function updateRequestTypeFields() {
 
 function resetRequestForm() {
   if (state.unsubscribeComments) state.unsubscribeComments();
+  if (state.unsubscribeHistory) state.unsubscribeHistory();
   state.unsubscribeComments = null;
+  state.unsubscribeHistory = null;
   state.currentComments = [];
+  state.currentHistory = [];
   state.modalArchived = false;
   els.requestForm.reset();
   clearFieldValidation(els.requestClientCode);
@@ -1776,12 +1945,15 @@ function resetRequestForm() {
   els.archiveRequestButton.hidden = true;
   els.deleteRequestButton.hidden = true;
   els.requestCommentsTab.disabled = true;
+  els.requestHistoryTab.disabled = true;
   els.requestCommentCount.textContent = "0";
+  els.requestHistoryCount.textContent = "0";
   els.requestCommentText.value = "";
   els.requestCommentMention.innerHTML = '<option value="">Não enviar notificação</option>';
   showFormError(els.requestCommentError);
   switchRequestTab("details");
   renderRequestComments();
+  renderRequestHistory();
   els.requestAudit.hidden = true;
   state.modalCancellationItems = [];
   state.modalExistingAttachments = [];
@@ -1896,11 +2068,12 @@ function openRequestModal(id, source = "active") {
   els.archiveRequestButton.hidden = !isAdmin() || (!archived && item.status !== "concluida");
   els.archiveRequestButton.textContent = archived ? "↶ Restaurar" : "▣ Arquivar";
   els.requestCommentsTab.disabled = false;
-  els.commentComposer.hidden = archived;
+  els.requestHistoryTab.disabled = false;
+  els.commentComposer.hidden = archived || !canCommentOnRequest(item);
   els.requestAudit.hidden = false;
   els.requestAudit.innerHTML = `
     <strong>Solicitado por:</strong> ${escapeHtml(item.requesterName || item.requesterEmail || "—")}<br>
-    <strong>Criado em:</strong> ${formatDateTime(item.createdAt)} · <strong>Tempo:</strong> ${formatElapsed(requestAge(item))}<br>
+    <strong>Criado em:</strong> ${formatDateTime(item.createdAt)} · <strong>Tempo ativo:</strong> ${formatElapsed(requestAge(item))} · <strong>Tempo pausado:</strong> ${formatElapsed(requestPausedDuration(item, item.status === "concluida" ? item.completedAt : null))}<br>
     <strong>Última atualização:</strong> ${formatDateTime(item.updatedAt)}${item.updatedByName ? ` por ${escapeHtml(item.updatedByName)}` : ""}
     ${archived ? `<br><strong>Arquivado em:</strong> ${formatDateTime(item.archivedAt)}${item.archivedByName ? ` por ${escapeHtml(item.archivedByName)}` : ""}` : ""}
   `;
@@ -1908,6 +2081,7 @@ function openRequestModal(id, source = "active") {
   populateCommentMentionOptions(item);
   updateRequestTypeFields();
   subscribeRequestComments(item.id, archived);
+  subscribeRequestHistory(item.id);
   els.requestDialog.showModal();
 }
 
@@ -2172,19 +2346,12 @@ async function saveRequest(event) {
 
     if (id && existing) {
       if (isAdmin()) {
-        payload.status = VALID_STATUSES.includes(els.requestStatus.value)
-          ? els.requestStatus.value
-          : existing.status;
+        payload.status = VALID_STATUSES.includes(els.requestStatus.value) ? els.requestStatus.value : existing.status;
+        Object.assign(payload, statusTransitionUpdate(existing, payload.status));
         const assignee = state.users.find((user) => user.uid === els.requestAssignee.value);
         payload.assigneeUid = assignee?.uid || "";
         payload.assigneeName = assignee?.name || assignee?.email || "";
 
-        if (payload.status === "concluida" && existing.status !== "concluida") {
-          payload.completedAt = serverTimestamp();
-        }
-        if (payload.status !== "concluida" && existing.status === "concluida") {
-          payload.completedAt = null;
-        }
       }
 
       batch.update(requestDocument, payload);
@@ -2198,11 +2365,23 @@ async function saveRequest(event) {
         assigneeUid: "",
         assigneeName: "",
         createdAt: serverTimestamp(),
-        completedAt: null
+        completedAt: null,
+        pausedDurationMs: 0,
+        pauseStartedAt: null,
+        lastStatusChangedAt: serverTimestamp()
       });
     }
 
     await batch.commit();
+    const savedItem = { ...(existing || {}), id: requestId, ...payload, requesterUid: existing?.requesterUid || state.user.uid, requesterName: existing?.requesterName || state.profile.name || state.user.email };
+    if (existing) {
+      const changes = describeRequestChanges(existing, payload);
+      await recordHistory(savedItem, "update", changes.summary, changes.details);
+      if (isAdmin() && payload.assigneeUid && payload.assigneeUid !== existing.assigneeUid) await notifyAssignment(savedItem, payload.assigneeUid);
+      if (isAdmin() && payload.status && payload.status !== existing.status) await notifyStatusChange(savedItem, payload.status);
+    } else {
+      await recordHistory(savedItem, "create", "Solicitação criada.", { type });
+    }
     showToast(id && existing
       ? "Solicitação atualizada com sucesso."
       : type === "cancelamento"
@@ -2367,16 +2546,21 @@ function copyRequestById(id) {
 
 function switchRequestTab(tab = "details") {
   const showComments = tab === "comments" && !els.requestCommentsTab.disabled;
-  els.requestDetailsTab.classList.toggle("active", !showComments);
+  const showHistory = tab === "history" && !els.requestHistoryTab.disabled;
+  const showDetails = !showComments && !showHistory;
+  els.requestDetailsTab.classList.toggle("active", showDetails);
   els.requestCommentsTab.classList.toggle("active", showComments);
-  els.requestDetailsTab.setAttribute("aria-selected", String(!showComments));
+  els.requestHistoryTab.classList.toggle("active", showHistory);
+  els.requestDetailsTab.setAttribute("aria-selected", String(showDetails));
   els.requestCommentsTab.setAttribute("aria-selected", String(showComments));
-  els.requestDetailsPanel.hidden = showComments;
+  els.requestHistoryTab.setAttribute("aria-selected", String(showHistory));
+  els.requestDetailsPanel.hidden = !showDetails;
   els.requestCommentsPanel.hidden = !showComments;
-  els.requestDetailsPanel.classList.toggle("active", !showComments);
+  els.requestHistoryPanel.hidden = !showHistory;
+  els.requestDetailsPanel.classList.toggle("active", showDetails);
   els.requestCommentsPanel.classList.toggle("active", showComments);
+  els.requestHistoryPanel.classList.toggle("active", showHistory);
 }
-
 function populateCommentMentionOptions(item) {
   const targetIds = [...new Set([item.requesterUid, item.assigneeUid].filter(Boolean))]
     .filter((uid) => uid !== state.user?.uid)
@@ -2499,6 +2683,7 @@ async function addRequestComment() {
     }
 
     await batch.commit();
+    await recordHistory(item, "comment", mentionUser ? `Comentário adicionado e ${mentionUser.name || mentionUser.email} notificado.` : "Comentário interno adicionado.", { comment: text.slice(0, 300) });
     els.requestCommentText.value = "";
     els.requestCommentMention.value = "";
     showToast(mentionUser ? "Comentário enviado e técnico notificado." : "Comentário interno enviado.");
@@ -2652,6 +2837,7 @@ async function archiveRequestDocument(item) {
   });
   batch.delete(doc(db, "requests", item.id));
   await batch.commit();
+  await recordHistory(item, "archive", "Solicitação arquivada.", {});
   state.archivedLoaded = false;
 }
 
@@ -2671,6 +2857,7 @@ async function restoreArchivedRequest(item) {
   });
   batch.delete(doc(db, "archivedRequests", item.id));
   await batch.commit();
+  await recordHistory(item, "restore", "Solicitação restaurada para o Kanban.", {});
   state.archivedLoaded = false;
 }
 
@@ -2762,11 +2949,7 @@ function renderIndicators() {
   const items = indicatorSourceRequests();
   const completed = items.filter((item) => item.status === "concluida" || Boolean(item.archivedAt));
   const blocked = items.filter((item) => item.status === "bloqueio");
-  const durations = completed.map((item) => {
-    const created = timestampToDate(item.createdAt);
-    const completedAt = timestampToDate(item.completedAt);
-    return created && completedAt ? Math.max(0, completedAt - created) : null;
-  }).filter((value) => value !== null);
+  const durations = completed.map(activeDurationForCompleted).filter((value) => value !== null);
   const average = durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : null;
 
   els.indicatorCreated.textContent = items.length;
@@ -2776,35 +2959,27 @@ function renderIndicators() {
   els.indicatorCompletionRate.textContent = `${items.length ? Math.round((completed.length / items.length) * 100) : 0}%`;
   els.indicatorArchived.textContent = items.filter((item) => Boolean(item.archivedAt)).length;
 
-  const statusEntries = VALID_STATUSES.map((status) => [
-    STATUS_LABELS[status],
-    items.filter((item) => item.status === status).length,
-    status === "concluida" ? "green" : status === "bloqueio" ? "red" : status === "aguardando" ? "amber" : status === "analise" ? "purple" : "blue"
-  ]);
-  const typeEntries = VALID_TYPES.map((type) => [
-    TYPE_LABELS[type],
-    items.filter((item) => item.type === type).length,
-    type === "cancelamento" ? "red" : type === "tef_elgin" ? "amber" : "blue"
-  ]);
+  const statusEntries = VALID_STATUSES.map((status) => [STATUS_LABELS[status], items.filter((item) => item.status === status).length, status === "concluida" ? "green" : status === "bloqueio" ? "red" : status === "aguardando" ? "amber" : status === "analise" ? "purple" : "blue"]);
+  const typeEntries = VALID_TYPES.map((type) => [TYPE_LABELS[type], items.filter((item) => item.type === type).length, type === "cancelamento" ? "red" : type === "tef_elgin" ? "amber" : "blue"]);
   els.indicatorStatusBars.innerHTML = reportBarsHtml(statusEntries, items.length);
   els.indicatorTypeBars.innerHTML = reportBarsHtml(typeEntries, items.length);
 
   const requesterMap = new Map();
   items.forEach((item) => {
-    const key = item.requesterUid || item.requesterEmail || "sem-solicitante";
-    if (!requesterMap.has(key)) requesterMap.set(key, { name: item.requesterName || item.requesterEmail || "Não identificado", total: 0, completed: 0, open: 0, blocked: 0 });
+    const key = item.assigneeUid || item.requesterUid || item.requesterEmail || "sem-solicitante";
+    if (!requesterMap.has(key)) requesterMap.set(key, { name: item.assigneeName || item.requesterName || item.requesterEmail || "Não identificado", total: 0, completed: 0, open: 0, blocked: 0, durations: [] });
     const entry = requesterMap.get(key);
     entry.total += 1;
-    if (item.status === "concluida" || item.archivedAt) entry.completed += 1;
+    if (item.status === "concluida" || item.archivedAt) { entry.completed += 1; const duration = activeDurationForCompleted(item); if (duration !== null) entry.durations.push(duration); }
     else entry.open += 1;
     if (item.status === "bloqueio") entry.blocked += 1;
   });
   const requesterRows = [...requesterMap.values()].sort((a, b) => b.total - a.total);
   els.indicatorRequesterTable.innerHTML = requesterRows.length
-    ? requesterRows.map((entry) => `<tr><td><strong>${escapeHtml(entry.name)}</strong></td><td>${entry.total}</td><td>${entry.completed}</td><td>${entry.open}</td><td>${entry.blocked}</td></tr>`).join("")
-    : `<tr><td colspan="5" class="report-empty-row">Nenhuma solicitação no período selecionado.</td></tr>`;
+    ? requesterRows.map((entry) => { const avg = entry.durations.length ? entry.durations.reduce((a,b)=>a+b,0)/entry.durations.length : null; return `<tr><td><strong>${escapeHtml(entry.name)}</strong></td><td>${entry.total}</td><td>${entry.completed}</td><td>${entry.open}</td><td>${entry.blocked}</td><td>${avg === null ? "—" : formatElapsed(avg, true)}</td></tr>`; }).join("")
+    : `<tr><td colspan="6" class="report-empty-row">Nenhuma solicitação no período selecionado.</td></tr>`;
+  renderExpandedIndicators(items, completed);
 }
-
 async function changeCurrentUserPassword(event) {
   event.preventDefault();
   showFormError(els.changePasswordError);
@@ -2842,6 +3017,7 @@ async function changeCurrentUserPassword(event) {
     els.changePasswordForm.reset();
     [els.currentPassword, els.newPassword, els.confirmNewPassword].forEach((input) => { input.type = "password"; });
     closeModal(els.changePasswordDialog);
+    await logAccessEvent("password_changed", "Senha alterada pelo próprio usuário.");
     showToast("Senha alterada com sucesso.");
   } catch (error) {
     console.error(error);
@@ -3096,30 +3272,31 @@ function userRowHtml(entry) {
         <td><div class="user-identity"><div class="user-list-avatar pending">✉</div><div><strong>${escapeHtml(entry.name || "Convite")}</strong><span>${escapeHtml(entry.email || "")}</span></div></div></td>
         <td><span class="user-role-badge ${escapeHtml(entry.role)}">${escapeHtml(roleLabel(entry.role))}</span></td>
         <td><span class="user-status-badge pending">● Convite pendente</span></td>
+        <td><div class="user-date">—</div></td>
         <td><div class="user-date">Criado em ${escapeHtml(formatDateTime(entry.createdAt))}<br>Expira em ${escapeHtml(formatDateTime(entry.expiresAt))}</div></td>
-        <td><div class="user-actions">
-          <button class="user-action-button primary" type="button" data-user-action="copy-invite" data-id="${escapeHtml(entry.id)}">⧉ Copiar convite</button>
-          <button class="user-action-button danger" type="button" data-user-action="cancel-invite" data-id="${escapeHtml(entry.id)}">Cancelar convite</button>
-        </div></td>
+        <td><div class="user-actions"><button class="user-action-button primary" type="button" data-user-action="copy-invite" data-id="${escapeHtml(entry.id)}">⧉ Copiar convite</button><button class="user-action-button danger" type="button" data-user-action="cancel-invite" data-id="${escapeHtml(entry.id)}">Cancelar convite</button></div></td>
       </tr>`;
   }
-
   const active = entry.active !== false;
+  const locked = entry.accessLocked === true;
   const isSelf = entry.uid === state.user?.uid;
+  const statusText = !active ? "Inativo" : locked ? "Bloqueado" : "Ativo";
+  const statusClass = !active ? "inactive" : locked ? "pending" : "active";
   return `
     <tr>
       <td><div class="user-identity"><div class="user-list-avatar">${escapeHtml(initials(entry.name || entry.email))}</div><div><strong>${escapeHtml(entry.name || "Usuário")}${isSelf ? " (você)" : ""}</strong><span>${escapeHtml(entry.email || "")}</span></div></div></td>
       <td><span class="user-role-badge ${escapeHtml(entry.role)}">${escapeHtml(roleLabel(entry.role))}</span></td>
-      <td><span class="user-status-badge ${active ? "active" : "inactive"}">● ${active ? "Ativo" : "Inativo"}</span></td>
+      <td><span class="user-status-badge ${statusClass}">● ${statusText}</span></td>
+      <td><div class="user-date">${escapeHtml(formatDateTime(entry.lastLoginAt))}<br><small>${Number(entry.loginCount || 0)} acesso(s)</small></div></td>
       <td><div class="user-date">${escapeHtml(formatDateTime(entry.createdAt))}</div></td>
       <td><div class="user-actions">
         <button class="user-action-button" type="button" data-user-action="edit-user" data-id="${escapeHtml(entry.uid)}">Editar</button>
         <button class="user-action-button" type="button" data-user-action="reset-password" data-id="${escapeHtml(entry.uid)}">Redefinir senha</button>
+        <button class="user-action-button ${locked ? "success" : ""}" type="button" data-user-action="toggle-lock" data-id="${escapeHtml(entry.uid)}" ${isSelf ? "disabled" : ""}>${locked ? "Desbloquear" : "Bloquear"}</button>
         <button class="user-action-button ${active ? "danger" : "success"}" type="button" data-user-action="toggle-user" data-id="${escapeHtml(entry.uid)}" ${isSelf ? "disabled title=\"Você não pode desativar o próprio acesso\"" : ""}>${active ? "Desativar" : "Reativar"}</button>
       </div></td>
     </tr>`;
 }
-
 function renderUserManagement() {
   if (!isAdmin()) return;
   const activeUsers = state.users.filter((user) => user.active !== false);
@@ -3144,13 +3321,14 @@ function setKanbanFocusMode(active) {
 }
 
 async function switchAppView(view = "kanban") {
-  if (["users", "indicators", "archived"].includes(view) && !isAdmin()) view = "kanban";
+  if (["users", "indicators", "archived", "security"].includes(view) && !isAdmin()) view = "kanban";
   state.currentView = view;
   if (view !== "kanban") setKanbanFocusMode(false);
   els.kanbanView.hidden = view !== "kanban";
   els.usersView.hidden = view !== "users";
   els.indicatorsView.hidden = view !== "indicators";
   els.archivedView.hidden = view !== "archived";
+  els.securityView.hidden = view !== "security";
   $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
 
   if (view === "users") await refreshUserManagement();
@@ -3164,6 +3342,7 @@ async function switchAppView(view = "kanban") {
       showToast(firebaseErrorMessage(error), "error");
     }
   }
+  if (view === "security") await loadAccessLogs();
   if (view === "archived") {
     try {
       await loadArchivedRequests();
@@ -3363,6 +3542,7 @@ function handleUserTableAction(event) {
   if (userAction === "edit-user") openEditUserDialog(id);
   if (userAction === "toggle-user") openUserStatusDialog(id);
   if (userAction === "reset-password") sendUserPasswordReset(id);
+  if (userAction === "toggle-lock") toggleUserAccessLock(id);
   if (userAction === "copy-invite") copyText(buildInviteUrl(id));
   if (userAction === "cancel-invite") cancelInvite(id);
 }
@@ -3371,8 +3551,8 @@ function subscribeCurrentProfile() {
   if (state.unsubscribeProfile) state.unsubscribeProfile();
   if (!state.user) return;
   state.unsubscribeProfile = onSnapshot(doc(db, "users", state.user.uid), async (snapshot) => {
-    if (!snapshot.exists() || snapshot.data().active !== true) {
-      state.forcedLogoutMessage = "Seu acesso foi desativado por um administrador.";
+    if (!snapshot.exists() || snapshot.data().active !== true || snapshot.data().accessLocked === true) {
+      state.forcedLogoutMessage = snapshot.data()?.accessLocked === true ? "Seu acesso foi temporariamente bloqueado por um administrador." : "Seu acesso foi desativado por um administrador.";
       signOut(auth);
       return;
     }
@@ -3380,7 +3560,7 @@ function subscribeCurrentProfile() {
     state.profile = { uid: snapshot.id, ...snapshot.data() };
     renderUser();
     if (previousRole && previousRole !== state.profile.role) {
-      if (!isAdmin() && ["users", "indicators", "archived"].includes(state.currentView)) switchAppView("kanban");
+      if (!isAdmin() && ["users", "indicators", "archived", "security"].includes(state.currentView)) switchAppView("kanban");
       await loadUsers();
       subscribeRequests();
     }
@@ -3389,6 +3569,574 @@ function subscribeCurrentProfile() {
     state.forcedLogoutMessage = "Seu acesso não está mais disponível.";
     signOut(auth);
   });
+}
+
+
+function historyEntryData(item, action, summary, details = {}) {
+  return {
+    requestId: item.id,
+    requestTitle: requestCardTitle(item).slice(0, 140),
+    requestType: item.type || "programacao",
+    action,
+    summary: sanitizeText(summary).slice(0, 500),
+    details,
+    actorUid: state.user?.uid || "",
+    actorName: state.profile?.name || state.user?.email || "Sistema",
+    actorEmail: state.user?.email || "",
+    createdAt: serverTimestamp()
+  };
+}
+
+async function recordHistory(item, action, summary, details = {}) {
+  if (!item?.id || !state.user) return;
+  try {
+    await setDoc(doc(collection(db, "requestHistory")), historyEntryData(item, action, summary, details));
+  } catch (error) {
+    console.warn("Não foi possível registrar o histórico.", error);
+  }
+}
+
+function renderRequestHistory() {
+  const entries = [...state.currentHistory].sort((a, b) =>
+    (timestampToDate(b.createdAt)?.getTime() || 0) - (timestampToDate(a.createdAt)?.getTime() || 0));
+  els.requestHistoryCount.textContent = String(entries.length);
+  if (!entries.length) {
+    els.requestHistoryList.innerHTML = `<div class="comments-empty"><strong>Nenhuma alteração registrada.</strong><span>Novas ações aparecerão aqui automaticamente.</span></div>`;
+    return;
+  }
+  const icons = { create: "+", update: "✎", status: "↔", comment: "💬", crm: "✓", archive: "▣", restore: "↶", bulk: "☑", attachment: "📎" };
+  els.requestHistoryList.innerHTML = entries.map((entry) => `
+    <article class="history-item">
+      <div class="history-icon">${escapeHtml(icons[entry.action] || "•")}</div>
+      <div class="history-copy"><header><strong>${escapeHtml(entry.actorName || "Sistema")}</strong><span>${escapeHtml(formatDateTime(entry.createdAt))}</span></header><p>${escapeHtml(entry.summary || "Alteração registrada.")}</p></div>
+    </article>`).join("");
+}
+
+function subscribeRequestHistory(requestId) {
+  if (state.unsubscribeHistory) state.unsubscribeHistory();
+  state.currentHistory = [];
+  renderRequestHistory();
+  state.unsubscribeHistory = onSnapshot(
+    query(collection(db, "requestHistory"), where("requestId", "==", requestId)),
+    (snapshot) => {
+      state.currentHistory = snapshot.docs.map((snapshotDoc) => ({ id: snapshotDoc.id, ...snapshotDoc.data() }));
+      renderRequestHistory();
+    },
+    (error) => console.warn("Histórico indisponível.", error)
+  );
+}
+
+function describeRequestChanges(existing, payload) {
+  const changes = [];
+  const details = {};
+  const fields = [
+    ["title", "Título"], ["clientName", "Cliente"], ["clientCode", "CNPJ"],
+    ["priority", "Prioridade"], ["status", "Status"], ["assigneeUid", "Responsável"],
+    ["description", "Descrição"], ["currentBehavior", "Comportamento atual"],
+    ["expectedBehavior", "Comportamento esperado"], ["justification", "Justificativa"]
+  ];
+  fields.forEach(([key, label]) => {
+    if (!(key in payload)) return;
+    const before = existing?.[key] ?? "";
+    const after = payload?.[key] ?? "";
+    if (String(before) !== String(after)) {
+      changes.push(label);
+      details[key] = { before: String(before).slice(0, 300), after: String(after).slice(0, 300) };
+    }
+  });
+  return {
+    summary: changes.length ? `Solicitação atualizada: ${changes.join(", ")}.` : "Solicitação salva sem alteração relevante nos campos principais.",
+    details
+  };
+}
+
+async function createInternalNotification(targetUid, item, message, type = "system") {
+  if (!targetUid || targetUid === state.user?.uid || !item?.id) return;
+  const target = state.users.find((user) => user.uid === targetUid);
+  if (target?.active === false) return;
+  await setDoc(doc(collection(db, "notifications")), {
+    targetUid,
+    targetName: target?.name || target?.email || "Usuário",
+    createdByUid: state.user.uid,
+    createdByName: state.profile.name || state.user.email,
+    requestId: item.id,
+    requestTitle: requestCardTitle(item).slice(0, 140),
+    message: sanitizeText(message).slice(0, 300),
+    type,
+    read: false,
+    createdAt: serverTimestamp(),
+    readAt: null
+  });
+}
+
+async function notifyAssignment(item, assigneeUid) {
+  try { await createInternalNotification(assigneeUid, item, "Uma solicitação foi atribuída a você.", "assignment"); }
+  catch (error) { console.warn("Notificação de atribuição não enviada.", error); }
+}
+
+async function notifyStatusChange(item, newStatus) {
+  if (!item) return;
+  const targets = [...new Set([item.requesterUid, item.assigneeUid].filter(Boolean))];
+  const message = newStatus === "bloqueio"
+    ? "A solicitação foi movida para Bloqueio e precisa de atenção para continuar."
+    : `O status foi alterado para ${STATUS_LABELS[newStatus] || newStatus}.`;
+  for (const targetUid of targets) {
+    try { await createInternalNotification(targetUid, item, message, newStatus === "bloqueio" ? "blocked" : "status"); }
+    catch (error) { console.warn("Notificação de status não enviada.", error); }
+  }
+}
+
+async function checkAutomaticAlerts() {
+  if (!isAdmin() || state.automaticAlertRunning) return;
+  state.automaticAlertRunning = true;
+  try {
+    for (const item of state.requests) {
+      if (!PAUSED_STATUSES.has(item.status) || item.pauseAlert24SentAt || !item.pauseStartedAt) continue;
+      const started = timestampToDate(item.pauseStartedAt);
+      if (!started || Date.now() - started.getTime() < AUTO_PAUSE_ALERT_MS) continue;
+      const targets = [...new Set([item.requesterUid, item.assigneeUid].filter(Boolean))];
+      for (const targetUid of targets) {
+        try { await createInternalNotification(targetUid, item, `A solicitação está com o tempo pausado em ${STATUS_LABELS[item.status]} há mais de 24 horas.`, "paused_24h"); }
+        catch (error) { console.warn(error); }
+      }
+      await updateDoc(doc(db, "requests", item.id), { pauseAlert24SentAt: serverTimestamp() });
+    }
+  } catch (error) {
+    console.warn("Falha ao verificar alertas automáticos.", error);
+  } finally {
+    state.automaticAlertRunning = false;
+  }
+}
+
+async function loadSavedFilters() {
+  if (!state.user) return;
+  const snapshots = await getDocs(query(collection(db, "savedFilters"), where("ownerUid", "==", state.user.uid)));
+  state.savedFilters = snapshots.docs.map((snapshotDoc) => ({ id: snapshotDoc.id, ...snapshotDoc.data() }))
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR"));
+  renderSavedFilters();
+}
+
+function renderSavedFilters() {
+  if (!els.savedFilterSelect) return;
+  els.savedFilterSelect.innerHTML = `<option value="">Filtros salvos</option>${state.savedFilters.map((filter) => `<option value="${escapeHtml(filter.id)}">${escapeHtml(filter.name)}</option>`).join("")}`;
+}
+
+function applySavedFilter(id) {
+  const filter = state.savedFilters.find((item) => item.id === id);
+  if (!filter) return;
+  const values = filter.filters || {};
+  els.searchInput.value = values.search || "";
+  els.typeFilter.value = values.type || "all";
+  els.priorityFilter.value = values.priority || "all";
+  els.requesterFilter.value = values.requester || "all";
+  applyFilters();
+  showToast(`Filtro “${filter.name}” aplicado.`);
+}
+
+async function saveCurrentFilter(event) {
+  event.preventDefault();
+  showFormError(els.savedFilterError);
+  const name = sanitizeText(els.savedFilterName.value);
+  if (!name) return showFormError(els.savedFilterError, "Informe um nome para o filtro.");
+  setButtonLoading(els.confirmSaveFilterButton, true, "Salvando...");
+  try {
+    await setDoc(doc(collection(db, "savedFilters")), {
+      ownerUid: state.user.uid,
+      name,
+      filters: { ...state.filters },
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    closeModal(els.savedFilterDialog);
+    await loadSavedFilters();
+    showToast("Filtro salvo.");
+  } catch (error) {
+    showFormError(els.savedFilterError, firebaseErrorMessage(error));
+  } finally { setButtonLoading(els.confirmSaveFilterButton, false); }
+}
+
+
+async function deleteSelectedSavedFilter() {
+  const id = els.savedFilterSelect.value;
+  if (!id) return showToast("Selecione um filtro salvo.", "warning");
+  try {
+    await deleteDoc(doc(db, "savedFilters", id));
+    await loadSavedFilters();
+    showToast("Filtro excluído.");
+  } catch (error) { showToast(firebaseErrorMessage(error), "error"); }
+}
+
+async function loadCommentTemplates() {
+  let custom = [];
+  try {
+    const snapshots = await getDocs(collection(db, "commentTemplates"));
+    custom = snapshots.docs.map((snapshotDoc) => ({ id: snapshotDoc.id, ...snapshotDoc.data(), custom: true }));
+  } catch (error) { console.warn("Modelos personalizados indisponíveis.", error); }
+  state.commentTemplates = [...DEFAULT_COMMENT_TEMPLATES, ...custom].sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
+  renderCommentTemplates();
+}
+
+function renderCommentTemplates() {
+  if (!els.commentTemplateSelect) return;
+  els.commentTemplateSelect.innerHTML = `<option value="">Selecione um modelo (opcional)</option>${state.commentTemplates.map((template) => `<option value="${escapeHtml(template.id)}">${escapeHtml(template.title)}</option>`).join("")}`;
+  if (els.commentTemplateList) {
+    const custom = state.commentTemplates.filter((item) => item.custom);
+    els.commentTemplateList.innerHTML = custom.length ? custom.map((template) => `<div class="template-item"><div><strong>${escapeHtml(template.title)}</strong><p>${escapeHtml(template.text)}</p></div><button class="user-action-button danger" type="button" data-template-delete="${escapeHtml(template.id)}">Excluir</button></div>`).join("") : `<div class="comments-empty"><strong>Nenhum modelo personalizado.</strong><span>Os modelos padrão já estão disponíveis para todos.</span></div>`;
+  }
+}
+
+async function addCommentTemplate(event) {
+  event.preventDefault();
+  if (!isAdmin()) return;
+  const title = sanitizeText(els.commentTemplateTitle.value);
+  const text = sanitizeText(els.commentTemplateText.value);
+  showFormError(els.commentTemplateError);
+  if (!title || !text) return showFormError(els.commentTemplateError, "Preencha o título e o texto.");
+  setButtonLoading(els.addCommentTemplateButton, true, "Adicionando...");
+  try {
+    await setDoc(doc(collection(db, "commentTemplates")), { title, text, createdByUid: state.user.uid, createdByName: state.profile.name || state.user.email, createdAt: serverTimestamp() });
+    els.commentTemplateForm.reset();
+    await loadCommentTemplates();
+    showToast("Modelo adicionado.");
+  } catch (error) { showFormError(els.commentTemplateError, firebaseErrorMessage(error)); }
+  finally { setButtonLoading(els.addCommentTemplateButton, false); }
+}
+
+async function deleteCommentTemplate(id) {
+  if (!isAdmin()) return;
+  try { await deleteDoc(doc(db, "commentTemplates", id)); await loadCommentTemplates(); showToast("Modelo excluído."); }
+  catch (error) { showToast(firebaseErrorMessage(error), "error"); }
+}
+
+function updateBulkColumnSelector(status, items = null) {
+  const wrapper = document.querySelector(`[data-bulk-column-wrapper="${CSS.escape(status)}"]`);
+  const input = document.querySelector(`[data-bulk-column="${CSS.escape(status)}"]`);
+  if (!wrapper || !input) return;
+  wrapper.hidden = !(isAdmin() && state.bulkMode);
+  if (wrapper.hidden) {
+    input.checked = false;
+    input.indeterminate = false;
+    input.disabled = true;
+    return;
+  }
+  const visibleItems = items || filteredRequests().filter((item) => item.status === status);
+  const selectedCount = visibleItems.filter((item) => state.bulkSelected.has(item.id)).length;
+  input.disabled = visibleItems.length === 0;
+  input.checked = visibleItems.length > 0 && selectedCount === visibleItems.length;
+  input.indeterminate = selectedCount > 0 && selectedCount < visibleItems.length;
+}
+
+function setBulkColumnSelection(status, selected) {
+  if (!isAdmin() || !state.bulkMode || !VALID_STATUSES.includes(status)) return;
+  const visibleItems = filteredRequests().filter((item) => item.status === status);
+  visibleItems.forEach((item) => {
+    if (selected) state.bulkSelected.add(item.id);
+    else state.bulkSelected.delete(item.id);
+  });
+  updateBulkBar();
+  renderBoard();
+}
+
+function updateBulkBar() {
+  els.bulkActionsBar.hidden = !state.bulkMode;
+  els.bulkSelectedCount.textContent = String(state.bulkSelected.size);
+  els.bulkModeButton?.classList.toggle("active", state.bulkMode);
+}
+
+function setBulkMode(active) {
+  if (!isAdmin()) return;
+  state.bulkMode = Boolean(active);
+  if (!state.bulkMode) state.bulkSelected.clear();
+  updateBulkBar();
+  renderBoard();
+}
+
+function setBulkSelection(id, selected) {
+  if (selected) state.bulkSelected.add(id); else state.bulkSelected.delete(id);
+  updateBulkBar();
+  const card = document.querySelector(`.request-card[data-id="${CSS.escape(id)}"]`);
+  card?.classList.toggle("bulk-selected", selected);
+  const item = state.requests.find((entry) => entry.id === id);
+  if (item) updateBulkColumnSelector(item.status);
+}
+
+function toggleBulkSelection(id) { setBulkSelection(id, !state.bulkSelected.has(id)); const input = document.querySelector(`[data-bulk-id="${CSS.escape(id)}"]`); if (input) input.checked = state.bulkSelected.has(id); }
+
+function selectedBulkItems() { return state.requests.filter((item) => state.bulkSelected.has(item.id)); }
+
+async function applyBulkStatus() {
+  const newStatus = els.bulkStatusSelect.value;
+  const items = selectedBulkItems();
+  if (!VALID_STATUSES.includes(newStatus) || !items.length) return;
+  setButtonLoading(els.bulkStatusSelect, true, "Atualizando...");
+  try {
+    for (const item of items) {
+      await updateDoc(doc(db, "requests", item.id), { ...statusTransitionUpdate(item, newStatus), updatedAt: serverTimestamp(), updatedByUid: state.user.uid, updatedByName: state.profile.name || state.user.email });
+      await recordHistory(item, "bulk", `Status alterado em massa para ${STATUS_LABELS[newStatus]}.`, { to: newStatus });
+      await notifyStatusChange(item, newStatus);
+    }
+    showToast(`${items.length} solicitação(ões) atualizada(s).`);
+    els.bulkStatusSelect.value = "";
+    setBulkMode(false);
+  } catch (error) { showToast(firebaseErrorMessage(error), "error"); }
+  finally { setButtonLoading(els.bulkStatusSelect, false); }
+}
+
+async function applyBulkAssignee() {
+  const uid = els.bulkAssigneeSelect.value;
+  const user = state.users.find((entry) => entry.uid === uid && entry.active !== false);
+  const items = selectedBulkItems();
+  if (!user || !items.length) return;
+  try {
+    for (const item of items) {
+      await updateDoc(doc(db, "requests", item.id), { assigneeUid: user.uid, assigneeName: user.name || user.email, updatedAt: serverTimestamp(), updatedByUid: state.user.uid, updatedByName: state.profile.name || state.user.email });
+      await recordHistory(item, "bulk", `Responsável definido em massa: ${user.name || user.email}.`, { assigneeUid: user.uid });
+      await notifyAssignment(item, user.uid);
+    }
+    showToast(`${items.length} solicitação(ões) atribuída(s).`);
+    els.bulkAssigneeSelect.value = "";
+    setBulkMode(false);
+  } catch (error) { showToast(firebaseErrorMessage(error), "error"); }
+}
+
+async function bulkMarkCrm() {
+  const items = selectedBulkItems().filter((item) => item.type === "cancelamento");
+  if (!items.length) return showToast("Selecione solicitações de cancelamento.", "warning");
+  try {
+    for (const item of items) {
+      const tracking = {};
+      cancellationItemsFromRequest(item).forEach((entry) => { tracking[entry.itemId] = { cancelled: true, cancelledAt: Timestamp.now(), cancelledByUid: state.user.uid, cancelledByName: state.profile.name || state.user.email }; });
+      await updateDoc(doc(db, "requests", item.id), { cancellationCrmStatus: tracking, updatedAt: serverTimestamp(), updatedByUid: state.user.uid, updatedByName: state.profile.name || state.user.email });
+      await recordHistory(item, "bulk", "Todos os clientes foram marcados como cancelados no CRM em uma ação em massa.", {});
+    }
+    showToast(`CRM atualizado em ${items.length} solicitação(ões).`);
+    setBulkMode(false);
+  } catch (error) { showToast(firebaseErrorMessage(error), "error"); }
+}
+
+async function bulkArchive() {
+  const items = selectedBulkItems().filter((item) => item.status === "concluida");
+  if (!items.length) return showToast("Selecione solicitações concluídas.", "warning");
+  try { for (const item of items) await archiveRequestDocument(item); showToast(`${items.length} solicitação(ões) arquivada(s).`); setBulkMode(false); }
+  catch (error) { showToast(firebaseErrorMessage(error), "error"); }
+}
+
+function previousIndicatorItems() {
+  const start = state.indicatorFilters.start ? new Date(`${state.indicatorFilters.start}T00:00:00`) : null;
+  const end = state.indicatorFilters.end ? new Date(`${state.indicatorFilters.end}T23:59:59.999`) : null;
+  if (!start || !end) return [];
+  const length = end.getTime() - start.getTime() + 1;
+  const previousEnd = new Date(start.getTime() - 1);
+  const previousStart = new Date(previousEnd.getTime() - length + 1);
+  return [...state.requests, ...state.archivedRequests].filter((item) => {
+    const created = timestampToDate(item.createdAt);
+    return created && created >= previousStart && created <= previousEnd && (state.indicatorFilters.type === "all" || item.type === state.indicatorFilters.type);
+  });
+}
+
+function activeDurationForCompleted(item) {
+  const created = timestampToDate(item.createdAt);
+  const completed = timestampToDate(item.completedAt);
+  return created && completed ? Math.max(0, completed.getTime() - created.getTime() - requestPausedDuration(item, completed)) : null;
+}
+
+function percentageChange(current, previous) {
+  if (!previous) return current ? 100 : 0;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+function renderExpandedIndicators(items, completed) {
+  const previous = previousIndicatorItems();
+  const previousCompleted = previous.filter((item) => item.status === "concluida" || item.archivedAt);
+  const change = percentageChange(items.length, previous.length);
+  els.indicatorVolumeChange.textContent = `${change > 0 ? "+" : ""}${change}%`;
+  const totalPaused = items.reduce((sum, item) => sum + requestPausedDuration(item, item.status === "concluida" ? item.completedAt : null), 0);
+  els.indicatorPausedTime.textContent = formatElapsed(totalPaused, true);
+  els.indicatorComparison.innerHTML = [
+    ["Criadas", items.length, previous.length],
+    ["Concluídas", completed.length, previousCompleted.length],
+    ["Taxa de conclusão", items.length ? Math.round(completed.length / items.length * 100) : 0, previous.length ? Math.round(previousCompleted.length / previous.length * 100) : 0]
+  ].map(([label, current, old]) => `<div class="comparison-row"><span>${label}</span><strong>${current}</strong><small>${percentageChange(current, old) >= 0 ? "+" : ""}${percentageChange(current, old)}% vs. período anterior</small></div>`).join("");
+  const typeTimes = VALID_TYPES.map((type) => {
+    const durations = completed.filter((item) => item.type === type).map(activeDurationForCompleted).filter((value) => value !== null);
+    const avg = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
+    return [TYPE_LABELS[type], avg, type === "cancelamento" ? "red" : type === "tef_elgin" ? "amber" : "blue"];
+  });
+  const maxTypeTime = Math.max(1, ...typeTimes.map(([, value]) => value));
+  els.indicatorTypeTimeBars.innerHTML = typeTimes.map(([label, value, className]) => `<div class="report-bar-row"><div class="report-bar-label"><span>${escapeHtml(label)}</span><strong>${value ? formatElapsed(value, true) : "—"}</strong></div><div class="report-bar-track"><span class="${className}" style="width:${Math.round((value / maxTypeTime) * 100)}%"></span></div></div>`).join("");
+}
+
+function bytesToBase64(bytes) {
+  const array = bytes.toUint8Array ? bytes.toUint8Array() : bytes;
+  let binary = "";
+  for (let i = 0; i < array.length; i += 0x8000) binary += String.fromCharCode(...array.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+function serializeBackupValue(value) {
+  if (value instanceof Timestamp || value?.toDate) return { __type: "timestamp", value: timestampToDate(value)?.toISOString() };
+  if (value instanceof Bytes) return { __type: "bytes", value: bytesToBase64(value) };
+  if (Array.isArray(value)) return value.map(serializeBackupValue);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, serializeBackupValue(entry)]));
+  return value;
+}
+
+async function downloadBackup() {
+  if (!isAdmin()) return;
+  setButtonLoading(els.downloadBackupButton, true, "Gerando...");
+  try {
+    const names = ["requests", "archivedRequests", "requestComments", "requestHistory", "requestAttachments", "users", "userInvites", "notifications", "savedFilters", "commentTemplates", "accessLogs"];
+    const data = {};
+    for (const name of names) {
+      try {
+        const snapshots = await getDocs(collection(db, name));
+        data[name] = snapshots.docs.map((snapshotDoc) => ({ id: snapshotDoc.id, ...serializeBackupValue(snapshotDoc.data()) }));
+      } catch (error) {
+        console.error(`Falha ao incluir a colecao ${name} no backup.`, error);
+        const wrappedError = new Error(`Nao foi possivel ler a colecao ${name} para o backup.`);
+        wrappedError.code = error?.code || "backup/permission-denied";
+        wrappedError.cause = error;
+        throw wrappedError;
+      }
+    }
+    const backup = { generatedAt: new Date().toISOString(), version: "28", projectId: firebaseConfig.projectId, data };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url; link.download = `painel-solicitacoes-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(url);
+    await logAccessEvent("backup", "Backup administrativo gerado.");
+    showToast("Backup gerado com sucesso.");
+  } catch (error) {
+    const message = error?.message?.startsWith("Nao foi possivel ler a colecao")
+      ? `${error.message} Publique as regras da versao 28 no Firestore.`
+      : firebaseErrorMessage(error);
+    showToast(message, "error");
+  }
+  finally { setButtonLoading(els.downloadBackupButton, false); }
+}
+
+async function logAccessEvent(eventType, description = "") {
+  if (!state.user) return;
+  try {
+    await setDoc(doc(collection(db, "accessLogs")), {
+      uid: state.user.uid,
+      name: state.profile?.name || state.user.email,
+      email: state.user.email,
+      eventType,
+      description,
+      userAgent: navigator.userAgent.slice(0, 300),
+      createdAt: serverTimestamp()
+    });
+  } catch (error) { console.warn("Log de acesso não registrado.", error); }
+}
+
+async function loadAccessLogs() {
+  if (!isAdmin()) return;
+  const snapshots = await getDocs(collection(db, "accessLogs"));
+  state.accessLogs = snapshots.docs.map((snapshotDoc) => ({ id: snapshotDoc.id, ...snapshotDoc.data() }))
+    .sort((a, b) => (timestampToDate(b.createdAt)?.getTime() || 0) - (timestampToDate(a.createdAt)?.getTime() || 0)).slice(0, 300);
+  els.accessLogTable.innerHTML = state.accessLogs.length ? state.accessLogs.map((log) => `<tr><td>${escapeHtml(formatDateTime(log.createdAt))}</td><td><strong>${escapeHtml(log.name || log.email || "Usuário")}</strong></td><td>${escapeHtml(log.eventType || "acesso")}<br><small>${escapeHtml(log.description || "")}</small></td><td><span title="${escapeHtml(log.userAgent || "")}">${escapeHtml((log.userAgent || "Navegador").slice(0, 60))}</span></td></tr>`).join("") : `<tr><td colspan="4" class="report-empty-row">Nenhum acesso registrado.</td></tr>`;
+}
+
+async function toggleUserAccessLock(uid) {
+  const user = state.users.find((entry) => entry.uid === uid);
+  if (!isAdmin() || !user || uid === state.user.uid) return;
+  const locked = user.accessLocked === true;
+  try {
+    await updateDoc(doc(db, "users", uid), { accessLocked: !locked, lockedAt: locked ? null : serverTimestamp(), lockedByUid: locked ? "" : state.user.uid, updatedAt: serverTimestamp(), updatedByUid: state.user.uid });
+    await loadUsers();
+    showToast(locked ? "Acesso desbloqueado." : "Acesso bloqueado temporariamente.");
+  } catch (error) { showToast(firebaseErrorMessage(error), "error"); }
+}
+
+function clearSessionTimers() {
+  [state.sessionWarningTimer, state.sessionExpireTimer, state.sessionCountdownTimer].forEach((timer) => timer && clearTimeout(timer));
+  if (state.sessionCountdownTimer) clearInterval(state.sessionCountdownTimer);
+  state.sessionWarningTimer = state.sessionExpireTimer = state.sessionCountdownTimer = null;
+}
+
+function updateSessionCountdown() {
+  const remaining = Math.max(0, (state.sessionExpiresAt || 0) - Date.now());
+  const minutes = Math.floor(remaining / 60000);
+  const seconds = Math.floor((remaining % 60000) / 1000);
+  els.sessionCountdown.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function resetSessionInactivity() {
+  if (!state.user) return;
+  state.lastActivityAt = Date.now();
+  clearSessionTimers();
+  if (els.sessionWarningDialog?.open) closeModal(els.sessionWarningDialog);
+  state.sessionExpiresAt = Date.now() + SESSION_INACTIVITY_MS;
+  state.sessionWarningTimer = setTimeout(() => {
+    updateSessionCountdown();
+    if (!els.sessionWarningDialog.open) els.sessionWarningDialog.showModal();
+    state.sessionCountdownTimer = setInterval(updateSessionCountdown, 1000);
+  }, SESSION_INACTIVITY_MS - SESSION_WARNING_MS);
+  state.sessionExpireTimer = setTimeout(async () => {
+    state.forcedLogoutMessage = "Sua sessão expirou após 3 horas sem atividade.";
+    await logAccessEvent("session_expired", "Sessão encerrada por inatividade.");
+    await signOut(auth);
+  }, SESSION_INACTIVITY_MS);
+}
+
+function applyTheme(theme) {
+  const value = theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = value;
+  localStorage.setItem("painel-theme", value);
+  els.themeToggleButton.textContent = value === "dark" ? "☀" : "◐";
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", value === "dark" ? "#0f172a" : "#2563eb");
+}
+
+function toggleTheme() { applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"); }
+
+function setupPwa() {
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./service-worker.js").catch((error) => console.warn(error));
+  window.addEventListener("beforeinstallprompt", (event) => { event.preventDefault(); state.deferredInstallPrompt = event; els.installAppButton.hidden = false; });
+  els.installAppButton?.addEventListener("click", async () => {
+    if (!state.deferredInstallPrompt) return;
+    state.deferredInstallPrompt.prompt();
+    await state.deferredInstallPrompt.userChoice;
+    state.deferredInstallPrompt = null;
+    els.installAppButton.hidden = true;
+  });
+}
+
+function isTypingTarget(target) { return target?.matches?.("input, textarea, select, [contenteditable='true']"); }
+
+function handleKeyboardShortcuts(event) {
+  if (!state.user) return;
+  if (event.key === "Escape") {
+    if (event.shiftKey && state.bulkMode && isAdmin()) {
+      state.bulkSelected.clear(); updateBulkBar(); renderBoard();
+      return;
+    }
+    if (document.body.classList.contains("kanban-focus-mode")) setKanbanFocusMode(false);
+    return;
+  }
+  if (event.ctrlKey && event.key === "Enter") {
+    if (els.requestDialog.open) {
+      event.preventDefault();
+      if (!els.requestCommentsPanel.hidden && els.requestCommentText.value.trim()) addRequestComment();
+      else els.requestForm.requestSubmit();
+    }
+    return;
+  }
+  if (isTypingTarget(event.target) || event.ctrlKey || event.altKey || event.metaKey) return;
+  const key = event.key.toLocaleLowerCase("pt-BR");
+  if (event.shiftKey && key === "a" && state.bulkMode && isAdmin()) {
+    event.preventDefault();
+    filteredRequests().forEach((item) => state.bulkSelected.add(item.id));
+    updateBulkBar(); renderBoard();
+    return;
+  }
+  const actions = {
+    n: () => openNewRequestModal(), f: () => els.searchInput.focus(), k: () => setKanbanFocusMode(!document.body.classList.contains("kanban-focus-mode")),
+    r: () => { renderAll(); showToast("Painel atualizado."); }, "?": () => openHelpDialog("help-productivity"), t: toggleTheme,
+    m: () => toggleNotifications(true), s: () => els.savedFilterSelect.focus(), c: () => els.requestDialog.open && switchRequestTab("comments"),
+    l: () => els.requestDialog.open && switchRequestTab("history")
+  };
+  if (isAdmin()) Object.assign(actions, { b: () => setBulkMode(!state.bulkMode), i: () => switchAppView("indicators"), a: () => switchAppView("archived"), u: () => switchAppView("users") });
+  if (actions[key]) { event.preventDefault(); actions[key](); }
 }
 
 function setupEvents() {
@@ -3445,7 +4193,7 @@ function setupEvents() {
     els.togglePassword.setAttribute("aria-label", hidden ? "Ocultar senha" : "Mostrar senha");
   });
 
-  els.logoutButton.addEventListener("click", () => signOut(auth));
+  els.logoutButton.addEventListener("click", async () => { await logAccessEvent("logout", "Saída manual do painel."); await signOut(auth); });
   els.changePasswordButton.addEventListener("click", () => {
     els.changePasswordForm.reset();
     showFormError(els.changePasswordError);
@@ -3498,6 +4246,12 @@ function setupEvents() {
   els.copyRequestButton.addEventListener("click", () => copyRequestById(els.requestId.value));
   els.requestDetailsTab.addEventListener("click", () => switchRequestTab("details"));
   els.requestCommentsTab.addEventListener("click", () => switchRequestTab("comments"));
+  els.requestHistoryTab.addEventListener("click", () => switchRequestTab("history"));
+  els.commentTemplateSelect.addEventListener("change", () => { const template = state.commentTemplates.find((item) => item.id === els.commentTemplateSelect.value); if (template) els.requestCommentText.value = template.text; });
+  els.manageCommentTemplatesButton.addEventListener("click", () => { renderCommentTemplates(); els.commentTemplateDialog.showModal(); });
+  els.commentTemplateForm.addEventListener("submit", addCommentTemplate);
+  els.commentTemplateList.addEventListener("click", (event) => { const button = event.target.closest("[data-template-delete]"); if (button) deleteCommentTemplate(button.dataset.templateDelete); });
+  $$(".close-comment-template-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.commentTemplateDialog)));
   els.addRequestCommentButton.addEventListener("click", addRequestComment);
   els.archiveRequestButton.addEventListener("click", () => {
     const item = state.modalArchived
@@ -3516,6 +4270,20 @@ function setupEvents() {
     control.addEventListener(control === els.searchInput ? "input" : "change", applyFilters);
   });
   els.clearFilters.addEventListener("click", clearFilters);
+  els.savedFilterSelect.addEventListener("change", () => applySavedFilter(els.savedFilterSelect.value));
+  els.saveCurrentFilterButton.addEventListener("click", () => { els.savedFilterForm.reset(); showFormError(els.savedFilterError); els.savedFilterDialog.showModal(); });
+  els.savedFilterForm.addEventListener("submit", saveCurrentFilter);
+  els.deleteSavedFilterButton.addEventListener("click", deleteSelectedSavedFilter);
+  $$(".close-saved-filter-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.savedFilterDialog)));
+  els.bulkModeButton?.addEventListener("click", () => setBulkMode(!state.bulkMode));
+  $$('[data-bulk-column]').forEach((input) => {
+    input.addEventListener("change", () => setBulkColumnSelection(input.dataset.bulkColumn, input.checked));
+  });
+  els.bulkClearButton?.addEventListener("click", () => { state.bulkSelected.clear(); updateBulkBar(); renderBoard(); });
+  els.bulkStatusSelect?.addEventListener("change", applyBulkStatus);
+  els.bulkAssigneeSelect?.addEventListener("change", applyBulkAssignee);
+  els.bulkCrmButton?.addEventListener("click", bulkMarkCrm);
+  els.bulkArchiveButton?.addEventListener("click", bulkArchive);
   els.expandKanbanButton?.addEventListener("click", () => setKanbanFocusMode(true));
   els.exitKanbanFocusButton?.addEventListener("click", () => setKanbanFocusMode(false));
   document.addEventListener("keydown", (event) => {
@@ -3531,7 +4299,7 @@ function setupEvents() {
         els.sidebar.classList.remove("open");
         return;
       }
-      if (["users", "indicators", "archived"].includes(button.dataset.view)) {
+      if (["users", "indicators", "archived", "security"].includes(button.dataset.view)) {
         switchAppView(button.dataset.view);
         return;
       }
@@ -3627,6 +4395,14 @@ function setupEvents() {
     if (button.dataset.archiveAction === "restore") openArchiveConfirmation("restore", item);
   });
 
+  els.themeToggleButton.addEventListener("click", toggleTheme);
+  els.downloadBackupButton.addEventListener("click", downloadBackup);
+  els.refreshAccessLogsButton.addEventListener("click", loadAccessLogs);
+  els.continueSessionButton.addEventListener("click", resetSessionInactivity);
+  els.logoutSessionButton.addEventListener("click", async () => { await logAccessEvent("logout", "Saída pela tela de expiração."); await signOut(auth); });
+  document.addEventListener("keydown", handleKeyboardShortcuts);
+  ["pointerdown", "mousemove", "keydown", "scroll", "touchstart"].forEach((eventName) => document.addEventListener(eventName, () => { if (state.user && Date.now() - state.lastActivityAt > 30000) resetSessionInactivity(); }, { passive: true }));
+
   els.forgotPassword.addEventListener("click", () => {
     els.resetEmail.value = els.loginEmail.value.trim();
     showFormError(els.resetError);
@@ -3647,7 +4423,7 @@ function setupEvents() {
     }
   });
 
-  [els.requestDialog, els.resetDialog, els.changePasswordDialog, els.helpDialog, els.userInviteDialog, els.editUserDialog, els.userStatusDialog, els.archiveConfirmDialog].forEach((dialog) => {
+  [els.requestDialog, els.resetDialog, els.changePasswordDialog, els.helpDialog, els.userInviteDialog, els.editUserDialog, els.userStatusDialog, els.archiveConfirmDialog, els.savedFilterDialog, els.commentTemplateDialog].forEach((dialog) => {
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) dialog.close();
     });
@@ -3655,8 +4431,11 @@ function setupEvents() {
 
   els.requestDialog.addEventListener("close", () => {
     if (state.unsubscribeComments) state.unsubscribeComments();
+    if (state.unsubscribeHistory) state.unsubscribeHistory();
     state.unsubscribeComments = null;
+    state.unsubscribeHistory = null;
     state.currentComments = [];
+    state.currentHistory = [];
   });
 
   setupDropzones();
@@ -3667,8 +4446,8 @@ async function handleAuthenticated(user) {
   if (state.inviteRegistrationInProgress) return;
   try {
     const profile = await loadProfile(user);
-    if (profile.active !== true) {
-      state.forcedLogoutMessage = "Seu acesso está desativado. Procure o administrador.";
+    if (profile.active !== true || profile.accessLocked === true) {
+      state.forcedLogoutMessage = profile.accessLocked === true ? "Seu acesso está temporariamente bloqueado. Procure o administrador." : "Seu acesso está desativado. Procure o administrador.";
       await signOut(auth);
       return;
     }
@@ -3681,6 +4460,12 @@ async function handleAuthenticated(user) {
     renderUser();
     await switchAppView("kanban");
     await loadUsers();
+    await Promise.all([loadSavedFilters(), loadCommentTemplates()]);
+    try {
+      await updateDoc(doc(db, "users", user.uid), { lastLoginAt: serverTimestamp(), lastSeenAt: serverTimestamp(), loginCount: increment(1) });
+      await logAccessEvent("login", "Entrada no painel.");
+    } catch (logError) { console.warn(logError); }
+    resetSessionInactivity();
     subscribeRequests();
     subscribeNotifications();
     subscribeCurrentProfile();
@@ -3702,11 +4487,13 @@ function handleSignedOut() {
   if (state.unsubscribeProfile) state.unsubscribeProfile();
   if (state.unsubscribeNotifications) state.unsubscribeNotifications();
   if (state.unsubscribeComments) state.unsubscribeComments();
+  if (state.unsubscribeHistory) state.unsubscribeHistory();
   if (state.elapsedTimer) clearInterval(state.elapsedTimer);
   state.unsubscribeRequests = null;
   state.unsubscribeProfile = null;
   state.unsubscribeNotifications = null;
   state.unsubscribeComments = null;
+  state.unsubscribeHistory = null;
   state.user = null;
   state.profile = null;
   state.requests = [];
@@ -3716,6 +4503,8 @@ function handleSignedOut() {
   state.invites = [];
   state.notifications = [];
   state.currentComments = [];
+  state.currentHistory = [];
+  clearSessionTimers();
   toggleNotifications(false);
   els.notificationList.innerHTML = "";
   els.notificationBadge.hidden = true;
@@ -3747,7 +4536,7 @@ async function loadAppVersion() {
     if (!response.ok) throw new Error("version-file-unavailable");
 
     const info = await response.json();
-    const release = String(info.release || "25").replace(/^v/i, "");
+    const release = String(info.release || "28").replace(/^v/i, "");
     const isLocal = !info.build || String(info.build).toLowerCase() === "local";
     const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
 
@@ -3782,12 +4571,14 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v19";
+    versionLabel.textContent = "v28";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }
 }
 
+applyTheme(localStorage.getItem("painel-theme") || (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+setupPwa();
 loadAppVersion();
 setupEvents();
 const rememberedEmail = localStorage.getItem("painel-email");

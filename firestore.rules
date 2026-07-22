@@ -12,7 +12,9 @@ service cloud.firestore {
     function isActive() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && currentUser().data.active == true;
+        && currentUser().data.active == true
+        && (!currentUser().data.keys().hasAny(['accessLocked'])
+          || currentUser().data.accessLocked != true);
     }
 
     function isAdmin() {
@@ -189,7 +191,21 @@ service cloud.firestore {
             && data.assigneeUid == request.auth.uid));
     }
 
+    function canViewProgramming(data) {
+      return isActive()
+        && currentUser().data.role == 'solicitante'
+        && data.type == 'programacao';
+    }
+
     function canReadActiveRequest(requestId) {
+      let path = /databases/$(database)/documents/requests/$(requestId);
+      return exists(path)
+        && (isAdmin()
+          || isRequestParticipant(get(path).data)
+          || canViewProgramming(get(path).data));
+    }
+
+    function canParticipateActiveRequest(requestId) {
       let path = /databases/$(database)/documents/requests/$(requestId);
       return exists(path)
         && (isAdmin() || isRequestParticipant(get(path).data));
@@ -249,7 +265,7 @@ service cloud.firestore {
         && data.message is string
         && data.message.size() > 0
         && data.message.size() <= 300
-        && data.type == 'mention'
+        && data.type in ['mention', 'assignment', 'status', 'blocked', 'paused_24h', 'system']
         && data.read == false
         && data.createdAt == request.time;
     }
@@ -260,13 +276,20 @@ service cloud.firestore {
 
       allow create: if isAdmin() || validInvitedUser(userId, request.resource.data);
 
-      allow update: if isAdmin()
+      allow update: if (isAdmin()
         && request.resource.data.email == resource.data.email
         && validUserRole(request.resource.data.role)
         && request.resource.data.active is bool
         && (request.auth.uid != userId
           || (request.resource.data.active == true
-            && request.resource.data.role == 'admin'));
+            && request.resource.data.role == 'admin')))
+        || (isActive()
+          && request.auth.uid == userId
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['lastLoginAt', 'lastSeenAt', 'loginCount'])
+          && request.resource.data.lastLoginAt == request.time
+          && request.resource.data.lastSeenAt == request.time
+          && request.resource.data.loginCount is int);
 
       allow delete: if false;
     }
@@ -294,7 +317,9 @@ service cloud.firestore {
     }
 
     match /requests/{requestId} {
-      allow read: if isAdmin() || isRequestParticipant(resource.data);
+      allow read: if isAdmin()
+        || isRequestParticipant(resource.data)
+        || canViewProgramming(resource.data);
 
       allow create: if (isAdmin() && validRequestData(request.resource.data))
         || (isActive()
@@ -346,7 +371,7 @@ service cloud.firestore {
 
       allow create: if isActive()
         && validCommentData(request.resource.data)
-        && canReadActiveRequest(request.resource.data.requestId);
+        && canParticipateActiveRequest(request.resource.data.requestId);
 
       allow update: if false;
       allow delete: if isAdmin();
@@ -366,6 +391,63 @@ service cloud.firestore {
 
       allow delete: if isAdmin()
         || (isActive() && resource.data.targetUid == request.auth.uid);
+    }
+
+    match /requestHistory/{historyId} {
+      allow read: if canReadActiveRequest(resource.data.requestId)
+        || canReadArchivedRequest(resource.data.requestId);
+      allow create: if isActive()
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.requestId is string
+        && request.resource.data.requestId.size() > 0
+        && request.resource.data.summary is string
+        && request.resource.data.summary.size() > 0
+        && request.resource.data.summary.size() <= 500
+        && request.resource.data.action in ['create', 'update', 'status', 'comment', 'crm', 'archive', 'restore', 'bulk', 'attachment']
+        && request.resource.data.createdAt == request.time
+        && (canParticipateActiveRequest(request.resource.data.requestId)
+          || canReadArchivedRequest(request.resource.data.requestId));
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /savedFilters/{filterId} {
+      // O administrador pode ler todos os filtros para gerar o backup completo.
+      // Os demais usuarios continuam acessando somente os proprios filtros.
+      allow read: if isAdmin()
+        || (isActive() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isActive()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.filters is map
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if isActive() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    match /commentTemplates/{templateId} {
+      allow read: if isActive();
+      allow create: if isAdmin()
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 800
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if isAdmin();
+    }
+
+    match /accessLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isActive()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.eventType in ['login', 'logout', 'session_expired', 'password_changed', 'backup']
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
     }
 
     match /requestAttachments/{attachmentId} {

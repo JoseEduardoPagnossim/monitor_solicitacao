@@ -5,19 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Kanban interno para solicitações de programação, cancelamento e TEF Elgin.">
   <title>Painel de Solicitações</title>
-  <link rel="icon" type="image/png" href="logo-soften.png?v=25.0.0">
+  <link rel="icon" type="image/png" href="logo-soften.png?v=26.0.0">
   <meta name="theme-color" content="#2563eb">
+  <link rel="manifest" href="manifest.webmanifest?v=26.0.0">
+  <link rel="apple-touch-icon" href="icon-192.png?v=26.0.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=25.0.0">
+  <link rel="stylesheet" href="styles.css?v=29.0.0">
 </head>
 <body>
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <section id="login-view" class="login-view">
     <div class="login-visual">
-      <div class="brand-mark"><img src="logo-soften.png?v=25.0.0" alt="Logo Soften"></div>
+      <div class="brand-mark"><img src="logo-soften.png?v=26.0.0" alt="Logo Soften"></div>
       <div>
         <span class="eyebrow">CONTROLE INTERNO</span>
         <h1>Solicitações organizadas, prioridades visíveis.</h1>
@@ -33,7 +35,7 @@
     <div class="login-panel">
       <form id="login-form" class="auth-card" autocomplete="on">
         <div class="auth-header">
-          <span class="mobile-logo"><img src="logo-soften.png?v=25.0.0" alt="Logo Soften"></span>
+          <span class="mobile-logo"><img src="logo-soften.png?v=26.0.0" alt="Logo Soften"></span>
           <h2>Entrar no painel</h2>
           <p>Use o e-mail e a senha cadastrados pelo administrador.</p>
         </div>
@@ -64,7 +66,7 @@
 
       <form id="invite-registration-form" class="auth-card" autocomplete="on" hidden>
         <div class="auth-header">
-          <span class="mobile-logo"><img src="logo-soften.png?v=25.0.0" alt="Logo Soften"></span>
+          <span class="mobile-logo"><img src="logo-soften.png?v=26.0.0" alt="Logo Soften"></span>
           <span class="eyebrow">CONVITE DE ACESSO</span>
           <h2>Concluir cadastro</h2>
           <p>Confira seus dados e crie uma senha para acessar o painel.</p>
@@ -106,7 +108,7 @@
   <div id="app-view" class="app-view" hidden>
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <div class="brand-mark small"><img src="logo-soften.png?v=25.0.0" alt="Logo Soften"></div>
+        <div class="brand-mark small"><img src="logo-soften.png?v=26.0.0" alt="Logo Soften"></div>
         <div>
           <strong>Painel</strong>
           <span>Solicitações</span>
@@ -135,6 +137,9 @@
         <button id="users-nav-button" class="nav-item admin-only" data-view="users" type="button">
           <span class="nav-icon">♙</span> Usuários
         </button>
+        <button id="security-nav-button" class="nav-item admin-only" data-view="security" type="button">
+          <span class="nav-icon">◈</span> Segurança e backup
+        </button>
         <div class="nav-divider" aria-hidden="true"></div>
         <button id="help-button" class="nav-item" data-view="help" type="button">
           <span class="nav-icon">?</span> Ajuda
@@ -148,13 +153,15 @@
             <strong id="user-name">Usuário</strong>
             <span id="user-role">Solicitante</span>
           </div>
+          <button id="theme-toggle-button" class="icon-button" title="Alternar tema" aria-label="Alternar tema">◐</button>
+          <button id="install-app-button" class="icon-button" title="Instalar aplicativo" aria-label="Instalar aplicativo" hidden>⬇</button>
           <button id="change-password-button" class="icon-button" title="Alterar minha senha" aria-label="Alterar minha senha">🔑</button>
           <button id="logout-button" class="icon-button" title="Sair" aria-label="Sair">↪</button>
         </div>
         <div id="app-version-card" class="app-version-card" title="Informações da versão publicada">
           <div class="app-version-main">
             <span>VERSÃO</span>
-            <strong id="app-version-label">v25</strong>
+            <strong id="app-version-label">v26</strong>
           </div>
           <span id="app-version-details" class="app-version-details">Ambiente local</span>
         </div>
@@ -174,6 +181,7 @@
           <div class="notification-anchor">
             <button id="notification-button" class="button button-secondary notification-button" type="button" title="Notificações">♢ Notificações <span id="notification-badge" class="notification-badge" hidden>0</span></button>
           </div>
+          <button id="bulk-mode-button" class="button button-secondary admin-only" type="button" title="Ações em massa">☑ Em massa</button>
           <button id="expand-kanban-button" class="button button-secondary kanban-expand-button" type="button" title="Exibir somente o Kanban" aria-label="Exibir somente o Kanban">⛶</button>
           <button id="top-help-button" class="button button-secondary" type="button" title="Abrir ajuda">? Ajuda</button>
           <button id="refresh-button" class="button button-secondary" type="button" title="Atualizar">↻ Atualizar</button>
@@ -222,11 +230,23 @@
           <option value="all">Todos os solicitantes</option>
         </select>
         <button id="clear-filters" class="link-button" type="button">Limpar filtros</button>
+        <select id="saved-filter-select" class="select-control saved-filter-select" aria-label="Filtros salvos"><option value="">Filtros salvos</option></select>
+        <button id="save-current-filter-button" class="button button-secondary compact-button" type="button">☆ Salvar filtro</button>
+        <button id="delete-saved-filter-button" class="button button-secondary compact-button" type="button" title="Excluir filtro selecionado">×</button>
+      </section>
+
+      <section id="bulk-actions-bar" class="bulk-actions-bar admin-only" hidden>
+        <div><strong><span id="bulk-selected-count">0</span> selecionadas</strong><span>Marque os cards que deseja atualizar.</span></div>
+        <select id="bulk-status-select" class="select-control"><option value="">Alterar status...</option><option value="nova">Nova</option><option value="analise">Em análise</option><option value="aguardando">Aguardando</option><option value="bloqueio">Bloqueio</option><option value="concluida">Concluída</option></select>
+        <select id="bulk-assignee-select" class="select-control"><option value="">Definir responsável...</option></select>
+        <button id="bulk-crm-button" class="button button-secondary" type="button">Marcar CRM</button>
+        <button id="bulk-archive-button" class="button button-secondary" type="button">Arquivar concluídas</button>
+        <button id="bulk-clear-button" class="link-button" type="button">Limpar seleção</button>
       </section>
 
       <header id="kanban-focus-header" class="kanban-focus-header" hidden>
         <div class="kanban-focus-title">
-          <img src="logo-soften.png?v=25.0.0" alt="Logo Soften">
+          <img src="logo-soften.png?v=26.0.0" alt="Logo Soften">
           <div><strong>Kanban de solicitações</strong><span>Visualização ampliada das etapas</span></div>
         </div>
         <button id="exit-kanban-focus-button" class="kanban-focus-exit" type="button" title="Voltar ao painel" aria-label="Voltar ao painel">✕ Voltar ao painel</button>
@@ -234,23 +254,23 @@
 
       <section id="kanban-board" class="kanban-board" aria-label="Quadro Kanban">
         <div class="kanban-column" data-status="nova">
-          <header><div><span class="status-dot new"></span><h2>Novas</h2></div><span class="column-count" data-count="nova">0</span></header>
+          <header><div><span class="status-dot new"></span><h2>Novas</h2></div><div class="column-header-actions"><label class="bulk-column-select" data-bulk-column-wrapper="nova" hidden title="Selecionar todos os cards visíveis desta coluna"><input type="checkbox" data-bulk-column="nova"><span>Todos</span></label><span class="column-count" data-count="nova">0</span></div></header>
           <div class="column-body" data-dropzone="nova"></div>
         </div>
         <div class="kanban-column" data-status="analise">
-          <header><div><span class="status-dot analysis"></span><h2>Em análise</h2></div><span class="column-count" data-count="analise">0</span></header>
+          <header><div><span class="status-dot analysis"></span><h2>Em análise</h2></div><div class="column-header-actions"><label class="bulk-column-select" data-bulk-column-wrapper="analise" hidden title="Selecionar todos os cards visíveis desta coluna"><input type="checkbox" data-bulk-column="analise"><span>Todos</span></label><span class="column-count" data-count="analise">0</span></div></header>
           <div class="column-body" data-dropzone="analise"></div>
         </div>
         <div class="kanban-column" data-status="aguardando">
-          <header><div><span class="status-dot waiting"></span><h2>Aguardando</h2></div><span class="column-count" data-count="aguardando">0</span></header>
+          <header><div><span class="status-dot waiting"></span><h2>Aguardando</h2></div><div class="column-header-actions"><label class="bulk-column-select" data-bulk-column-wrapper="aguardando" hidden title="Selecionar todos os cards visíveis desta coluna"><input type="checkbox" data-bulk-column="aguardando"><span>Todos</span></label><span class="column-count" data-count="aguardando">0</span></div></header>
           <div class="column-body" data-dropzone="aguardando"></div>
         </div>
         <div class="kanban-column" data-status="bloqueio">
-          <header><div><span class="status-dot blocked"></span><h2>Bloqueio</h2></div><span class="column-count" data-count="bloqueio">0</span></header>
+          <header><div><span class="status-dot blocked"></span><h2>Bloqueio</h2></div><div class="column-header-actions"><label class="bulk-column-select" data-bulk-column-wrapper="bloqueio" hidden title="Selecionar todos os cards visíveis desta coluna"><input type="checkbox" data-bulk-column="bloqueio"><span>Todos</span></label><span class="column-count" data-count="bloqueio">0</span></div></header>
           <div class="column-body" data-dropzone="bloqueio"></div>
         </div>
         <div class="kanban-column" data-status="concluida">
-          <header><div><span class="status-dot done"></span><h2>Concluídas</h2></div><span class="column-count" data-count="concluida">0</span></header>
+          <header><div><span class="status-dot done"></span><h2>Concluídas</h2></div><div class="column-header-actions"><label class="bulk-column-select" data-bulk-column-wrapper="concluida" hidden title="Selecionar todos os cards visíveis desta coluna"><input type="checkbox" data-bulk-column="concluida"><span>Todos</span></label><span class="column-count" data-count="concluida">0</span></div></header>
           <div class="column-body" data-dropzone="concluida"></div>
         </div>
       </section>
@@ -304,7 +324,7 @@
         <section class="users-panel">
           <div class="users-table-wrap">
             <table class="users-table">
-              <thead><tr><th>Usuário</th><th>Perfil</th><th>Situação</th><th>Cadastro</th><th>Ações</th></tr></thead>
+              <thead><tr><th>Usuário</th><th>Perfil</th><th>Situação</th><th>Último acesso</th><th>Cadastro</th><th>Ações</th></tr></thead>
               <tbody id="users-table-body"></tbody>
             </table>
           </div>
@@ -346,6 +366,8 @@
           <article class="metric-card"><div class="metric-icon red">!</div><div><span>Em bloqueio</span><strong id="indicator-blocked">0</strong></div></article>
           <article class="metric-card"><div class="metric-icon purple">%</div><div><span>Taxa de conclusão</span><strong id="indicator-completion-rate">0%</strong></div></article>
           <article class="metric-card"><div class="metric-icon gray">▣</div><div><span>Arquivadas</span><strong id="indicator-archived">0</strong></div></article>
+          <article class="metric-card"><div class="metric-icon cyan">⏸</div><div><span>Tempo pausado</span><strong id="indicator-paused-time">—</strong></div></article>
+          <article class="metric-card"><div class="metric-icon blue">↕</div><div><span>Variação de volume</span><strong id="indicator-volume-change">—</strong></div></article>
         </section>
 
         <section class="reports-grid">
@@ -359,7 +381,15 @@
           </article>
           <article class="report-card report-card-wide">
             <header><div><span class="eyebrow">EQUIPE</span><h2>Solicitações por técnico</h2></div></header>
-            <div class="report-table-wrap"><table class="report-table"><thead><tr><th>Técnico</th><th>Criadas</th><th>Concluídas</th><th>Em aberto</th><th>Bloqueadas</th></tr></thead><tbody id="indicator-requester-table"></tbody></table></div>
+            <div class="report-table-wrap"><table class="report-table"><thead><tr><th>Técnico</th><th>Criadas</th><th>Concluídas</th><th>Em aberto</th><th>Bloqueadas</th><th>Tempo médio ativo</th></tr></thead><tbody id="indicator-requester-table"></tbody></table></div>
+          </article>
+          <article class="report-card">
+            <header><div><span class="eyebrow">COMPARAÇÃO</span><h2>Período anterior</h2></div></header>
+            <div id="indicator-comparison" class="comparison-list"></div>
+          </article>
+          <article class="report-card">
+            <header><div><span class="eyebrow">EFICIÊNCIA</span><h2>Tempo médio por tipo</h2></div></header>
+            <div id="indicator-type-time-bars" class="report-bars"></div>
           </article>
         </section>
       </section>
@@ -398,6 +428,18 @@
           <div id="archived-empty-state" class="users-empty-state" hidden><div>▣</div><h2>Nenhuma solicitação arquivada</h2><p>As solicitações concluídas podem ser arquivadas pelo administrador.</p></div>
         </section>
       </section>
+      <section id="security-view" class="app-section admin-view" hidden>
+        <header class="topbar">
+          <div><button class="icon-button mobile-menu" type="button" aria-label="Abrir menu">☰</button><span class="eyebrow">ADMINISTRAÇÃO</span><h1>Segurança e backup</h1><p>Acompanhe acessos, sessões e faça cópias dos dados do painel.</p></div>
+          <div class="topbar-actions"><button id="download-backup-button" class="button button-primary" type="button">↓ Baixar backup JSON</button><button id="refresh-access-logs-button" class="button button-secondary" type="button">↻ Atualizar</button></div>
+        </header>
+        <section class="security-grid">
+          <article class="report-card"><header><div><span class="eyebrow">SESSÃO</span><h2>Política de segurança</h2></div></header><div class="security-copy"><p><strong>Expiração por inatividade:</strong> 3 horas.</p><p>O painel avisa nos últimos 5 minutos e encerra a sessão se não houver atividade.</p><p>Administradores podem bloquear e desbloquear temporariamente usuários na tela Usuários.</p></div></article>
+          <article class="report-card"><header><div><span class="eyebrow">BACKUP</span><h2>Cópia dos dados</h2></div></header><div class="security-copy"><p>O backup inclui solicitações ativas e arquivadas, comentários, histórico, usuários, filtros, modelos e anexos.</p><p>Guarde o arquivo em local seguro. Ele pode conter informações de clientes.</p></div></article>
+          <article class="report-card report-card-wide"><header><div><span class="eyebrow">ACESSOS</span><h2>Log de acesso</h2></div></header><div class="report-table-wrap"><table class="report-table"><thead><tr><th>Data</th><th>Usuário</th><th>Evento</th><th>Dispositivo</th></tr></thead><tbody id="access-log-table"></tbody></table></div></article>
+        </section>
+      </section>
+
     </main>
   </div>
 
@@ -420,6 +462,7 @@
       <div class="request-tabs" role="tablist" aria-label="Conteúdo da solicitação">
         <button id="request-details-tab" class="request-tab active" type="button" data-request-tab="details" role="tab" aria-selected="true">Detalhes</button>
         <button id="request-comments-tab" class="request-tab" type="button" data-request-tab="comments" role="tab" aria-selected="false" disabled>Comentários <span id="request-comment-count" class="request-tab-count">0</span></button>
+        <button id="request-history-tab" class="request-tab" type="button" data-request-tab="history" role="tab" aria-selected="false" disabled>Histórico <span id="request-history-count" class="request-tab-count">0</span></button>
       </div>
       <section id="request-details-panel" class="request-tab-panel active" data-request-panel="details">
       <input id="request-id" type="hidden">
@@ -694,11 +737,16 @@
         </div>
         <div id="request-comments-list" class="comments-list"><div class="comments-empty"><strong>Nenhum comentário interno.</strong><span>Os comentários aparecerão aqui em ordem cronológica.</span></div></div>
         <div id="comment-composer" class="comment-composer">
+          <label class="field"><span>Modelo de comentário</span><div class="inline-field-row"><select id="comment-template-select"><option value="">Selecione um modelo (opcional)</option></select><button id="manage-comment-templates-button" class="button button-secondary admin-only" type="button">Gerenciar</button></div></label>
           <label class="field"><span>Novo comentário *</span><textarea id="request-comment-text" rows="4" maxlength="2000" placeholder="Escreva o alinhamento ou a informação que está faltando..."></textarea></label>
           <label id="comment-mention-field" class="field admin-only"><span>Notificar técnico (opcional)</span><select id="request-comment-mention"><option value="">Não enviar notificação</option></select><small>O técnico receberá uma notificação interna no painel.</small></label>
           <p id="request-comment-error" class="form-error" hidden></p>
           <div class="comment-actions"><button id="add-request-comment-button" class="button button-primary" type="button">Enviar comentário</button></div>
         </div>
+      </section>
+      <section id="request-history-panel" class="request-tab-panel history-panel" data-request-panel="history" hidden>
+        <div class="comments-header"><div><span class="eyebrow">RASTREABILIDADE</span><h3>Histórico de alterações</h3><p>Registro automático das principais ações realizadas na solicitação.</p></div></div>
+        <div id="request-history-list" class="history-list"><div class="comments-empty"><strong>Nenhuma alteração registrada.</strong><span>Novas ações aparecerão aqui.</span></div></div>
       </section>
     </form>
   </dialog>
@@ -768,13 +816,24 @@
   </dialog>
 
 
+
+  <dialog id="saved-filter-dialog" class="modal modal-small">
+    <form id="saved-filter-form" method="dialog" class="modal-content"><div class="modal-header"><div><span class="eyebrow">FILTRO FAVORITO</span><h2>Salvar filtro atual</h2></div><button class="icon-button close-saved-filter-modal" type="button">×</button></div><label class="field"><span>Nome do filtro *</span><input id="saved-filter-name" maxlength="80" placeholder="Ex.: Cancelamentos pendentes"></label><p id="saved-filter-error" class="form-error" hidden></p><div class="modal-actions modal-actions-end"><button class="button button-secondary close-saved-filter-modal" type="button">Cancelar</button><button id="confirm-save-filter-button" class="button button-primary" type="submit">Salvar filtro</button></div></form>
+  </dialog>
+  <dialog id="comment-template-dialog" class="modal modal-small">
+    <div class="modal-content"><div class="modal-header"><div><span class="eyebrow">RESPOSTAS RÁPIDAS</span><h2>Modelos de comentários</h2></div><button class="icon-button close-comment-template-modal" type="button">×</button></div><form id="comment-template-form"><label class="field"><span>Título *</span><input id="comment-template-title" maxlength="80"></label><label class="field"><span>Texto *</span><textarea id="comment-template-text" rows="4" maxlength="800"></textarea></label><p id="comment-template-error" class="form-error" hidden></p><button id="add-comment-template-button" class="button button-primary button-full" type="submit">Adicionar modelo</button></form><div id="comment-template-list" class="template-list"></div></div>
+  </dialog>
+  <dialog id="session-warning-dialog" class="modal modal-small confirm-dialog">
+    <div class="modal-content confirm-dialog-content"><div class="confirm-dialog-icon archive-icon">◷</div><div class="confirm-dialog-copy"><span class="eyebrow">SESSÃO POR INATIVIDADE</span><h2>Sua sessão vai expirar</h2><p>Por segurança, a sessão será encerrada em <strong id="session-countdown">05:00</strong>.</p></div><div class="modal-actions modal-actions-end"><button id="continue-session-button" class="button button-primary" type="button">Continuar conectado</button><button id="logout-session-button" class="button button-secondary" type="button">Sair agora</button></div></div>
+  </dialog>
+
   <dialog id="help-dialog" class="modal help-modal">
     <div class="modal-content help-modal-content">
       <div class="modal-header help-modal-header">
         <div>
           <span class="eyebrow">CENTRAL DE AJUDA</span>
           <h2>Como utilizar o Painel de Solicitações</h2>
-          <p>Consulte as orientações antes de registrar uma demanda para garantir que as informações cheguem completas ao responsável.</p>
+          <p>Consulte o preenchimento dos formulários, o acompanhamento no Kanban, os atalhos, as notificações e os recursos administrativos do painel.</p>
         </div>
         <button class="icon-button close-help-modal" type="button" aria-label="Fechar ajuda">×</button>
       </div>
@@ -800,6 +859,10 @@
           <button class="help-tab" type="button" data-help-target="help-kanban">
             <span class="help-tab-icon">▦</span>
             <span><strong>Kanban e ações</strong><small>Status, filtros e cópia</small></span>
+          </button>
+          <button class="help-tab" type="button" data-help-target="help-productivity">
+            <span class="help-tab-icon">⌨</span>
+            <span><strong>Produtividade</strong><small>Atalhos, alertas e sessão</small></span>
           </button>
           <button class="help-tab admin-only" type="button" data-help-target="help-users">
             <span class="help-tab-icon">♙</span>
@@ -970,7 +1033,8 @@
                 <div><strong>Comentários internos</strong><p>Na aba Comentários, registre alinhamentos. O administrador pode selecionar o técnico para gerar uma notificação interna quando faltar alguma informação.</p></div>
                 <div><strong>Bloqueio</strong><p>Use a coluna Bloqueio quando a solicitação não puder avançar por falta de dados, retorno ou validação.</p></div>
                 <div><strong>Arquivamento</strong><p>Solicitações concluídas podem ser arquivadas pelo administrador, retirando registros antigos do Kanban sem perder o histórico.</p></div>
-                <div><strong>Editar e excluir</strong><p>O solicitante pode editar uma demanda própria enquanto ela estiver em Nova. A exclusão de solicitações é permitida exclusivamente para usuários com perfil Administrador.</p></div>
+                <div><strong>Permissões do solicitante</strong><p>O solicitante visualiza todas as solicitações de Programação em modo somente leitura, além das solicitações de qualquer tipo que criou ou que foram atribuídas a ele. Uma demanda própria continua editável apenas enquanto estiver em Nova.</p></div>
+                <div><strong>Editar e excluir</strong><p>A exclusão de solicitações é permitida exclusivamente para usuários com perfil Administrador.</p></div>
               </div>
             </div>
 
@@ -1005,10 +1069,30 @@
                 <div><strong>Arquivar uma solicitação</strong><p>Abra uma solicitação concluída e clique em Arquivar. Ela sairá do Kanban principal, mas continuará com dados, comentários e anexos no histórico.</p></div>
                 <div><strong>Arquivamento em lote</strong><p>Na tela Arquivados, o administrador pode mover de uma vez as solicitações concluídas há mais de 30 dias.</p></div>
                 <div><strong>Restaurar</strong><p>Use Restaurar para devolver uma solicitação arquivada ao Kanban, na coluna Concluídas.</p></div>
+                <div><strong>Comparação de períodos</strong><p>Os indicadores comparam automaticamente o período selecionado com o intervalo anterior de mesma duração.</p></div>
+                <div><strong>Backup</strong><p>Na tela Segurança e backup, o administrador pode baixar uma cópia JSON completa. Para funcionar, as regras do Firestore da mesma versão do painel precisam estar publicadas.</p></div>
+                <div><strong>Log de acesso</strong><p>Entradas, saídas, troca de senha e expiração de sessão são registradas para consulta administrativa.</p></div>
               </div>
             </div>
             <div class="help-notice"><strong>Melhoria de desempenho</strong><p>O Kanban carrega somente solicitações ativas. Registros arquivados são consultados apenas quando o administrador abre o histórico ou os indicadores.</p></div>
           </section>
+
+          <section id="help-productivity" class="help-section">
+            <div class="help-section-title"><span class="help-section-number">08</span><div><span class="eyebrow">PRODUTIVIDADE E SEGURANÇA</span><h3>Atalhos, tempo pausado e recursos internos</h3></div></div>
+            <div class="help-form-block"><div class="help-field-list single-column">
+              <div><strong>Pausa do tempo</strong><p>O tempo ativo fica pausado automaticamente nas colunas Aguardando e Bloqueio. Ao voltar para Nova ou Em análise, a contagem continua de onde parou. O tempo total pausado é preservado nos indicadores.</p></div>
+              <div><strong>Alertas automáticos</strong><p>O painel notifica atribuições, menções, mudanças para Bloqueio e solicitações pausadas por mais de 24 horas.</p></div>
+              <div><strong>Ações em massa</strong><p>Administradores podem selecionar cards visíveis e alterar status, responsável, controle de CRM ou arquivar concluídas. No topo de cada coluna, a opção <strong>Todos</strong> seleciona ou desmarca todos os cards visíveis daquela etapa, respeitando os filtros aplicados.</p></div>
+              <div><strong>Modelos de comentários</strong><p>Selecione um texto pronto antes de comentar. Administradores podem criar e excluir modelos compartilhados.</p></div>
+              <div><strong>Filtros salvos</strong><p>Configure os filtros, clique em Salvar filtro e reutilize a combinação pelo seletor Filtros salvos.</p></div>
+              <div><strong>Aplicativo instalável</strong><p>Quando disponível, use o ícone de instalação no rodapé para abrir o painel como aplicativo no computador.</p></div>
+              <div><strong>Sessão segura</strong><p>A sessão expira após 3 horas sem atividade. Um contador aparece nos últimos 5 minutos para permitir a renovação.</p></div>
+            </div></div>
+            <div class="help-form-block"><div class="help-form-block-title"><span>⌨</span><div><strong>Atalhos de teclado</strong><small>As teclas simples não funcionam enquanto você estiver digitando em um campo.</small></div></div><div class="shortcut-grid">
+              <div><kbd>N</kbd><span>Nova solicitação</span></div><div><kbd>F</kbd><span>Focar a busca</span></div><div><kbd>K</kbd><span>Kanban ampliado</span></div><div><kbd>R</kbd><span>Atualizar dados</span></div><div><kbd>?</kbd><span>Abrir Ajuda</span></div><div><kbd>T</kbd><span>Alternar tema</span></div><div><kbd>M</kbd><span>Notificações</span></div><div><kbd>S</kbd><span>Filtros salvos</span></div><div><kbd>B</kbd><span>Ações em massa (admin)</span></div><div><kbd>I</kbd><span>Indicadores (admin)</span></div><div><kbd>A</kbd><span>Arquivados (admin)</span></div><div><kbd>U</kbd><span>Usuários (admin)</span></div><div><kbd>Shift + A</kbd><span>Selecionar todos os cards visíveis</span></div><div><kbd>Shift + Esc</kbd><span>Limpar seleção em massa</span></div><div><kbd>C</kbd><span>Aba Comentários</span></div><div><kbd>L</kbd><span>Aba Histórico</span></div><div><kbd>Ctrl + Enter</kbd><span>Salvar/enviar comentário</span></div><div><kbd>Esc</kbd><span>Fechar diálogo ou modo ampliado</span></div>
+            </div></div>
+          </section>
+
         </div>
       </div>
 
@@ -1100,6 +1184,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=25.0.0"></script>
+  <script type="module" src="app.js?v=29.0.0"></script>
 </body>
 </html>
