@@ -9,10 +9,23 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+
+    function validSquad(value) {
+      return value in ['squad_a', 'squad_b', 'squad_d', 'squad_e'];
+    }
+
+    function validAccessProfile(data) {
+      return data.role == 'admin'
+        || (data.role == 'solicitante'
+          && data.keys().hasAll(['squad'])
+          && validSquad(data.squad));
+    }
+
     function isActive() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && currentUser().data.active == true
+        && validAccessProfile(currentUser().data)
         && (!currentUser().data.keys().hasAny(['accessLocked'])
           || currentUser().data.accessLocked != true);
     }
@@ -32,10 +45,6 @@ service cloud.firestore {
 
     function validPriority(priority) {
       return priority in ['urgente', 'alta', 'normal', 'baixa'];
-    }
-
-    function validSquad(value) {
-      return value in ['squad_a', 'squad_b', 'squad_d', 'squad_e'];
     }
 
     function validStatus(status) {
@@ -126,7 +135,8 @@ service cloud.firestore {
     function validRequestData(data) {
       return validType(data.type)
         && validPriority(data.priority)
-        && (!data.keys().hasAny(['squad']) || validSquad(data.squad))
+        && data.keys().hasAll(['squad'])
+        && validSquad(data.squad)
         && validStatus(data.status)
         && data.clientName is string
         && data.clientName.size() > 0
@@ -166,6 +176,9 @@ service cloud.firestore {
         && data.email.size() > 3
         && data.email.size() <= 160
         && validUserRole(data.role)
+        && data.squad is string
+        && ((data.role == 'admin' && data.squad == '')
+          || (data.role == 'solicitante' && validSquad(data.squad)))
         && data.status == 'pending'
         && data.createdByUid == request.auth.uid
         && data.createdAt == request.time
@@ -185,6 +198,8 @@ service cloud.firestore {
         && data.email == invite.data.email
         && data.name == invite.data.name
         && data.role == invite.data.role
+        && data.squad == invite.data.squad
+        && validAccessProfile(data)
         && data.active == true
         && data.createdAt == request.time;
     }
@@ -196,10 +211,19 @@ service cloud.firestore {
             && data.assigneeUid == request.auth.uid));
     }
 
+    function sameSquadVisibilityGroup(userSquad, requestSquad) {
+      return ((userSquad in ['squad_a', 'squad_b'])
+          && (requestSquad in ['squad_a', 'squad_b']))
+        || ((userSquad in ['squad_d', 'squad_e'])
+          && (requestSquad in ['squad_d', 'squad_e']));
+    }
+
     function canViewProgramming(data) {
       return isActive()
         && currentUser().data.role == 'solicitante'
-        && data.type == 'programacao';
+        && data.type == 'programacao'
+        && data.keys().hasAll(['squad'])
+        && sameSquadVisibilityGroup(currentUser().data.squad, data.squad);
     }
 
     function canReadActiveRequest(requestId) {
@@ -279,11 +303,15 @@ service cloud.firestore {
       allow get: if signedIn() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
 
-      allow create: if isAdmin() || validInvitedUser(userId, request.resource.data);
+      allow create: if (isAdmin()
+          && validUserRole(request.resource.data.role)
+          && validAccessProfile(request.resource.data))
+        || validInvitedUser(userId, request.resource.data);
 
       allow update: if (isAdmin()
         && request.resource.data.email == resource.data.email
         && validUserRole(request.resource.data.role)
+        && validAccessProfile(request.resource.data)
         && request.resource.data.active is bool
         && (request.auth.uid != userId
           || (request.resource.data.active == true
@@ -295,6 +323,14 @@ service cloud.firestore {
           && request.resource.data.lastLoginAt == request.time
           && request.resource.data.lastSeenAt == request.time
           && request.resource.data.loginCount is int);
+
+      allow update: if isActive()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['preferredSquadFilter', 'updatedAt'])
+        && (request.resource.data.preferredSquadFilter == 'all'
+          || validSquad(request.resource.data.preferredSquadFilter))
+        && request.resource.data.updatedAt == request.time;
 
       allow delete: if false;
     }
@@ -334,6 +370,7 @@ service cloud.firestore {
           && request.resource.data.requesterUid == request.auth.uid
           && request.resource.data.requesterEmail == request.auth.token.email
           && request.resource.data.status == 'nova'
+          && request.resource.data.squad == currentUser().data.squad
           && request.resource.data.keys().hasAll(['squad'])
           && validSquad(request.resource.data.squad)
           && emptyCancellationCrmOnCreate(request.resource.data)
@@ -358,6 +395,7 @@ service cloud.firestore {
         && request.resource.data.requesterEmail == resource.data.requesterEmail
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.type == resource.data.type
+        && request.resource.data.squad == resource.data.squad
         && cancellationCrmUnchangedByRequester()
         && cancellationListCanChangeByRequester()
         && validRequestData(request.resource.data);

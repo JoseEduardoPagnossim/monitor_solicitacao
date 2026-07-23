@@ -2147,3 +2147,8 @@ kbd { min-width: 68px; padding: 4px 7px; border: 1px solid #cbd5e1; border-botto
     background: var(--surface);
   }
 }
+
+
+/* Versão 31: grupos de usuários */
+.field[hidden], .invite-role-summary[hidden] { display: none !important; }
+.users-table .tag.squad { white-space: nowrap; }

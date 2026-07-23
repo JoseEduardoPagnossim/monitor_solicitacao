@@ -9,9 +9,8 @@ O projeto é publicado no **GitHub Pages** e usa:
 - **GitHub Actions** para publicação e controle automático de build;
 - **PWA** para instalação do painel como aplicativo.
 
-> **Versão 30:** adiciona grupo de atendimento obrigatório nas solicitações e filtros por Squad A, Squad B, Squad D e Squad E no Kanban, Indicadores e Arquivados.
+> **Versão 31:** torna o Squad obrigatório também para usuários solicitantes, aplica visibilidade compartilhada A/B e D/E nas Programações e salva automaticamente a preferência de grupo do administrador.
 
-> **Versão 28:** correção da permissão do backup administrativo, melhoria completa de contraste dos diálogos no tema escuro e atualização da Central de Ajuda com acesso visível à lista de atalhos.
 
 ---
 
@@ -23,11 +22,11 @@ O projeto é publicado no **GitHub Pages** e usa:
 - Recuperação de senha por e-mail.
 - Alteração da própria senha dentro do painel.
 - Perfis `admin` e `solicitante`;
-- solicitantes visualizam todas as solicitações de Programação em modo somente leitura;
+- solicitantes dos Squads A e B visualizam Programações dos Squads A e B; solicitantes dos Squads D e E visualizam Programações dos Squads D e E;
 - solicitações de Cancelamento e TEF Elgin continuam visíveis apenas para quem criou, recebeu como responsável ou possui perfil administrador.
 - Cadastro de usuários por convite.
 - Convites válidos por 7 dias.
-- Alteração de nome e perfil pela interface administrativa.
+- Alteração de nome, perfil e Squad pela interface administrativa.
 - Ativação e desativação sem apagar o histórico.
 - Bloqueio temporário de acesso pelo administrador.
 - Desbloqueio do acesso pela tela **Usuários**.
@@ -55,7 +54,6 @@ Recursos:
 - busca por cliente, CNPJ, título ou solicitante;
 - filtros por tipo, prioridade, grupo de atendimento e solicitante;
 - grupos disponíveis: **Squad A**, **Squad B**, **Squad D** e **Squad E**;
-- opção **Sem grupo** para localizar e corrigir registros antigos;
 - filtros favoritos salvos por usuário;
 - contador de comentários e anexos no card;
 - CNPJ completo no card de Programação;
@@ -70,7 +68,7 @@ Toda solicitação deve ser vinculada a um grupo responsável:
 - **Squad D**;
 - **Squad E**.
 
-O grupo aparece no card, nos detalhes, no texto copiado e no histórico. O filtro por grupo está disponível no Kanban, em Indicadores e em Arquivados. Os filtros favoritos também guardam o grupo escolhido. A classificação por Squad organiza a operação, mas não altera as permissões definidas pelo perfil do usuário.
+O grupo aparece no card, nos detalhes, no texto copiado e no histórico. O filtro por grupo está disponível no Kanban, em Indicadores e em Arquivados. Os filtros favoritos também guardam o grupo escolhido. A classificação por Squad também controla a leitura das Programações para solicitantes. Administradores continuam vendo todos os grupos. O filtro do administrador salva automaticamente a última opção escolhida no perfil, inclusive **Todos os grupos**.
 
 ### Tipos de solicitação
 
@@ -417,7 +415,7 @@ O Firebase Authentication também possui proteções próprias contra abuso de t
 
 ## 11. Aplicativo instalável — PWA
 
-A versão 27 mantém:
+A instalação PWA utiliza:
 
 ```text
 manifest.webmanifest
@@ -585,6 +583,16 @@ O repositório deve usar **GitHub Actions** como fonte.
 5. Aguarde a execução ficar verde.
 6. Atualize o painel com `Ctrl + F5`.
 
+### Política de versionamento a partir da versão 100
+
+Até a versão 99, o projeto mantém a numeração sequencial atual. A versão seguinte será publicada como **1.0.0**. A partir daí:
+
+- correções de erro: incrementam o último número (`1.0.1`, `1.0.2`);
+- melhorias menores e compatíveis: incrementam o número central (`1.1.0`, `1.2.0`);
+- grandes evoluções ou mudanças estruturais: incrementam o primeiro número (`2.0.0`, `3.0.0`).
+
+O workflow já aceita valores como `1.0.0` no arquivo `VERSION`, portanto não será necessário alterar o processo de publicação no GitHub Actions.
+
 O arquivo `VERSION` contém o número funcional da versão. O workflow gera automaticamente:
 
 - número do build;
@@ -593,33 +601,11 @@ O arquivo `VERSION` contém o número funcional da versão. O workflow gera auto
 
 ---
 
-## 18. Atualização para a versão 27
+## 18. Atualização para a versão 31
 
-Substitua no GitHub:
+Envie ao GitHub todos os arquivos deste pacote, mantendo o seu `firebase-config.js` atual.
 
-```text
-index.html
-styles.css
-app.js
-firestore.rules
-README.md
-ATUALIZAR.txt
-VERSION
-version.json
-manifest.webmanifest
-service-worker.js
-icon-192.png
-icon-512.png
-.github/workflows/pages.yml
-```
-
-Mantenha o seu arquivo configurado:
-
-```text
-firebase-config.js
-```
-
-Depois, publique obrigatoriamente as novas regras do Firestore.
+Depois, publique obrigatoriamente o novo `firestore.rules` no Firebase. Antes de liberar o acesso, abra a tela **Usuários** e atribua um Squad a cada solicitante existente.
 
 ### Cache da PWA
 

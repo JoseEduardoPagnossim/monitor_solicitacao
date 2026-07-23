@@ -158,6 +158,8 @@ const els = {
   inviteRegistrationName: $("#invite-registration-name"),
   inviteRegistrationEmail: $("#invite-registration-email"),
   inviteRegistrationRole: $("#invite-registration-role"),
+  inviteRegistrationSquadWrap: $("#invite-registration-squad-wrap"),
+  inviteRegistrationSquad: $("#invite-registration-squad"),
   inviteRegistrationPassword: $("#invite-registration-password"),
   inviteRegistrationConfirmPassword: $("#invite-registration-confirm-password"),
   inviteRegistrationButton: $("#invite-registration-button"),
@@ -251,6 +253,8 @@ const els = {
   userInviteName: $("#user-invite-name"),
   userInviteEmail: $("#user-invite-email"),
   userInviteRole: $("#user-invite-role"),
+  userInviteSquadField: $("#user-invite-squad-field"),
+  userInviteSquad: $("#user-invite-squad"),
   userInviteError: $("#user-invite-error"),
   createUserInviteButton: $("#create-user-invite-button"),
   userInviteLink: $("#user-invite-link"),
@@ -262,6 +266,8 @@ const els = {
   editUserName: $("#edit-user-name"),
   editUserEmail: $("#edit-user-email"),
   editUserRole: $("#edit-user-role"),
+  editUserSquadField: $("#edit-user-squad-field"),
+  editUserSquad: $("#edit-user-squad"),
   editUserSelfNote: $("#edit-user-self-note"),
   editUserError: $("#edit-user-error"),
   saveUserButton: $("#save-user-button"),
@@ -414,12 +420,27 @@ function isSolicitante() {
   return state.profile?.role === "solicitante";
 }
 
+function squadVisibilityGroup(squad) {
+  if (["squad_a", "squad_b"].includes(squad)) return ["squad_a", "squad_b"];
+  if (["squad_d", "squad_e"].includes(squad)) return ["squad_d", "squad_e"];
+  return [];
+}
+
+function userHasValidSquad(profile = state.profile) {
+  return profile?.role === "admin" || VALID_SQUADS.includes(profile?.squad);
+}
+
+function canViewSquadProgramming(item) {
+  if (!item || !isSolicitante() || item.type !== "programacao") return false;
+  return squadVisibilityGroup(state.profile?.squad).includes(item.squad);
+}
+
 function requestIsParticipant(item) {
   return Boolean(item) && (item.requesterUid === state.user?.uid || item.assigneeUid === state.user?.uid);
 }
 
 function canViewProgrammingRequest(item) {
-  return Boolean(item) && isSolicitante() && item.type === "programacao";
+  return canViewSquadProgramming(item);
 }
 
 function canCommentOnRequest(item) {
@@ -1183,13 +1204,15 @@ function subscribeRequests() {
     return;
   }
 
-  const sourceMaps = { requester: new Map(), assignee: new Map(), programming: new Map() };
+  const allowedProgrammingSquads = squadVisibilityGroup(state.profile?.squad);
+  const sourceMaps = { requester: new Map(), assignee: new Map() };
+  allowedProgrammingSquads.forEach((squad) => { sourceMaps[`programming_${squad}`] = new Map(); });
+
   const sync = () => {
-    const merged = new Map([
-      ...sourceMaps.requester,
-      ...sourceMaps.assignee,
-      ...sourceMaps.programming
-    ]);
+    const merged = new Map();
+    Object.values(sourceMaps).forEach((source) => {
+      source.forEach((value, key) => merged.set(key, value));
+    });
     state.requests = [...merged.values()];
     populateRequesterFilterForViewer();
     renderAll();
@@ -1205,26 +1228,22 @@ function subscribeRequests() {
     console.error(error);
     showToast(firebaseErrorMessage(error), "error");
   };
-  const unsubscribeRequester = onSnapshot(
-    query(base, where("requesterUid", "==", state.user.uid)),
-    handleSnapshot("requester"),
-    handleError
-  );
-  const unsubscribeAssignee = onSnapshot(
-    query(base, where("assigneeUid", "==", state.user.uid)),
-    handleSnapshot("assignee"),
-    handleError
-  );
-  const unsubscribeProgramming = onSnapshot(
-    query(base, where("type", "==", "programacao")),
-    handleSnapshot("programming"),
-    handleError
-  );
-  state.unsubscribeRequests = () => {
-    unsubscribeRequester();
-    unsubscribeAssignee();
-    unsubscribeProgramming();
-  };
+
+  const unsubscribers = [
+    onSnapshot(query(base, where("requesterUid", "==", state.user.uid)), handleSnapshot("requester"), handleError),
+    onSnapshot(query(base, where("assigneeUid", "==", state.user.uid)), handleSnapshot("assignee"), handleError)
+  ];
+
+  allowedProgrammingSquads.forEach((squad) => {
+    const source = `programming_${squad}`;
+    unsubscribers.push(onSnapshot(
+      query(base, where("type", "==", "programacao"), where("squad", "==", squad)),
+      handleSnapshot(source),
+      handleError
+    ));
+  });
+
+  state.unsubscribeRequests = () => unsubscribers.forEach((unsubscribe) => unsubscribe());
 }
 
 function requestIsAccessible(item) {
@@ -1630,6 +1649,62 @@ function setupDropzones() {
   });
 }
 
+function squadFilterOptionsForCurrentUser() {
+  if (isAdmin()) {
+    return [
+      ["all", "Todos os grupos"],
+      ...VALID_SQUADS.map((squad) => [squad, SQUAD_LABELS[squad]])
+    ];
+  }
+  const allowed = squadVisibilityGroup(state.profile?.squad);
+  const pairLabel = allowed.includes("squad_a") ? "Squads A e B" : "Squads D e E";
+  return [["all", pairLabel], ...allowed.map((squad) => [squad, SQUAD_LABELS[squad]])];
+}
+
+function defaultSquadFilterValue() {
+  if (isAdmin()) {
+    const preferred = state.profile?.preferredSquadFilter;
+    return preferred === "all" || VALID_SQUADS.includes(preferred) ? preferred : "all";
+  }
+  return VALID_SQUADS.includes(state.profile?.squad) ? state.profile.squad : "all";
+}
+
+function configureSquadFilter({ preserveSelection = false } = {}) {
+  if (!els.squadFilter) return;
+  const previous = preserveSelection ? els.squadFilter.value : "";
+  const options = squadFilterOptionsForCurrentUser();
+  els.squadFilter.innerHTML = options.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
+  const allowedValues = options.map(([value]) => value);
+  const nextValue = allowedValues.includes(previous) ? previous : defaultSquadFilterValue();
+  els.squadFilter.value = nextValue;
+  state.filters.squad = nextValue;
+}
+
+async function persistAdminSquadPreference() {
+  if (!isAdmin() || !state.user) return;
+  const value = els.squadFilter.value;
+  if (!(value === "all" || VALID_SQUADS.includes(value))) return;
+  state.profile.preferredSquadFilter = value;
+  try {
+    await updateDoc(doc(db, "users", state.user.uid), {
+      preferredSquadFilter: value,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.warn("Não foi possível salvar a preferência de grupo.", error);
+  }
+}
+
+function updateUserSquadFieldVisibility(roleSelect, field, squadSelect) {
+  const isRequester = roleSelect?.value === "solicitante";
+  if (field) field.hidden = !isRequester;
+  if (squadSelect) {
+    squadSelect.required = isRequester;
+    squadSelect.disabled = !isRequester;
+    if (!isRequester) squadSelect.value = "";
+  }
+}
+
 function setAdminVisibility() {
   $$(".admin-only").forEach((element) => {
     element.hidden = !isAdmin();
@@ -1640,7 +1715,7 @@ function setAdminVisibility() {
 function renderUser() {
   const name = state.profile.name || state.user.email;
   els.userName.textContent = name;
-  els.userRole.textContent = isAdmin() ? "Administrador" : "Solicitante";
+  els.userRole.textContent = isAdmin() ? "Administrador" : `Solicitante · ${SQUAD_LABELS[state.profile?.squad] || "Sem grupo"}`;
   els.userAvatar.textContent = initials(name);
   els.welcomeMessage.textContent = isAdmin()
     ? "Gerencie, priorize e conclua as demandas da equipe."
@@ -1921,7 +1996,7 @@ function updateRequestTypeFields() {
   setSectionInputsEnabled(els.cancellationFields, isCancellation && state.modalEditable);
   setSectionInputsEnabled(els.tefFields, isTef && state.modalEditable);
   els.requestPriority.disabled = !isProgramming || !state.modalEditable;
-  els.requestSquad.disabled = !state.modalEditable;
+  els.requestSquad.disabled = !state.modalEditable || (!isAdmin() && isSolicitante());
 
   if (isProgramming) renderAttachmentList();
   if (isCancellation) renderCancellationItems(state.modalCancellationItems, state.modalEditable);
@@ -1952,7 +2027,7 @@ function resetRequestForm() {
   state.modalEditable = true;
   els.requestId.value = "";
   els.requestType.value = "programacao";
-  els.requestSquad.value = "";
+  els.requestSquad.value = isSolicitante() && VALID_SQUADS.includes(state.profile?.squad) ? state.profile.squad : "";
   els.requestPriority.value = "normal";
   els.requestStatus.value = "nova";
   els.requestAssignee.value = "";
@@ -3079,9 +3154,9 @@ function clearFilters() {
   els.searchInput.value = "";
   els.typeFilter.value = "all";
   els.priorityFilter.value = "all";
-  els.squadFilter.value = "all";
+  els.squadFilter.value = defaultSquadFilterValue();
   els.requesterFilter.value = "all";
-  state.filters = { search: "", type: "all", priority: "all", squad: "all", requester: "all" };
+  state.filters = { search: "", type: "all", priority: "all", squad: defaultSquadFilterValue(), requester: "all" };
   $$(".nav-item").forEach((item) => {
     item.classList.toggle("active", item.dataset.view === "kanban");
   });
@@ -3194,6 +3269,8 @@ async function initializeInviteFlow() {
     els.inviteRegistrationName.value = invite.name || "";
     els.inviteRegistrationEmail.value = invite.email || "";
     els.inviteRegistrationRole.textContent = roleLabel(invite.role);
+    if (els.inviteRegistrationSquadWrap) els.inviteRegistrationSquadWrap.hidden = invite.role !== "solicitante";
+    if (els.inviteRegistrationSquad) els.inviteRegistrationSquad.textContent = SQUAD_LABELS[invite.squad] || "—";
     els.inviteLoading.hidden = true;
     els.inviteRegistrationFields.hidden = false;
   } catch (error) {
@@ -3235,6 +3312,7 @@ async function registerFromInvite(event) {
       name: invite.name,
       email: invite.email,
       role: invite.role,
+      squad: invite.role === "solicitante" ? invite.squad : "",
       active: true,
       inviteToken: state.inviteToken,
       createdAt: serverTimestamp(),
@@ -3309,6 +3387,7 @@ function userRowHtml(entry) {
       <tr>
         <td><div class="user-identity"><div class="user-list-avatar pending">✉</div><div><strong>${escapeHtml(entry.name || "Convite")}</strong><span>${escapeHtml(entry.email || "")}</span></div></div></td>
         <td><span class="user-role-badge ${escapeHtml(entry.role)}">${escapeHtml(roleLabel(entry.role))}</span></td>
+        <td><span class="tag squad">${escapeHtml(entry.role === "admin" ? "Todos" : (SQUAD_LABELS[entry.squad] || "Sem grupo"))}</span></td>
         <td><span class="user-status-badge pending">● Convite pendente</span></td>
         <td><div class="user-date">—</div></td>
         <td><div class="user-date">Criado em ${escapeHtml(formatDateTime(entry.createdAt))}<br>Expira em ${escapeHtml(formatDateTime(entry.expiresAt))}</div></td>
@@ -3324,6 +3403,7 @@ function userRowHtml(entry) {
     <tr>
       <td><div class="user-identity"><div class="user-list-avatar">${escapeHtml(initials(entry.name || entry.email))}</div><div><strong>${escapeHtml(entry.name || "Usuário")}${isSelf ? " (você)" : ""}</strong><span>${escapeHtml(entry.email || "")}</span></div></div></td>
       <td><span class="user-role-badge ${escapeHtml(entry.role)}">${escapeHtml(roleLabel(entry.role))}</span></td>
+      <td><span class="tag squad">${escapeHtml(entry.role === "admin" ? "Todos" : (SQUAD_LABELS[entry.squad] || "Sem grupo"))}</span></td>
       <td><span class="user-status-badge ${statusClass}">● ${statusText}</span></td>
       <td><div class="user-date">${escapeHtml(formatDateTime(entry.lastLoginAt))}<br><small>${Number(entry.loginCount || 0)} acesso(s)</small></div></td>
       <td><div class="user-date">${escapeHtml(formatDateTime(entry.createdAt))}</div></td>
@@ -3397,6 +3477,8 @@ function openUserInviteDialog() {
   if (!isAdmin()) return;
   els.userInviteForm.reset();
   els.userInviteRole.value = "solicitante";
+  els.userInviteSquad.value = "";
+  updateUserSquadFieldVisibility(els.userInviteRole, els.userInviteSquadField, els.userInviteSquad);
   els.userInviteFormFields.hidden = false;
   els.userInviteResult.hidden = true;
   showFormError(els.userInviteError);
@@ -3410,9 +3492,14 @@ async function createUserInvite(event) {
   const name = sanitizeText(els.userInviteName.value);
   const email = els.userInviteEmail.value.trim().toLocaleLowerCase("pt-BR");
   const role = VALID_USER_ROLES.includes(els.userInviteRole.value) ? els.userInviteRole.value : "solicitante";
+  const squad = role === "solicitante" && VALID_SQUADS.includes(els.userInviteSquad.value) ? els.userInviteSquad.value : "";
 
   if (!name || !email) {
     showFormError(els.userInviteError, "Preencha nome e e-mail.");
+    return;
+  }
+  if (role === "solicitante" && !squad) {
+    showFormError(els.userInviteError, "Selecione o grupo do solicitante.");
     return;
   }
   if (state.users.some((user) => (user.email || "").toLocaleLowerCase("pt-BR") === email)) {
@@ -3432,6 +3519,7 @@ async function createUserInvite(event) {
       name,
       email,
       role,
+      squad,
       status: "pending",
       createdAt: serverTimestamp(),
       createdByUid: state.user.uid,
@@ -3460,7 +3548,9 @@ function openEditUserDialog(uid) {
   els.editUserName.value = user.name || "";
   els.editUserEmail.value = user.email || "";
   els.editUserRole.value = user.role || "solicitante";
+  els.editUserSquad.value = VALID_SQUADS.includes(user.squad) ? user.squad : "";
   els.editUserRole.disabled = isSelf;
+  updateUserSquadFieldVisibility(els.editUserRole, els.editUserSquadField, els.editUserSquad);
   els.editUserSelfNote.hidden = !isSelf;
   showFormError(els.editUserError);
   els.editUserDialog.showModal();
@@ -3475,8 +3565,13 @@ async function saveUserProfile(event) {
   if (!user) return;
   const name = sanitizeText(els.editUserName.value);
   const role = uid === state.user.uid ? "admin" : els.editUserRole.value;
+  const squad = role === "solicitante" && VALID_SQUADS.includes(els.editUserSquad.value) ? els.editUserSquad.value : "";
   if (!name || !VALID_USER_ROLES.includes(role)) {
     showFormError(els.editUserError, "Informe um nome e um perfil válidos.");
+    return;
+  }
+  if (role === "solicitante" && !squad) {
+    showFormError(els.editUserError, "Selecione o grupo do solicitante.");
     return;
   }
 
@@ -3485,6 +3580,7 @@ async function saveUserProfile(event) {
     await updateDoc(doc(db, "users", uid), {
       name,
       role,
+      squad,
       updatedAt: serverTimestamp(),
       updatedByUid: state.user.uid
     });
@@ -3595,9 +3691,19 @@ function subscribeCurrentProfile() {
       return;
     }
     const previousRole = state.profile?.role;
+    const previousSquad = state.profile?.squad;
+    const previousPreference = state.profile?.preferredSquadFilter;
     state.profile = { uid: snapshot.id, ...snapshot.data() };
+    if (!userHasValidSquad(state.profile)) {
+      state.forcedLogoutMessage = "Seu grupo de atendimento ainda não foi atribuído. Procure um administrador.";
+      signOut(auth);
+      return;
+    }
     renderUser();
-    if (previousRole && previousRole !== state.profile.role) {
+    const accessChanged = previousRole && (previousRole !== state.profile.role || previousSquad !== state.profile.squad);
+    const preferenceChanged = isAdmin() && previousPreference !== state.profile.preferredSquadFilter;
+    if (accessChanged || preferenceChanged) configureSquadFilter({ preserveSelection: !preferenceChanged });
+    if (accessChanged) {
       if (!isAdmin() && ["users", "indicators", "archived", "security"].includes(state.currentView)) switchAppView("kanban");
       await loadUsers();
       subscribeRequests();
@@ -3766,9 +3872,11 @@ function applySavedFilter(id) {
   els.searchInput.value = values.search || "";
   els.typeFilter.value = values.type || "all";
   els.priorityFilter.value = values.priority || "all";
-  els.squadFilter.value = values.squad || "all";
+  const allowedSquadValues = [...els.squadFilter.options].map((option) => option.value);
+  els.squadFilter.value = allowedSquadValues.includes(values.squad) ? values.squad : defaultSquadFilterValue();
   els.requesterFilter.value = values.requester || "all";
   applyFilters();
+  persistAdminSquadPreference();
   showToast(`Filtro “${filter.name}” aplicado.`);
 }
 
@@ -4311,6 +4419,7 @@ function setupEvents() {
   [els.searchInput, els.typeFilter, els.priorityFilter, els.squadFilter, els.requesterFilter].forEach((control) => {
     control.addEventListener(control === els.searchInput ? "input" : "change", applyFilters);
   });
+  els.squadFilter.addEventListener("change", persistAdminSquadPreference);
   els.clearFilters.addEventListener("click", clearFilters);
   els.savedFilterSelect.addEventListener("change", () => applySavedFilter(els.savedFilterSelect.value));
   els.saveCurrentFilterButton.addEventListener("click", () => { els.savedFilterForm.reset(); showFormError(els.savedFilterError); els.savedFilterDialog.showModal(); });
@@ -4377,9 +4486,11 @@ function setupEvents() {
   els.newUserInviteButton.addEventListener("click", openUserInviteDialog);
   els.refreshUsersButton.addEventListener("click", () => refreshUserManagement(true));
   els.userInviteForm.addEventListener("submit", createUserInvite);
+  els.userInviteRole.addEventListener("change", () => updateUserSquadFieldVisibility(els.userInviteRole, els.userInviteSquadField, els.userInviteSquad));
   els.copyUserInviteLink.addEventListener("click", () => copyText(els.userInviteLink.value));
   $$(".close-user-invite-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.userInviteDialog)));
   els.editUserForm.addEventListener("submit", saveUserProfile);
+  els.editUserRole.addEventListener("change", () => updateUserSquadFieldVisibility(els.editUserRole, els.editUserSquadField, els.editUserSquad));
   $$(".close-edit-user-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.editUserDialog)));
   els.confirmUserStatusButton.addEventListener("click", confirmUserStatusChange);
   $$(".close-user-status-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.userStatusDialog)));
@@ -4500,8 +4611,15 @@ async function handleAuthenticated(user) {
       return;
     }
 
+    if (!userHasValidSquad(profile)) {
+      state.forcedLogoutMessage = "Seu grupo de atendimento ainda não foi atribuído. Procure um administrador.";
+      await signOut(auth);
+      return;
+    }
+
     state.user = user;
     state.profile = profile;
+    configureSquadFilter();
     els.loginView.hidden = true;
     els.appView.hidden = false;
     showLoginCard();
@@ -4584,7 +4702,7 @@ async function loadAppVersion() {
     if (!response.ok) throw new Error("version-file-unavailable");
 
     const info = await response.json();
-    const release = String(info.release || "28").replace(/^v/i, "");
+    const release = String(info.release || "31").replace(/^v/i, "");
     const isLocal = !info.build || String(info.build).toLowerCase() === "local";
     const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
 

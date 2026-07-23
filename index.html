@@ -86,6 +86,10 @@
             <span>Perfil de acesso</span>
             <strong id="invite-registration-role">Solicitante</strong>
           </div>
+          <div id="invite-registration-squad-wrap" class="invite-role-summary">
+            <span>Grupo de atendimento</span>
+            <strong id="invite-registration-squad">—</strong>
+          </div>
           <label class="field">
             <span>Crie uma senha</span>
             <div class="password-wrap">
@@ -232,7 +236,6 @@
           <option value="squad_b">Squad B</option>
           <option value="squad_d">Squad D</option>
           <option value="squad_e">Squad E</option>
-          <option value="none">Sem grupo</option>
         </select>
         <select id="requester-filter" class="select-control admin-only" aria-label="Filtrar por solicitante">
           <option value="all">Todos os solicitantes</option>
@@ -332,7 +335,7 @@
         <section class="users-panel">
           <div class="users-table-wrap">
             <table class="users-table">
-              <thead><tr><th>Usuário</th><th>Perfil</th><th>Situação</th><th>Último acesso</th><th>Cadastro</th><th>Ações</th></tr></thead>
+              <thead><tr><th>Usuário</th><th>Perfil</th><th>Grupo</th><th>Situação</th><th>Último acesso</th><th>Cadastro</th><th>Ações</th></tr></thead>
               <tbody id="users-table-body"></tbody>
             </table>
           </div>
@@ -370,8 +373,7 @@
             <option value="squad_b">Squad B</option>
             <option value="squad_d">Squad D</option>
             <option value="squad_e">Squad E</option>
-            <option value="none">Sem grupo</option>
-          </select>
+            </select>
           <button id="indicator-clear-filter" class="link-button" type="button">Últimos 30 dias</button>
         </section>
 
@@ -438,8 +440,7 @@
             <option value="squad_b">Squad B</option>
             <option value="squad_d">Squad D</option>
             <option value="squad_e">Squad E</option>
-            <option value="none">Sem grupo</option>
-          </select>
+            </select>
         </section>
 
         <section class="archived-panel">
@@ -797,6 +798,7 @@
         <label class="field"><span>Nome completo *</span><input id="user-invite-name" type="text" maxlength="120" required></label>
         <label class="field"><span>E-mail *</span><input id="user-invite-email" type="email" maxlength="160" placeholder="nome@empresa.com.br" required></label>
         <label class="field"><span>Perfil *</span><select id="user-invite-role" required><option value="solicitante">Solicitante</option><option value="admin">Administrador</option></select></label>
+        <label id="user-invite-squad-field" class="field"><span>Grupo do solicitante *</span><select id="user-invite-squad"><option value="">Selecione o grupo</option><option value="squad_a">Squad A</option><option value="squad_b">Squad B</option><option value="squad_d">Squad D</option><option value="squad_e">Squad E</option></select><small>Squads A e B compartilham as Programações entre si. Squads D e E também.</small></label>
         <p id="user-invite-error" class="form-error" hidden></p>
         <div class="modal-actions modal-actions-end">
           <button class="button button-secondary close-user-invite-modal" type="button">Cancelar</button>
@@ -827,6 +829,7 @@
       <label class="field"><span>Nome completo *</span><input id="edit-user-name" type="text" maxlength="120" required></label>
       <label class="field"><span>E-mail</span><input id="edit-user-email" type="email" readonly></label>
       <label class="field"><span>Perfil *</span><select id="edit-user-role" required><option value="solicitante">Solicitante</option><option value="admin">Administrador</option></select></label>
+      <label id="edit-user-squad-field" class="field"><span>Grupo do solicitante *</span><select id="edit-user-squad"><option value="">Selecione o grupo</option><option value="squad_a">Squad A</option><option value="squad_b">Squad B</option><option value="squad_d">Squad D</option><option value="squad_e">Squad E</option></select><small>O grupo define quais Programações o solicitante pode visualizar.</small></label>
       <p id="edit-user-self-note" class="user-self-note" hidden>Seu próprio perfil precisa permanecer ativo como Administrador.</p>
       <p id="edit-user-error" class="form-error" hidden></p>
       <div class="modal-actions modal-actions-end">
@@ -917,7 +920,7 @@
 
             <div class="help-steps">
               <article class="help-step"><span>1</span><div><strong>Clique em Nova solicitação</strong><p>Abra o formulário pelo botão azul no canto superior direito.</p></div></article>
-              <article class="help-step"><span>2</span><div><strong>Escolha o tipo e o grupo</strong><p>Use Programação para melhorias do sistema, Cancelamento para encerramentos e TEF Elgin para configurações do TEF. Em seguida, selecione o grupo responsável: Squad A, B, D ou E.</p></div></article>
+              <article class="help-step"><span>2</span><div><strong>Escolha o tipo e confirme o grupo</strong><p>Use Programação para melhorias do sistema, Cancelamento para encerramentos e TEF Elgin para configurações do TEF. Para solicitantes, o grupo é preenchido automaticamente conforme o perfil; administradores podem escolher qualquer Squad.</p></div></article>
               <article class="help-step"><span>3</span><div><strong>Preencha informações objetivas</strong><p>Descreva fatos, exemplos e impactos. Evite textos genéricos como “cliente quer uma melhoria”.</p></div></article>
               <article class="help-step"><span>4</span><div><strong>Salve e acompanhe</strong><p>A demanda ficará no Kanban e poderá ser acompanhada conforme o status.</p></div></article>
             </div>
@@ -1067,7 +1070,7 @@
                 <div><strong>Comentários internos</strong><p>Na aba Comentários, registre alinhamentos. O administrador pode selecionar o técnico para gerar uma notificação interna quando faltar alguma informação.</p></div>
                 <div><strong>Bloqueio</strong><p>Use a coluna Bloqueio quando a solicitação não puder avançar por falta de dados, retorno ou validação.</p></div>
                 <div><strong>Arquivamento</strong><p>Solicitações concluídas podem ser arquivadas pelo administrador, retirando registros antigos do Kanban sem perder o histórico.</p></div>
-                <div><strong>Filtro por grupo</strong><p>Selecione Squad A, B, D ou E no filtro do Kanban para visualizar apenas as demandas do seu grupo. O grupo também aparece no cartão e fica salvo nos filtros favoritos.</p></div><div><strong>Permissões do solicitante</strong><p>O solicitante visualiza todas as solicitações de Programação em modo somente leitura, além das solicitações de qualquer tipo que criou ou que foram atribuídas a ele. Uma demanda própria continua editável apenas enquanto estiver em Nova.</p></div>
+                <div><strong>Filtro por grupo</strong><p>Administradores podem escolher qualquer Squad ou Todos os grupos. A última escolha do administrador fica salva no perfil e é reaplicada no próximo acesso. Solicitantes visualizam apenas os Squads permitidos pelo próprio grupo.</p></div><div><strong>Permissões do solicitante</strong><p>Solicitantes dos Squads A e B visualizam as Programações dos Squads A e B. Solicitantes dos Squads D e E visualizam as Programações dos Squads D e E. Cancelamentos e TEF Elgin continuam disponíveis somente quando o usuário criou a solicitação ou foi definido como responsável.</p></div>
                 <div><strong>Editar e excluir</strong><p>A exclusão de solicitações é permitida exclusivamente para usuários com perfil Administrador.</p></div>
               </div>
             </div>
@@ -1084,12 +1087,12 @@
               <div><span class="eyebrow">ACESSOS</span><h3>Convites, perfis e desativação</h3></div>
             </div>
             <div class="help-steps">
-              <article class="help-step"><span>1</span><div><strong>Crie o convite</strong><p>Informe nome, e-mail e perfil. O painel gera um link exclusivo válido por sete dias.</p></div></article>
+              <article class="help-step"><span>1</span><div><strong>Crie o convite</strong><p>Informe nome, e-mail, perfil e, para solicitantes, o Squad obrigatório. O painel gera um link exclusivo válido por sete dias.</p></div></article>
               <article class="help-step"><span>2</span><div><strong>Compartilhe o link</strong><p>Copie o convite e envie ao colaborador. Ele definirá a própria senha.</p></div></article>
-              <article class="help-step"><span>3</span><div><strong>Gerencie o acesso</strong><p>Altere nome ou perfil, desative e reative usuários diretamente na lista.</p></div></article>
+              <article class="help-step"><span>3</span><div><strong>Gerencie o acesso</strong><p>Altere nome, perfil e Squad, além de desativar ou reativar usuários diretamente na lista.</p></div></article>
               <article class="help-step"><span>4</span><div><strong>Recupere a senha</strong><p>O próprio usuário pode alterar a senha no ícone de chave do perfil. O administrador ainda pode enviar a recuperação por e-mail.</p></div></article>
             </div>
-            <div class="help-warning"><strong>Importante</strong><p>Desativar mantém o histórico do usuário, mas bloqueia seu acesso. O administrador não pode desativar ou remover o próprio perfil administrativo.</p></div>
+            <div class="help-warning"><strong>Importante</strong><p>Todo solicitante precisa ter um Squad válido. Sem essa atribuição, o acesso é bloqueado até que um administrador edite o usuário. Administradores não dependem de grupo e continuam visualizando todas as solicitações.</p></div>
           </section>
 
           <section id="help-management" class="help-section admin-only">
