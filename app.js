@@ -142,6 +142,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
 const els = {
+  authBootstrap: $("#app-bootstrap"),
   loginView: $("#login-view"),
   appView: $("#app-view"),
   loginForm: $("#login-form"),
@@ -3433,6 +3434,16 @@ function renderUserManagement() {
 
 function setKanbanFocusMode(active) {
   const enabled = Boolean(active) && state.currentView === "kanban";
+
+  // A visualização ampliada é exclusiva para acompanhamento do Kanban.
+  // Ao entrar nela, encerra ações em massa e remove qualquer seleção anterior.
+  if (enabled && state.bulkMode) {
+    state.bulkMode = false;
+    state.bulkSelected.clear();
+    updateBulkBar();
+    renderBoard();
+  }
+
   document.body.classList.toggle("kanban-focus-mode", enabled);
   if (els.kanbanFocusHeader) els.kanbanFocusHeader.hidden = !enabled;
   if (els.expandKanbanButton) els.expandKanbanButton.setAttribute("aria-pressed", String(enabled));
@@ -4601,6 +4612,11 @@ function setupEvents() {
   setupModalScrollLock();
 }
 
+function finishAuthBootstrap() {
+  document.body.classList.remove("auth-pending");
+  if (els.authBootstrap) els.authBootstrap.hidden = true;
+}
+
 async function handleAuthenticated(user) {
   if (state.inviteRegistrationInProgress) return;
   try {
@@ -4622,6 +4638,7 @@ async function handleAuthenticated(user) {
     configureSquadFilter();
     els.loginView.hidden = true;
     els.appView.hidden = false;
+    finishAuthBootstrap();
     showLoginCard();
     renderUser();
     await switchAppView("kanban");
@@ -4676,6 +4693,7 @@ function handleSignedOut() {
   els.notificationBadge.hidden = true;
   els.appView.hidden = true;
   els.loginView.hidden = false;
+  finishAuthBootstrap();
   els.loginPassword.value = "";
 
   if (state.inviteToken) {
@@ -4702,7 +4720,7 @@ async function loadAppVersion() {
     if (!response.ok) throw new Error("version-file-unavailable");
 
     const info = await response.json();
-    const release = String(info.release || "31").replace(/^v/i, "");
+    const release = String(info.release || "32").replace(/^v/i, "");
     const isLocal = !info.build || String(info.build).toLowerCase() === "local";
     const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
 
@@ -4737,7 +4755,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v28";
+    versionLabel.textContent = "v32";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }

@@ -9,7 +9,7 @@ O projeto é publicado no **GitHub Pages** e usa:
 - **GitHub Actions** para publicação e controle automático de build;
 - **PWA** para instalação do painel como aplicativo.
 
-> **Versão 31:** torna o Squad obrigatório também para usuários solicitantes, aplica visibilidade compartilhada A/B e D/E nas Programações e salva automaticamente a preferência de grupo do administrador.
+> **Versão 32:** corrige a visualização ampliada do Kanban para encerrar automaticamente o modo de ações em massa e adiciona uma tela segura de inicialização, evitando que o login apareça rapidamente durante a restauração da sessão.
 
 
 ---
@@ -19,6 +19,7 @@ O projeto é publicado no **GitHub Pages** e usa:
 ### Acesso e usuários
 
 - Login individual por e-mail e senha.
+- restauração da sessão sem exibir rapidamente a tela de login durante a atualização da página;
 - Recuperação de senha por e-mail.
 - Alteração da própria senha dentro do painel.
 - Perfis `admin` e `solicitante`;
@@ -48,7 +49,7 @@ Recursos:
 - atualização em tempo real;
 - arrastar e soltar para administradores;
 - rolagem independente por coluna;
-- modo ampliado mostrando somente o Kanban;
+- modo ampliado mostrando somente o Kanban e encerrando automaticamente qualquer ação em massa ativa;
 - ordenação da demanda mais antiga para a mais recente;
 - destaque visual da solicitação mais antiga;
 - busca por cliente, CNPJ, título ou solicitante;

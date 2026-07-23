@@ -2152,3 +2152,67 @@ kbd { min-width: 68px; padding: 4px 7px; border: 1px solid #cbd5e1; border-botto
 /* Versão 31: grupos de usuários */
 .field[hidden], .invite-role-summary[hidden] { display: none !important; }
 .users-table .tag.squad { white-space: nowrap; }
+
+/* Versão 32: inicialização sem piscar a tela de login */
+body.auth-pending {
+  overflow: hidden;
+}
+body.auth-pending .login-view,
+body.auth-pending .app-view {
+  display: none !important;
+}
+.app-bootstrap {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--text);
+  background: var(--bg);
+}
+body:not(.auth-pending) .app-bootstrap {
+  display: none !important;
+}
+.app-bootstrap-card {
+  display: flex;
+  width: min(360px, 100%);
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 30px 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+}
+.app-bootstrap-card img {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  margin-bottom: 4px;
+}
+.app-bootstrap-card strong {
+  font-size: 16px;
+}
+.app-bootstrap-card span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.app-bootstrap-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: app-bootstrap-spin .75s linear infinite;
+}
+@keyframes app-bootstrap-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* A visualização ampliada nunca mantém ações em massa ativas. */
+body.kanban-focus-mode #bulk-actions-bar {
+  display: none !important;
+}
