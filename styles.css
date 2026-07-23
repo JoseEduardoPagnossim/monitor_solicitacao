@@ -1849,7 +1849,9 @@ body.kanban-focus-mode #kanban-board .column-body {
 .comparison-row small { grid-column: 1/-1; color: var(--muted); }
 .security-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
 .security-grid .report-card-wide { grid-column: 1/-1; }
-.security-copy { color: var(--muted); line-height: 1.6; }
+.security-copy { padding: 17px 18px 18px; color: var(--muted); line-height: 1.6; }
+.security-copy p { margin: 0 0 12px; }
+.security-copy p:last-child { margin-bottom: 0; }
 .shortcut-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
 .shortcut-grid > div { display: flex; align-items: center; gap: 10px; padding: 9px; border: 1px solid var(--border); border-radius: 9px; }
 kbd { min-width: 68px; padding: 4px 7px; border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 6px; background: var(--surface-muted); text-align: center; font-family: inherit; font-size: 11px; font-weight: 800; }

@@ -4749,7 +4749,7 @@ async function loadAppVersion() {
     if (!response.ok) throw new Error("version-file-unavailable");
 
     const info = await response.json();
-    const release = String(info.release || "33").replace(/^v/i, "");
+    const release = String(info.release || "34").replace(/^v/i, "");
     const isLocal = !info.build || String(info.build).toLowerCase() === "local";
     const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
 
@@ -4784,7 +4784,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v33";
+    versionLabel.textContent = "v34";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }

@@ -9,7 +9,7 @@ O projeto é publicado no **GitHub Pages** e usa:
 - **GitHub Actions** para publicação e controle automático de build;
 - **PWA** para instalação do painel como aplicativo.
 
-> **Versão 33:** corrige a inicialização das ações em massa. Ao atualizar a página, a barra e as caixas de seleção permanecem ocultas até que o administrador ative explicitamente o modo **Em massa**.
+> **Versão 34:** melhora o espaçamento interno dos cartões de Segurança e backup, deixando os textos afastados das bordas e mais consistentes com o restante do painel.
 
 
 ---
