@@ -1707,10 +1707,28 @@ function updateUserSquadFieldVisibility(roleSelect, field, squadSelect) {
 }
 
 function setAdminVisibility() {
+  const admin = isAdmin();
+  const managedVisibility = new Set([
+    els.bulkActionsBar,
+    els.archiveRequestButton,
+    els.deleteRequestButton,
+    els.commentMentionField
+  ]);
+
   $$(".admin-only").forEach((element) => {
-    element.hidden = !isAdmin();
+    if (!admin) {
+      element.hidden = true;
+      return;
+    }
+
+    // Alguns componentes administrativos também dependem do estado atual
+    // da interface. Eles não devem ser exibidos apenas porque o usuário é admin.
+    if (managedVisibility.has(element)) return;
+    element.hidden = false;
   });
-  els.requesterFilter.hidden = !isAdmin();
+
+  if (els.bulkActionsBar) els.bulkActionsBar.hidden = !(admin && state.bulkMode);
+  els.requesterFilter.hidden = !admin;
 }
 
 function renderUser() {
@@ -3996,9 +4014,15 @@ function setBulkColumnSelection(status, selected) {
 }
 
 function updateBulkBar() {
-  els.bulkActionsBar.hidden = !state.bulkMode;
-  els.bulkSelectedCount.textContent = String(state.bulkSelected.size);
-  els.bulkModeButton?.classList.toggle("active", state.bulkMode);
+  const enabled = isAdmin() && state.bulkMode;
+  if (!enabled && state.bulkMode) {
+    state.bulkMode = false;
+    state.bulkSelected.clear();
+  }
+  if (els.bulkActionsBar) els.bulkActionsBar.hidden = !enabled;
+  if (els.bulkSelectedCount) els.bulkSelectedCount.textContent = String(state.bulkSelected.size);
+  els.bulkModeButton?.classList.toggle("active", enabled);
+  els.bulkModeButton?.setAttribute("aria-pressed", String(enabled));
 }
 
 function setBulkMode(active) {
@@ -4635,6 +4659,8 @@ async function handleAuthenticated(user) {
 
     state.user = user;
     state.profile = profile;
+    state.bulkMode = false;
+    state.bulkSelected.clear();
     configureSquadFilter();
     els.loginView.hidden = true;
     els.appView.hidden = false;
@@ -4687,6 +4713,9 @@ function handleSignedOut() {
   state.notifications = [];
   state.currentComments = [];
   state.currentHistory = [];
+  state.bulkMode = false;
+  state.bulkSelected.clear();
+  updateBulkBar();
   clearSessionTimers();
   toggleNotifications(false);
   els.notificationList.innerHTML = "";
@@ -4720,7 +4749,7 @@ async function loadAppVersion() {
     if (!response.ok) throw new Error("version-file-unavailable");
 
     const info = await response.json();
-    const release = String(info.release || "32").replace(/^v/i, "");
+    const release = String(info.release || "33").replace(/^v/i, "");
     const isLocal = !info.build || String(info.build).toLowerCase() === "local";
     const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
 
@@ -4755,7 +4784,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v32";
+    versionLabel.textContent = "v33";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }
