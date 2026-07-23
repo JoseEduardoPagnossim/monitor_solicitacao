@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=29.0.0">
+  <link rel="stylesheet" href="styles.css?v=30.0.0">
 </head>
 <body>
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
@@ -226,6 +226,14 @@
           <option value="normal">Normal</option>
           <option value="baixa">Baixa</option>
         </select>
+        <select id="squad-filter" class="select-control" aria-label="Filtrar por grupo de atendimento">
+          <option value="all">Todos os grupos</option>
+          <option value="squad_a">Squad A</option>
+          <option value="squad_b">Squad B</option>
+          <option value="squad_d">Squad D</option>
+          <option value="squad_e">Squad E</option>
+          <option value="none">Sem grupo</option>
+        </select>
         <select id="requester-filter" class="select-control admin-only" aria-label="Filtrar por solicitante">
           <option value="all">Todos os solicitantes</option>
         </select>
@@ -356,6 +364,14 @@
             <option value="cancelamento">Cancelamento</option>
             <option value="tef_elgin">TEF Elgin</option>
           </select>
+          <select id="indicator-squad-filter" class="select-control" aria-label="Filtrar indicadores por grupo">
+            <option value="all">Todos os grupos</option>
+            <option value="squad_a">Squad A</option>
+            <option value="squad_b">Squad B</option>
+            <option value="squad_d">Squad D</option>
+            <option value="squad_e">Squad E</option>
+            <option value="none">Sem grupo</option>
+          </select>
           <button id="indicator-clear-filter" class="link-button" type="button">Últimos 30 dias</button>
         </section>
 
@@ -416,12 +432,20 @@
             <option value="cancelamento">Cancelamento</option>
             <option value="tef_elgin">TEF Elgin</option>
           </select>
+          <select id="archived-squad-filter" class="select-control" aria-label="Filtrar arquivados por grupo">
+            <option value="all">Todos os grupos</option>
+            <option value="squad_a">Squad A</option>
+            <option value="squad_b">Squad B</option>
+            <option value="squad_d">Squad D</option>
+            <option value="squad_e">Squad E</option>
+            <option value="none">Sem grupo</option>
+          </select>
         </section>
 
         <section class="archived-panel">
           <div class="archived-table-wrap">
             <table class="archived-table">
-              <thead><tr><th>Solicitação</th><th>Tipo</th><th>Solicitante</th><th>Concluída</th><th>Arquivada</th><th>Ações</th></tr></thead>
+              <thead><tr><th>Solicitação</th><th>Tipo</th><th>Grupo</th><th>Solicitante</th><th>Concluída</th><th>Arquivada</th><th>Ações</th></tr></thead>
               <tbody id="archived-table-body"></tbody>
             </table>
           </div>
@@ -473,6 +497,16 @@
             <option value="programacao">Solicitação de programação</option>
             <option value="cancelamento">Chamado para cancelamento</option>
             <option value="tef_elgin">Solicitação TEF Elgin</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Grupo de atendimento *</span>
+          <select id="request-squad" required>
+            <option value="">Selecione o grupo</option>
+            <option value="squad_a">Squad A</option>
+            <option value="squad_b">Squad B</option>
+            <option value="squad_d">Squad D</option>
+            <option value="squad_e">Squad E</option>
           </select>
         </label>
         <label id="priority-field" class="field">
@@ -883,7 +917,7 @@
 
             <div class="help-steps">
               <article class="help-step"><span>1</span><div><strong>Clique em Nova solicitação</strong><p>Abra o formulário pelo botão azul no canto superior direito.</p></div></article>
-              <article class="help-step"><span>2</span><div><strong>Escolha o tipo correto</strong><p>Use Programação para melhorias do sistema, Cancelamento para encerramentos e TEF Elgin para configurações do TEF.</p></div></article>
+              <article class="help-step"><span>2</span><div><strong>Escolha o tipo e o grupo</strong><p>Use Programação para melhorias do sistema, Cancelamento para encerramentos e TEF Elgin para configurações do TEF. Em seguida, selecione o grupo responsável: Squad A, B, D ou E.</p></div></article>
               <article class="help-step"><span>3</span><div><strong>Preencha informações objetivas</strong><p>Descreva fatos, exemplos e impactos. Evite textos genéricos como “cliente quer uma melhoria”.</p></div></article>
               <article class="help-step"><span>4</span><div><strong>Salve e acompanhe</strong><p>A demanda ficará no Kanban e poderá ser acompanhada conforme o status.</p></div></article>
             </div>
@@ -1033,7 +1067,7 @@
                 <div><strong>Comentários internos</strong><p>Na aba Comentários, registre alinhamentos. O administrador pode selecionar o técnico para gerar uma notificação interna quando faltar alguma informação.</p></div>
                 <div><strong>Bloqueio</strong><p>Use a coluna Bloqueio quando a solicitação não puder avançar por falta de dados, retorno ou validação.</p></div>
                 <div><strong>Arquivamento</strong><p>Solicitações concluídas podem ser arquivadas pelo administrador, retirando registros antigos do Kanban sem perder o histórico.</p></div>
-                <div><strong>Permissões do solicitante</strong><p>O solicitante visualiza todas as solicitações de Programação em modo somente leitura, além das solicitações de qualquer tipo que criou ou que foram atribuídas a ele. Uma demanda própria continua editável apenas enquanto estiver em Nova.</p></div>
+                <div><strong>Filtro por grupo</strong><p>Selecione Squad A, B, D ou E no filtro do Kanban para visualizar apenas as demandas do seu grupo. O grupo também aparece no cartão e fica salvo nos filtros favoritos.</p></div><div><strong>Permissões do solicitante</strong><p>O solicitante visualiza todas as solicitações de Programação em modo somente leitura, além das solicitações de qualquer tipo que criou ou que foram atribuídas a ele. Uma demanda própria continua editável apenas enquanto estiver em Nova.</p></div>
                 <div><strong>Editar e excluir</strong><p>A exclusão de solicitações é permitida exclusivamente para usuários com perfil Administrador.</p></div>
               </div>
             </div>
@@ -1184,6 +1218,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=29.0.0"></script>
+  <script type="module" src="app.js?v=30.0.0"></script>
 </body>
 </html>

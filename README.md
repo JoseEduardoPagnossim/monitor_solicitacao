@@ -9,7 +9,7 @@ O projeto é publicado no **GitHub Pages** e usa:
 - **GitHub Actions** para publicação e controle automático de build;
 - **PWA** para instalação do painel como aplicativo.
 
-> **Versão 29:** melhoria de contraste e legibilidade dos campos de data na tela de Indicadores, tanto no tema claro quanto no tema escuro.
+> **Versão 30:** adiciona grupo de atendimento obrigatório nas solicitações e filtros por Squad A, Squad B, Squad D e Squad E no Kanban, Indicadores e Arquivados.
 
 > **Versão 28:** correção da permissão do backup administrativo, melhoria completa de contraste dos diálogos no tema escuro e atualização da Central de Ajuda com acesso visível à lista de atalhos.
 
@@ -53,11 +53,24 @@ Recursos:
 - ordenação da demanda mais antiga para a mais recente;
 - destaque visual da solicitação mais antiga;
 - busca por cliente, CNPJ, título ou solicitante;
-- filtros por tipo, prioridade e solicitante;
+- filtros por tipo, prioridade, grupo de atendimento e solicitante;
+- grupos disponíveis: **Squad A**, **Squad B**, **Squad D** e **Squad E**;
+- opção **Sem grupo** para localizar e corrigir registros antigos;
 - filtros favoritos salvos por usuário;
 - contador de comentários e anexos no card;
 - CNPJ completo no card de Programação;
 - seleção de todos os cards visíveis de uma coluna no modo de ações em massa.
+
+### Grupos de atendimento
+
+Toda solicitação deve ser vinculada a um grupo responsável:
+
+- **Squad A**;
+- **Squad B**;
+- **Squad D**;
+- **Squad E**.
+
+O grupo aparece no card, nos detalhes, no texto copiado e no histórico. O filtro por grupo está disponível no Kanban, em Indicadores e em Arquivados. Os filtros favoritos também guardam o grupo escolhido. A classificação por Squad organiza a operação, mas não altera as permissões definidas pelo perfil do usuário.
 
 ### Tipos de solicitação
 
@@ -65,6 +78,7 @@ Recursos:
 
 Campos principais:
 
+- Grupo de atendimento;
 - Razão Social;
 - CNPJ obrigatório e validado;
 - Solicitante;
@@ -83,6 +97,8 @@ Depois do primeiro salvamento, o **tipo da solicitação não pode ser alterado*
 
 #### Cancelamento
 
+O formulário também exige a seleção do grupo de atendimento responsável.
+
 Para cada cliente é obrigatório informar:
 
 - CPF/CNPJ **ou** Razão Social;
@@ -91,6 +107,8 @@ Para cada cliente é obrigatório informar:
 O técnico preenche os campos fixos, adiciona o cliente à lista e repete o processo. O administrador pode marcar individualmente ou em massa os clientes já cancelados no CRM.
 
 #### TEF Elgin
+
+O formulário também exige a seleção do grupo de atendimento responsável.
 
 Campos:
 

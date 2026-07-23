@@ -34,6 +34,10 @@ service cloud.firestore {
       return priority in ['urgente', 'alta', 'normal', 'baixa'];
     }
 
+    function validSquad(value) {
+      return value in ['squad_a', 'squad_b', 'squad_d', 'squad_e'];
+    }
+
     function validStatus(status) {
       return status in ['nova', 'analise', 'aguardando', 'bloqueio', 'concluida'];
     }
@@ -122,6 +126,7 @@ service cloud.firestore {
     function validRequestData(data) {
       return validType(data.type)
         && validPriority(data.priority)
+        && (!data.keys().hasAny(['squad']) || validSquad(data.squad))
         && validStatus(data.status)
         && data.clientName is string
         && data.clientName.size() > 0
@@ -321,11 +326,16 @@ service cloud.firestore {
         || isRequestParticipant(resource.data)
         || canViewProgramming(resource.data);
 
-      allow create: if (isAdmin() && validRequestData(request.resource.data))
+      allow create: if (isAdmin()
+        && request.resource.data.keys().hasAll(['squad'])
+        && validSquad(request.resource.data.squad)
+        && validRequestData(request.resource.data))
         || (isActive()
           && request.resource.data.requesterUid == request.auth.uid
           && request.resource.data.requesterEmail == request.auth.token.email
           && request.resource.data.status == 'nova'
+          && request.resource.data.keys().hasAll(['squad'])
+          && validSquad(request.resource.data.squad)
           && emptyCancellationCrmOnCreate(request.resource.data)
           && validRequestData(request.resource.data));
 

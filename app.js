@@ -55,9 +55,17 @@ const PRIORITY_LABELS = {
   baixa: "Baixa"
 };
 
+const SQUAD_LABELS = {
+  squad_a: "Squad A",
+  squad_b: "Squad B",
+  squad_d: "Squad D",
+  squad_e: "Squad E"
+};
+
 const VALID_STATUSES = Object.keys(STATUS_LABELS);
 const VALID_TYPES = Object.keys(TYPE_LABELS);
 const VALID_PRIORITIES = Object.keys(PRIORITY_LABELS);
+const VALID_SQUADS = Object.keys(SQUAD_LABELS);
 const MAX_CANCELLATION_ITEMS = 50;
 const MAX_ATTACHMENTS = 2;
 const MAX_IMAGE_SOURCE_SIZE = 5 * 1024 * 1024;
@@ -102,7 +110,7 @@ const state = {
   inviteData: null,
   inviteRegistrationInProgress: false,
   forcedLogoutMessage: "",
-  filters: { search: "", type: "all", priority: "all", requester: "all" },
+  filters: { search: "", type: "all", priority: "all", squad: "all", requester: "all" },
   draggedId: null,
   modalEditable: true,
   modalCancellationItems: [],
@@ -112,8 +120,8 @@ const state = {
   modalArchived: false,
   archiveAction: null,
   archivedLoaded: false,
-  archivedFilters: { search: "", type: "all" },
-  indicatorFilters: { start: "", end: "", type: "all" },
+  archivedFilters: { search: "", type: "all", squad: "all" },
+  indicatorFilters: { start: "", end: "", type: "all", squad: "all" },
   currentHistory: [],
   unsubscribeHistory: null,
   savedFilters: [],
@@ -197,6 +205,7 @@ const els = {
   searchInput: $("#search-input"),
   typeFilter: $("#type-filter"),
   priorityFilter: $("#priority-filter"),
+  squadFilter: $("#squad-filter"),
   requesterFilter: $("#requester-filter"),
   clearFilters: $("#clear-filters"),
   savedFilterSelect: $("#saved-filter-select"),
@@ -268,6 +277,7 @@ const els = {
   indicatorStartDate: $("#indicator-start-date"),
   indicatorEndDate: $("#indicator-end-date"),
   indicatorTypeFilter: $("#indicator-type-filter"),
+  indicatorSquadFilter: $("#indicator-squad-filter"),
   indicatorClearFilter: $("#indicator-clear-filter"),
   indicatorCreated: $("#indicator-created"),
   indicatorCompleted: $("#indicator-completed"),
@@ -286,6 +296,7 @@ const els = {
   archiveOldRequestsButton: $("#archive-old-requests-button"),
   archivedSearchInput: $("#archived-search-input"),
   archivedTypeFilter: $("#archived-type-filter"),
+  archivedSquadFilter: $("#archived-squad-filter"),
   archivedTableBody: $("#archived-table-body"),
   archivedEmptyState: $("#archived-empty-state"),
   requestDialog: $("#request-dialog"),
@@ -318,6 +329,7 @@ const els = {
   commentTemplateList: $("#comment-template-list"),
   requestId: $("#request-id"),
   requestType: $("#request-type"),
+  requestSquad: $("#request-squad"),
   priorityField: $("#priority-field"),
   requestPriority: $("#request-priority"),
   programmingFields: $("#programming-fields"),
@@ -1303,6 +1315,7 @@ function filteredRequests() {
       item.requesterName,
       item.requesterEmail,
       item.assigneeName,
+      SQUAD_LABELS[item.squad],
       ...cancellationSearch
     ]
       .filter(Boolean)
@@ -1312,6 +1325,8 @@ function filteredRequests() {
     return (!term || haystack.includes(term))
       && (state.filters.type === "all" || item.type === state.filters.type)
       && (state.filters.priority === "all" || item.priority === state.filters.priority)
+      && (state.filters.squad === "all"
+        || (state.filters.squad === "none" ? !VALID_SQUADS.includes(item.squad) : item.squad === state.filters.squad))
       && (state.filters.requester === "all" || item.requesterUid === state.filters.requester);
   });
 }
@@ -1429,6 +1444,7 @@ function cardHtml(item, isOldest) {
       <div class="card-top">
         <div class="card-tags">
           <span class="tag ${item.type}">${TYPE_LABELS[item.type] || "Solicitação"}</span>
+          <span class="tag squad">${escapeHtml(SQUAD_LABELS[item.squad] || "Sem grupo")}</span>
           ${item.type === "programacao" ? `<span class="tag ${item.priority}">${PRIORITY_LABELS[item.priority] || "Normal"}</span>` : ""}
           ${attachmentCount ? `<span class="tag attachment">📎 ${attachmentCount}</span>` : ""}
           ${commentCount ? `<span class="tag comments">💬 ${commentCount}</span>` : ""}
@@ -1905,6 +1921,7 @@ function updateRequestTypeFields() {
   setSectionInputsEnabled(els.cancellationFields, isCancellation && state.modalEditable);
   setSectionInputsEnabled(els.tefFields, isTef && state.modalEditable);
   els.requestPriority.disabled = !isProgramming || !state.modalEditable;
+  els.requestSquad.disabled = !state.modalEditable;
 
   if (isProgramming) renderAttachmentList();
   if (isCancellation) renderCancellationItems(state.modalCancellationItems, state.modalEditable);
@@ -1935,6 +1952,7 @@ function resetRequestForm() {
   state.modalEditable = true;
   els.requestId.value = "";
   els.requestType.value = "programacao";
+  els.requestSquad.value = "";
   els.requestPriority.value = "normal";
   els.requestStatus.value = "nova";
   els.requestAssignee.value = "";
@@ -2001,6 +2019,7 @@ function openRequestModal(id, source = "active") {
 
   els.requestId.value = item.id;
   els.requestType.value = item.type || "programacao";
+  els.requestSquad.value = VALID_SQUADS.includes(item.squad) ? item.squad : "";
   els.requestPriority.value = item.priority || "normal";
   els.requestClient.value = item.clientName || "";
   els.requestClientCode.value = formatCpfCnpj(item.clientCode || "");
@@ -2072,6 +2091,7 @@ function openRequestModal(id, source = "active") {
   els.commentComposer.hidden = archived || !canCommentOnRequest(item);
   els.requestAudit.hidden = false;
   els.requestAudit.innerHTML = `
+    <strong>Grupo:</strong> ${escapeHtml(SQUAD_LABELS[item.squad] || "Sem grupo")}<br>
     <strong>Solicitado por:</strong> ${escapeHtml(item.requesterName || item.requesterEmail || "—")}<br>
     <strong>Criado em:</strong> ${formatDateTime(item.createdAt)} · <strong>Tempo ativo:</strong> ${formatElapsed(requestAge(item))} · <strong>Tempo pausado:</strong> ${formatElapsed(requestPausedDuration(item, item.status === "concluida" ? item.completedAt : null))}<br>
     <strong>Última atualização:</strong> ${formatDateTime(item.updatedAt)}${item.updatedByName ? ` por ${escapeHtml(item.updatedByName)}` : ""}
@@ -2286,6 +2306,13 @@ async function saveRequest(event) {
     return;
   }
 
+  const squad = VALID_SQUADS.includes(els.requestSquad.value) ? els.requestSquad.value : "";
+  if (!squad) {
+    showFormError(els.requestError, "Selecione o grupo de atendimento responsável pela solicitação.");
+    els.requestSquad.focus();
+    return;
+  }
+
   if (type === "programacao" && totalModalAttachments() > MAX_ATTACHMENTS) {
     showFormError(els.requestError, `É possível anexar no máximo ${MAX_ATTACHMENTS} arquivos.`);
     return;
@@ -2305,6 +2332,7 @@ async function saveRequest(event) {
 
   const payload = {
     type,
+    squad,
     priority: type === "programacao" && VALID_PRIORITIES.includes(els.requestPriority.value)
       ? els.requestPriority.value
       : "normal",
@@ -2452,6 +2480,7 @@ async function confirmDeleteRequest() {
 
 function programmingCopyText(item) {
   return `Título: ${item.title || ""}
+Grupo de atendimento: ${SQUAD_LABELS[item.squad] || "Sem grupo"}
 
 === Informações do Cliente ===
 Razão Social: ${item.clientName || ""}
@@ -2485,12 +2514,13 @@ Razão Social: ${entry.clientName || ""}
 CPF/CNPJ: ${entry.clientCnpj || ""}
 Motivo: ${entry.reason || ""}
 Status no CRM: ${entry.crmCancelled === true ? "Cancelado" : "Pendente"}`);
-  return `=== CHAMADOS PARA CANCELAMENTO ===\n\n${blocks.join("\n\n------------------------------\n\n")}`;
+  return `=== CHAMADOS PARA CANCELAMENTO ===\nGrupo de atendimento: ${SQUAD_LABELS[item.squad] || "Sem grupo"}\n\n${blocks.join("\n\n------------------------------\n\n")}`;
 }
 
 function tefCopyText(item) {
   return `=== SOLICITAÇÃO TEF ELGIN ===
 
+GRUPO DE ATENDIMENTO: ${SQUAD_LABELS[item.squad] || "Sem grupo"}
 CNPJ: ${item.tefCnpj || item.clientCode || ""}
 SISTEMA OPERACIONAL: ${item.tefOperatingSystem || ""}
 MEMÓRIA RAM DA MÁQUINA: ${item.tefRam || ""}
@@ -2787,10 +2817,12 @@ async function loadArchivedRequests(force = false) {
 function archivedFilteredRequests() {
   const term = state.archivedFilters.search.toLocaleLowerCase("pt-BR");
   return state.archivedRequests.filter((item) => {
-    const haystack = [item.title, item.clientName, item.clientCode, item.requesterName, item.requesterEmail]
+    const haystack = [item.title, item.clientName, item.clientCode, item.requesterName, item.requesterEmail, SQUAD_LABELS[item.squad]]
       .filter(Boolean).join(" ").toLocaleLowerCase("pt-BR");
     return (!term || haystack.includes(term))
-      && (state.archivedFilters.type === "all" || item.type === state.archivedFilters.type);
+      && (state.archivedFilters.type === "all" || item.type === state.archivedFilters.type)
+      && (state.archivedFilters.squad === "all"
+        || (state.archivedFilters.squad === "none" ? !VALID_SQUADS.includes(item.squad) : item.squad === state.archivedFilters.squad));
   }).sort((a, b) => (timestampToDate(b.archivedAt)?.getTime() || 0) - (timestampToDate(a.archivedAt)?.getTime() || 0));
 }
 
@@ -2800,6 +2832,7 @@ function renderArchivedRequests() {
     <tr>
       <td><div class="archived-title"><strong>${escapeHtml(requestCardTitle(item))}</strong><span>${escapeHtml(item.clientName || item.clientCode || "—")}</span></div></td>
       <td><span class="tag ${escapeHtml(item.type)}">${escapeHtml(TYPE_LABELS[item.type] || "Solicitação")}</span></td>
+      <td><span class="tag squad">${escapeHtml(SQUAD_LABELS[item.squad] || "Sem grupo")}</span></td>
       <td>${escapeHtml(item.requesterName || item.requesterEmail || "—")}</td>
       <td>${escapeHtml(formatDateTime(item.completedAt))}</td>
       <td>${escapeHtml(formatDateTime(item.archivedAt))}</td>
@@ -2924,6 +2957,7 @@ function setIndicatorDefaultDates() {
   state.indicatorFilters.start = els.indicatorStartDate.value;
   state.indicatorFilters.end = els.indicatorEndDate.value;
   state.indicatorFilters.type = els.indicatorTypeFilter.value;
+  state.indicatorFilters.squad = els.indicatorSquadFilter.value;
 }
 
 function indicatorSourceRequests() {
@@ -2934,7 +2968,9 @@ function indicatorSourceRequests() {
     return created
       && (!start || created >= start)
       && (!end || created <= end)
-      && (state.indicatorFilters.type === "all" || item.type === state.indicatorFilters.type);
+      && (state.indicatorFilters.type === "all" || item.type === state.indicatorFilters.type)
+      && (state.indicatorFilters.squad === "all"
+        || (state.indicatorFilters.squad === "none" ? !VALID_SQUADS.includes(item.squad) : item.squad === state.indicatorFilters.squad));
   });
 }
 
@@ -3034,6 +3070,7 @@ function applyFilters() {
   state.filters.search = els.searchInput.value.trim();
   state.filters.type = els.typeFilter.value;
   state.filters.priority = els.priorityFilter.value;
+  state.filters.squad = els.squadFilter.value;
   state.filters.requester = els.requesterFilter.value;
   renderBoard();
 }
@@ -3042,8 +3079,9 @@ function clearFilters() {
   els.searchInput.value = "";
   els.typeFilter.value = "all";
   els.priorityFilter.value = "all";
+  els.squadFilter.value = "all";
   els.requesterFilter.value = "all";
-  state.filters = { search: "", type: "all", priority: "all", requester: "all" };
+  state.filters = { search: "", type: "all", priority: "all", squad: "all", requester: "all" };
   $$(".nav-item").forEach((item) => {
     item.classList.toggle("active", item.dataset.view === "kanban");
   });
@@ -3631,7 +3669,7 @@ function describeRequestChanges(existing, payload) {
   const details = {};
   const fields = [
     ["title", "Título"], ["clientName", "Cliente"], ["clientCode", "CNPJ"],
-    ["priority", "Prioridade"], ["status", "Status"], ["assigneeUid", "Responsável"],
+    ["priority", "Prioridade"], ["squad", "Grupo de atendimento"], ["status", "Status"], ["assigneeUid", "Responsável"],
     ["description", "Descrição"], ["currentBehavior", "Comportamento atual"],
     ["expectedBehavior", "Comportamento esperado"], ["justification", "Justificativa"]
   ];
@@ -3728,6 +3766,7 @@ function applySavedFilter(id) {
   els.searchInput.value = values.search || "";
   els.typeFilter.value = values.type || "all";
   els.priorityFilter.value = values.priority || "all";
+  els.squadFilter.value = values.squad || "all";
   els.requesterFilter.value = values.requester || "all";
   applyFilters();
   showToast(`Filtro “${filter.name}” aplicado.`);
@@ -3930,7 +3969,10 @@ function previousIndicatorItems() {
   const previousStart = new Date(previousEnd.getTime() - length + 1);
   return [...state.requests, ...state.archivedRequests].filter((item) => {
     const created = timestampToDate(item.createdAt);
-    return created && created >= previousStart && created <= previousEnd && (state.indicatorFilters.type === "all" || item.type === state.indicatorFilters.type);
+    return created && created >= previousStart && created <= previousEnd
+      && (state.indicatorFilters.type === "all" || item.type === state.indicatorFilters.type)
+      && (state.indicatorFilters.squad === "all"
+        || (state.indicatorFilters.squad === "none" ? !VALID_SQUADS.includes(item.squad) : item.squad === state.indicatorFilters.squad));
   });
 }
 
@@ -4266,7 +4308,7 @@ function setupEvents() {
   $$(".close-delete-confirm").forEach((button) => button.addEventListener("click", () => closeModal(els.deleteConfirmDialog)));
   $$(".close-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.requestDialog)));
 
-  [els.searchInput, els.typeFilter, els.priorityFilter, els.requesterFilter].forEach((control) => {
+  [els.searchInput, els.typeFilter, els.priorityFilter, els.squadFilter, els.requesterFilter].forEach((control) => {
     control.addEventListener(control === els.searchInput ? "input" : "change", applyFilters);
   });
   els.clearFilters.addEventListener("click", clearFilters);
@@ -4360,16 +4402,18 @@ function setupEvents() {
     renderIndicators();
     showToast("Indicadores atualizados.");
   });
-  [els.indicatorStartDate, els.indicatorEndDate, els.indicatorTypeFilter].forEach((control) => {
+  [els.indicatorStartDate, els.indicatorEndDate, els.indicatorTypeFilter, els.indicatorSquadFilter].forEach((control) => {
     control.addEventListener("change", () => {
       state.indicatorFilters.start = els.indicatorStartDate.value;
       state.indicatorFilters.end = els.indicatorEndDate.value;
       state.indicatorFilters.type = els.indicatorTypeFilter.value;
+      state.indicatorFilters.squad = els.indicatorSquadFilter.value;
       renderIndicators();
     });
   });
   els.indicatorClearFilter.addEventListener("click", () => {
     els.indicatorTypeFilter.value = "all";
+    els.indicatorSquadFilter.value = "all";
     setIndicatorDefaultDates();
     renderIndicators();
   });
@@ -4385,6 +4429,10 @@ function setupEvents() {
   });
   els.archivedTypeFilter.addEventListener("change", () => {
     state.archivedFilters.type = els.archivedTypeFilter.value;
+    renderArchivedRequests();
+  });
+  els.archivedSquadFilter.addEventListener("change", () => {
+    state.archivedFilters.squad = els.archivedSquadFilter.value;
     renderArchivedRequests();
   });
   els.archivedTableBody.addEventListener("click", (event) => {

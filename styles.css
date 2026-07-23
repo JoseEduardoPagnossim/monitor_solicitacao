@@ -1830,6 +1830,8 @@ body.kanban-focus-mode #kanban-board .column-body {
 }
 .bulk-card-check input { accent-color: var(--primary); }
 .request-card.bulk-selected { outline: 3px solid rgba(37,99,235,.28); border-color: #3b82f6; }
+.tag.squad { color: #075985; background: #e0f2fe; border-color: #bae6fd; }
+:root[data-theme="dark"] .tag.squad { color: #bae6fd; background: #0c4a6e; border-color: #0369a1; }
 .tag.paused { color: #9a3412; background: #ffedd5; }
 .inline-field-row { display: flex; gap: 8px; align-items: stretch; }
 .inline-field-row select { flex: 1; }
