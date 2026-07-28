@@ -9,7 +9,7 @@ O projeto é publicado no **GitHub Pages** e usa:
 - **GitHub Actions** para publicação e controle automático de build;
 - **PWA** para instalação do painel como aplicativo.
 
-> **Versão 36:** mantém as abas Detalhes, Comentários e Histórico visíveis durante a rolagem da solicitação e exibe mensagens de confirmação acima do diálogo ativo.
+> **Versão 37:** mantém as abas da solicitação fixas e posiciona mensagens de sucesso, aviso e erro no canto superior direito da tela, acima dos diálogos.
 
 
 ---
@@ -684,3 +684,22 @@ As abas **Detalhes**, **Comentários** e **Histórico** permanecem fixas no topo
 ### Mensagens acima dos diálogos
 
 Mensagens de sucesso, aviso e erro, como a confirmação de **Copiar dados**, agora são renderizadas dentro do diálogo ativo. Assim, elas permanecem visíveis e não ficam apagadas atrás da sobreposição do modal. Quando não existe diálogo aberto, as mensagens continuam aparecendo no canto superior direito do painel.
+
+## 22. Ajuste da versão 37
+
+### Mensagens no canto superior direito
+
+As mensagens rápidas do painel, como **Dados copiados para a área de transferência**, agora utilizam uma camada global de primeiro plano. Mesmo quando um diálogo estiver aberto, a mensagem aparece no canto superior direito da tela, acima do fundo escurecido e sem ocupar espaço dentro da janela da solicitação.
+
+O painel utiliza a camada nativa de *popover* do navegador para manter a mensagem acima dos diálogos. Em navegadores compatíveis, isso evita problemas de `z-index` com a camada superior dos elementos `<dialog>`.
+
+As mensagens:
+
+- permanecem visíveis por aproximadamente quatro segundos;
+- aceitam os estados de sucesso, aviso e erro;
+- podem ser exibidas em sequência;
+- ajustam a largura automaticamente em telas menores;
+- continuam aparecendo no mesmo local quando nenhum diálogo está aberto.
+
+As abas **Detalhes**, **Comentários** e **Histórico** continuam fixas no topo durante a rolagem da solicitação.
+

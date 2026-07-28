@@ -459,34 +459,43 @@ function canCommentOnRequest(item) {
 }
 
 function getToastHost() {
-  const focusedDialog = document.activeElement?.closest?.("dialog[open]");
-  const openDialogs = Array.from(document.querySelectorAll("dialog[open]"));
-  const activeDialog = focusedDialog || openDialogs.at(-1);
+  return els.toastContainer;
+}
 
-  if (!activeDialog) return els.toastContainer;
-
-  let host = activeDialog.querySelector(":scope > .dialog-toast-container");
-  if (!host) {
-    host = document.createElement("div");
-    host.className = "toast-container dialog-toast-container";
-    host.setAttribute("aria-live", "polite");
-    activeDialog.appendChild(host);
+function openToastLayer(host) {
+  if (!host || typeof host.showPopover !== "function") return;
+  try {
+    if (!host.matches(":popover-open")) host.showPopover();
+  } catch (error) {
+    console.warn("Não foi possível abrir a camada de mensagens.", error);
   }
+}
 
-  const dialogRect = activeDialog.getBoundingClientRect();
-  host.style.top = `${Math.max(16, dialogRect.top + 16)}px`;
-  host.style.right = `${Math.max(16, window.innerWidth - dialogRect.right + 16)}px`;
-  host.style.maxWidth = `${Math.max(240, Math.min(420, dialogRect.width - 32))}px`;
-
-  return host;
+function closeToastLayerWhenEmpty(host) {
+  if (!host || host.childElementCount > 0 || typeof host.hidePopover !== "function") return;
+  try {
+    if (host.matches(":popover-open")) host.hidePopover();
+  } catch (error) {
+    console.warn("Não foi possível fechar a camada de mensagens.", error);
+  }
 }
 
 function showToast(message, type = "success") {
+  const host = getToastHost();
+  if (!host) return;
+
+  openToastLayer(host);
+
   const toast = document.createElement("div");
   toast.className = `toast ${type}`;
+  toast.setAttribute("role", type === "error" ? "alert" : "status");
   toast.textContent = message;
-  getToastHost().appendChild(toast);
-  window.setTimeout(() => toast.remove(), 4200);
+  host.appendChild(toast);
+
+  window.setTimeout(() => {
+    toast.remove();
+    closeToastLayerWhenEmpty(host);
+  }, 4200);
 }
 
 function showFormError(element, message = "") {
@@ -4888,7 +4897,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v36";
+    versionLabel.textContent = "v37";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }

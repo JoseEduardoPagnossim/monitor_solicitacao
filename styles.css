@@ -302,8 +302,24 @@ button { cursor: pointer; }
 .modal-actions-right, .modal-actions-end { display: flex; gap: 9px; margin-left: auto; }
 .request-audit { background: var(--surface-muted); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin: 0 0 16px; color: var(--muted); font-size: 11px; line-height: 1.6; }
 
-.toast-container { position: fixed; z-index: 1000; top: 18px; right: 18px; display: flex; flex-direction: column; gap: 8px; }
-.toast { min-width: 280px; max-width: 420px; padding: 12px 14px; border-radius: 10px; color: #344054; background: white; border: 1px solid var(--border); box-shadow: var(--shadow-md); animation: toast-in .2s ease; font-size: 13px; }
+.toast-container {
+  position: fixed;
+  inset: 18px 18px auto auto;
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(420px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  pointer-events: none;
+}
+.toast-container[popover]:not(:popover-open) { display: none; }
+.toast { width: 100%; min-width: 0; max-width: 420px; padding: 12px 14px; border-radius: 10px; color: #344054; background: white; border: 1px solid var(--border); box-shadow: var(--shadow-md); animation: toast-in .2s ease; font-size: 13px; pointer-events: auto; }
 .toast.success { border-left: 4px solid #059669; }
 .toast.error { border-left: 4px solid #dc2626; }
 .toast.warning { border-left: 4px solid #d97706; }
@@ -2252,7 +2268,7 @@ body.kanban-focus-mode #bulk-actions-bar {
 
 
 /* =========================================================
-   Versao 36: abas fixas no dialogo e mensagens sobre modais
+   Versao 37: abas fixas e mensagens globais acima dos modais
    ========================================================= */
 #request-dialog .request-tabs {
   position: sticky;
@@ -2264,19 +2280,12 @@ body.kanban-focus-mode #bulk-actions-bar {
   box-shadow: 0 10px 18px -18px rgba(15, 23, 42, .55);
 }
 
-.dialog-toast-container {
-  position: fixed;
-  z-index: 100000;
-  width: min(420px, calc(100vw - 32px));
-  pointer-events: none;
-}
-
-.dialog-toast-container .toast {
-  width: 100%;
-  pointer-events: auto;
-}
-
 @media (max-width: 640px) {
+  .toast-container {
+    inset: 12px 12px auto auto;
+    width: calc(100vw - 24px);
+  }
+
   #request-dialog .request-tabs {
     margin-right: -18px;
     margin-left: -18px;
