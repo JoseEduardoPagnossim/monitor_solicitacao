@@ -2218,3 +2218,34 @@ body:not(.auth-pending) .app-bootstrap {
 body.kanban-focus-mode #bulk-actions-bar {
   display: none !important;
 }
+
+
+/* Versão 35: opção PIX no TEF */
+.tef-pix-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 14px 15px;
+  border: 1px solid #a7f3d0;
+  border-radius: 11px;
+  background: #ecfdf5;
+  color: #065f46;
+  cursor: pointer;
+}
+.tef-pix-choice input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  flex: 0 0 auto;
+  accent-color: var(--primary);
+}
+.tef-pix-choice span { display: grid; gap: 3px; }
+.tef-pix-choice strong { color: inherit; font-size: 13px; }
+.tef-pix-choice small { color: #047857; font-size: 11px; line-height: 1.45; }
+.field-counter { align-self: flex-end; color: var(--muted); font-size: 10px; }
+:root[data-theme="dark"] .tef-pix-choice {
+  color: #a7f3d0;
+  background: #063c36;
+  border-color: #0f766e;
+}
+:root[data-theme="dark"] .tef-pix-choice small { color: #99f6e4; }

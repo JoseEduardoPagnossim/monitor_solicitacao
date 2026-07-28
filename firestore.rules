@@ -94,6 +94,9 @@ service cloud.firestore {
         || (data.tefCnpj is string
           && data.tefCnpj.size() >= 14
           && data.tefCnpj.size() <= 18
+          && data.tefClientName is string
+          && data.tefClientName.size() > 0
+          && data.tefClientName.size() <= 120
           && data.tefOperatingSystem is string
           && data.tefOperatingSystem.size() > 0
           && data.tefOperatingSystem.size() <= 120
@@ -129,7 +132,11 @@ service cloud.firestore {
           && data.tefContactEmail.size() <= 160
           && data.tefAgreedValue is string
           && data.tefAgreedValue.size() > 0
-          && data.tefAgreedValue.size() <= 120);
+          && data.tefAgreedValue.size() <= 120
+          && data.tefUsesPix is bool
+          && data.tefAdditionalInfo is string
+          && data.tefAdditionalInfo.size() <= 1000
+          && (data.tefUsesPix == true || data.tefAdditionalInfo == ''));
     }
 
     function validRequestData(data) {

@@ -9,7 +9,7 @@ O projeto é publicado no **GitHub Pages** e usa:
 - **GitHub Actions** para publicação e controle automático de build;
 - **PWA** para instalação do painel como aplicativo.
 
-> **Versão 34:** melhora o espaçamento interno dos cartões de Segurança e backup, deixando os textos afastados das bordas e mais consistentes com o restante do painel.
+> **Versão 35:** libera a cópia de Programações para solicitantes, corrige o fechamento acidental dos diálogos durante a seleção de texto e amplia o formulário TEF com Razão Social, uso de PIX e informações adicionais.
 
 
 ---
@@ -113,6 +113,7 @@ O formulário também exige a seleção do grupo de atendimento responsável.
 Campos:
 
 - CNPJ validado;
+- Razão Social;
 - sistema operacional;
 - memória RAM acima de 4 GB;
 - sistema utilizado;
@@ -124,7 +125,17 @@ Campos:
 - CPF validado;
 - telefone com DDD;
 - e-mail;
-- valor combinado.
+- valor combinado;
+- opção **Vai utilizar PIX**, desmarcada por padrão;
+- informações adicionais do PIX com até 1000 caracteres, exibidas quando a opção de PIX é marcada.
+
+### Cópia de dados
+
+- Administradores podem copiar qualquer tipo de solicitação.
+- Solicitantes podem copiar as Programações que possuem permissão para visualizar.
+- Cancelamentos e TEF Elgin permanecem disponíveis para cópia apenas aos administradores.
+
+Os diálogos só fecham ao clicar diretamente no fundo externo. Arrastar o mouse para selecionar textos e dados dentro do conteúdo não fecha mais a tela.
 
 ---
 

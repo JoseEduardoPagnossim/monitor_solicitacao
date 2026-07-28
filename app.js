@@ -366,6 +366,7 @@ const els = {
   addCancellationItem: $("#add-cancellation-item"),
   tefFields: $("#tef-fields"),
   tefCnpj: $("#tef-cnpj"),
+  tefClientName: $("#tef-client-name"),
   tefOperatingSystem: $("#tef-operating-system"),
   tefRam: $("#tef-ram"),
   tefSystemUsed: $("#tef-system-used"),
@@ -378,6 +379,10 @@ const els = {
   tefContactPhone: $("#tef-contact-phone"),
   tefContactEmail: $("#tef-contact-email"),
   tefAgreedValue: $("#tef-agreed-value"),
+  tefUsesPix: $("#tef-uses-pix"),
+  tefAdditionalInfoField: $("#tef-additional-info-field"),
+  tefAdditionalInfo: $("#tef-additional-info"),
+  tefAdditionalInfoCount: $("#tef-additional-info-count"),
   requestStatus: $("#request-status"),
   requestAssignee: $("#request-assignee"),
   requestAudit: $("#request-audit"),
@@ -419,6 +424,11 @@ function isAdmin() {
 
 function isSolicitante() {
   return state.profile?.role === "solicitante";
+}
+
+function canCopyRequest(item) {
+  if (!item) return false;
+  return isAdmin() || (isSolicitante() && item.type === "programacao" && requestIsAccessible(item));
 }
 
 function squadVisibilityGroup(squad) {
@@ -1320,6 +1330,7 @@ function filteredRequests() {
       item.expectedBehavior,
       item.justification,
       item.tefCnpj,
+      item.tefClientName,
       item.tefOperatingSystem,
       item.tefRam,
       item.tefSystemUsed,
@@ -1332,6 +1343,7 @@ function filteredRequests() {
       item.tefContactPhone,
       item.tefContactEmail,
       item.tefAgreedValue,
+      item.tefAdditionalInfo,
       item.requesterName,
       item.requesterEmail,
       item.assigneeName,
@@ -1396,8 +1408,8 @@ function requestCardTitle(item) {
 function requestCardClient(item) {
   if (item.type === "tef_elgin") {
     return {
-      name: item.tefCnpj || item.clientCode || "CNPJ não informado",
-      code: item.tefSystemUsed || "TEF Elgin"
+      name: item.tefClientName || item.clientName || item.tefCnpj || item.clientCode || "Cliente não informado",
+      code: item.tefCnpj || item.clientCode || "CNPJ não informado"
     };
   }
   if (item.type !== "cancelamento") {
@@ -1439,7 +1451,7 @@ function cardHtml(item, isOldest) {
   const videoLink = normalizeUrl(item.videoLink || item.externalLink || "");
   const cardClient = requestCardClient(item);
   const title = requestCardTitle(item);
-  const copyButton = isAdmin()
+  const copyButton = canCopyRequest(item)
     ? `<button class="card-copy-button" type="button" data-copy-id="${escapeHtml(item.id)}" title="Copiar dados da solicitação">⧉ Copiar</button>`
     : "";
   const attachmentCount = Array.isArray(item.attachments) ? item.attachments.length : 0;
@@ -1998,6 +2010,13 @@ function setSectionInputsEnabled(section, enabled) {
   });
 }
 
+function updateTefPixFields() {
+  const shouldShow = els.requestType.value === "tef_elgin" && els.tefUsesPix.checked;
+  els.tefAdditionalInfoField.hidden = !shouldShow;
+  els.tefAdditionalInfo.disabled = !shouldShow || !state.modalEditable;
+  els.tefAdditionalInfoCount.textContent = String(els.tefAdditionalInfo.value.length);
+}
+
 function updateRequestTypeFields() {
   const type = els.requestType.value;
   const isProgramming = type === "programacao";
@@ -2019,6 +2038,7 @@ function updateRequestTypeFields() {
 
   if (isProgramming) renderAttachmentList();
   if (isCancellation) renderCancellationItems(state.modalCancellationItems, state.modalEditable);
+  updateTefPixFields();
 
   const isExistingRequest = Boolean(els.requestId.value);
   els.requestType.disabled = !state.modalEditable || isExistingRequest;
@@ -2043,6 +2063,8 @@ function resetRequestForm() {
   clearFieldValidation(els.tefCnpj);
   clearFieldValidation(els.tefOwnerCpf);
   clearFieldValidation(els.tefContactPhone);
+  els.tefUsesPix.checked = false;
+  els.tefAdditionalInfo.value = "";
   state.modalEditable = true;
   els.requestId.value = "";
   els.requestType.value = "programacao";
@@ -2128,6 +2150,13 @@ function openRequestModal(id, source = "active") {
   els.requestJustification.value = item.justification || "";
   els.requestLink.value = item.videoLink || item.externalLink || "";
   els.tefCnpj.value = formatCnpj(item.tefCnpj || (item.type === "tef_elgin" ? item.clientCode : ""));
+  const legacyTefClientName = item.type === "tef_elgin"
+    && item.clientName
+    && item.clientName !== item.tefCnpj
+    && item.clientName !== item.clientCode
+      ? item.clientName
+      : "";
+  els.tefClientName.value = item.tefClientName || legacyTefClientName;
   els.tefOperatingSystem.value = item.tefOperatingSystem || "";
   els.tefRam.value = item.tefRam || "";
   els.tefSystemUsed.value = item.tefSystemUsed || "";
@@ -2140,6 +2169,8 @@ function openRequestModal(id, source = "active") {
   els.tefContactPhone.value = formatPhone(item.tefContactPhone || "");
   els.tefContactEmail.value = item.tefContactEmail || "";
   els.tefAgreedValue.value = item.tefAgreedValue || "";
+  els.tefUsesPix.checked = item.tefUsesPix === true;
+  els.tefAdditionalInfo.value = item.tefAdditionalInfo || "";
 
   // Valores preenchidos por código não disparam eventos input/blur.
   // Recalcula a validade para evitar mensagens incorretas no primeiro salvamento.
@@ -2176,7 +2207,7 @@ function openRequestModal(id, source = "active") {
   els.requestModalTitle.textContent = archived ? "Solicitação arquivada" : "Detalhes da solicitação";
   els.saveRequestButton.textContent = "Salvar alterações";
   els.saveRequestButton.hidden = !editable;
-  els.copyRequestButton.hidden = !isAdmin();
+  els.copyRequestButton.hidden = !canCopyRequest(item);
   els.deleteRequestButton.hidden = !isAdmin() || archived;
   els.archiveRequestButton.hidden = !isAdmin() || (!archived && item.status !== "concluida");
   els.archiveRequestButton.textContent = archived ? "↶ Restaurar" : "▣ Arquivar";
@@ -2313,8 +2344,10 @@ function buildCancellationPayload() {
 }
 
 function buildTefPayload() {
+  const usesPix = els.tefUsesPix.checked;
   const data = {
     tefCnpj: formatCnpj(els.tefCnpj.value),
+    tefClientName: sanitizeText(els.tefClientName.value),
     tefOperatingSystem: sanitizeText(els.tefOperatingSystem.value),
     tefRam: sanitizeText(els.tefRam.value),
     tefSystemUsed: sanitizeText(els.tefSystemUsed.value),
@@ -2326,7 +2359,9 @@ function buildTefPayload() {
     tefOwnerCpf: formatCpf(els.tefOwnerCpf.value),
     tefContactPhone: formatPhone(els.tefContactPhone.value),
     tefContactEmail: sanitizeText(els.tefContactEmail.value),
-    tefAgreedValue: sanitizeText(els.tefAgreedValue.value)
+    tefAgreedValue: sanitizeText(els.tefAgreedValue.value),
+    tefUsesPix: usesPix,
+    tefAdditionalInfo: usesPix ? sanitizeText(els.tefAdditionalInfo.value) : ""
   };
 
   if (!setSpecificDocumentValidity(els.tefCnpj, "cnpj", { required: true, showMessage: true })) {
@@ -2342,23 +2377,42 @@ function buildTefPayload() {
     return { error: "Informe um telefone fixo ou celular com DDD válido." };
   }
 
-  if (Object.values(data).some((value) => !value)) {
+  const requiredValues = [
+    data.tefCnpj,
+    data.tefClientName,
+    data.tefOperatingSystem,
+    data.tefRam,
+    data.tefSystemUsed,
+    data.tefEstablishmentNumber,
+    data.tefPinpadLogicalNumber,
+    data.tefPinpadModel,
+    data.tefAcquirer,
+    data.tefOwnerName,
+    data.tefOwnerCpf,
+    data.tefContactPhone,
+    data.tefContactEmail,
+    data.tefAgreedValue
+  ];
+  if (requiredValues.some((value) => !value)) {
     return { error: "Preencha todos os campos obrigatórios da solicitação TEF Elgin." };
   }
 
-  const title = `TEF Elgin — ${data.tefCnpj}`;
+  const title = `TEF Elgin — ${data.tefClientName}`;
   const description = [
+    `CNPJ: ${data.tefCnpj}`,
     `Sistema operacional: ${data.tefOperatingSystem}`,
     `Memória RAM: ${data.tefRam}`,
     `Sistema utilizado: ${data.tefSystemUsed}`,
     `Adquirente: ${data.tefAcquirer}`,
-    `Proprietário: ${data.tefOwnerName}`
-  ].join("\n");
+    `Proprietário: ${data.tefOwnerName}`,
+    `Utiliza PIX: ${data.tefUsesPix ? "Sim" : "Não"}`,
+    data.tefUsesPix && data.tefAdditionalInfo ? `Informações adicionais do PIX: ${data.tefAdditionalInfo}` : ""
+  ].filter(Boolean).join("\n");
 
   return {
     data: {
       priority: "normal",
-      clientName: data.tefCnpj,
+      clientName: data.tefClientName,
       clientCode: data.tefCnpj,
       contactName: data.tefOwnerName,
       contactRole: "Proprietário",
@@ -2615,6 +2669,7 @@ function tefCopyText(item) {
   return `=== SOLICITAÇÃO TEF ELGIN ===
 
 GRUPO DE ATENDIMENTO: ${SQUAD_LABELS[item.squad] || "Sem grupo"}
+RAZÃO SOCIAL: ${item.tefClientName || item.clientName || ""}
 CNPJ: ${item.tefCnpj || item.clientCode || ""}
 SISTEMA OPERACIONAL: ${item.tefOperatingSystem || ""}
 MEMÓRIA RAM DA MÁQUINA: ${item.tefRam || ""}
@@ -2627,7 +2682,9 @@ NOME COMPLETO DO PROPRIETÁRIO: ${item.tefOwnerName || ""}
 CPF DO PROPRIETÁRIO: ${item.tefOwnerCpf || ""}
 FONE PARA CONTATO: ${item.tefContactPhone || ""}
 E-MAIL: ${item.tefContactEmail || ""}
-VALOR COMBINADO: ${item.tefAgreedValue || ""}`;
+VALOR COMBINADO: ${item.tefAgreedValue || ""}
+UTILIZA PIX: ${item.tefUsesPix === true ? "SIM" : "NÃO"}
+INFORMAÇÕES ADICIONAIS DO PIX: ${item.tefUsesPix === true ? item.tefAdditionalInfo || "" : "Não se aplica"}`;
 }
 
 function requestCopyText(item) {
@@ -2660,10 +2717,9 @@ async function copyText(text) {
 }
 
 function copyRequestById(id) {
-  if (!isAdmin()) return;
   const item = state.requests.find((request) => request.id === id)
     || state.archivedRequests.find((request) => request.id === id);
-  if (!item) return;
+  if (!item || !canCopyRequest(item)) return;
   copyText(requestCopyText(item));
 }
 
@@ -2938,6 +2994,11 @@ function renderArchivedRequests() {
 
 function requestDataWithoutId(item) {
   const { id, ...data } = item;
+  if (data.type === "tef_elgin") {
+    data.tefClientName = data.tefClientName || data.clientName || data.tefCnpj || data.clientCode || "Cliente não informado";
+    data.tefUsesPix = data.tefUsesPix === true;
+    data.tefAdditionalInfo = data.tefUsesPix ? String(data.tefAdditionalInfo || "").slice(0, 1000) : "";
+  }
   return data;
 }
 
@@ -3806,7 +3867,9 @@ function describeRequestChanges(existing, payload) {
     ["title", "Título"], ["clientName", "Cliente"], ["clientCode", "CNPJ"],
     ["priority", "Prioridade"], ["squad", "Grupo de atendimento"], ["status", "Status"], ["assigneeUid", "Responsável"],
     ["description", "Descrição"], ["currentBehavior", "Comportamento atual"],
-    ["expectedBehavior", "Comportamento esperado"], ["justification", "Justificativa"]
+    ["expectedBehavior", "Comportamento esperado"], ["justification", "Justificativa"],
+    ["tefClientName", "Razão Social do TEF"], ["tefUsesPix", "Uso de PIX"],
+    ["tefAdditionalInfo", "Informações adicionais do PIX"]
   ];
   fields.forEach(([key, label]) => {
     if (!(key in payload)) return;
@@ -4429,6 +4492,8 @@ function setupEvents() {
   els.requestAttachments.addEventListener("change", handleAttachmentSelection);
   els.addCancellationItem.addEventListener("click", addCancellationItem);
   els.copyRequestButton.addEventListener("click", () => copyRequestById(els.requestId.value));
+  els.tefUsesPix.addEventListener("change", updateTefPixFields);
+  els.tefAdditionalInfo.addEventListener("input", updateTefPixFields);
   els.requestDetailsTab.addEventListener("click", () => switchRequestTab("details"));
   els.requestCommentsTab.addEventListener("click", () => switchRequestTab("comments"));
   els.requestHistoryTab.addEventListener("click", () => switchRequestTab("history"));
@@ -4618,8 +4683,24 @@ function setupEvents() {
   });
 
   [els.requestDialog, els.resetDialog, els.changePasswordDialog, els.helpDialog, els.userInviteDialog, els.editUserDialog, els.userStatusDialog, els.archiveConfirmDialog, els.savedFilterDialog, els.commentTemplateDialog].forEach((dialog) => {
-    dialog.addEventListener("click", (event) => {
-      if (event.target === dialog) dialog.close();
+    let pointerStartedOnBackdrop = false;
+    let pointerStartX = 0;
+    let pointerStartY = 0;
+
+    dialog.addEventListener("pointerdown", (event) => {
+      pointerStartedOnBackdrop = event.target === dialog;
+      pointerStartX = event.clientX;
+      pointerStartY = event.clientY;
+    });
+
+    dialog.addEventListener("pointerup", (event) => {
+      const moved = Math.hypot(event.clientX - pointerStartX, event.clientY - pointerStartY);
+      if (pointerStartedOnBackdrop && event.target === dialog && moved < 8) dialog.close();
+      pointerStartedOnBackdrop = false;
+    });
+
+    dialog.addEventListener("pointercancel", () => {
+      pointerStartedOnBackdrop = false;
     });
   });
 
@@ -4784,7 +4865,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v34";
+    versionLabel.textContent = "v35";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }

@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=34.0.0">
+  <link rel="stylesheet" href="styles.css?v=35.0.0">
 </head>
 <body class="auth-pending">
   <div id="app-bootstrap" class="app-bootstrap" role="status" aria-live="polite">
@@ -674,6 +674,10 @@
               <small id="tef-cnpj-error" class="field-validation-message" hidden></small>
             </label>
             <label class="field">
+              <span>Razão Social *</span>
+              <input id="tef-client-name" type="text" maxlength="120" placeholder="Razão social ou nome fantasia" required>
+            </label>
+            <label class="field">
               <span>Sistema operacional *</span>
               <input id="tef-operating-system" type="text" maxlength="120" placeholder="Ex.: Windows 10 Pro 64 bits" required>
             </label>
@@ -739,6 +743,18 @@
               <span>Valor combinado *</span>
               <input id="tef-agreed-value" type="text" maxlength="120" placeholder="Informe o valor combinado com o cliente" required>
             </label>
+            <label class="tef-pix-choice form-span-2" for="tef-uses-pix">
+              <input id="tef-uses-pix" type="checkbox">
+              <span>
+                <strong>Vai utilizar PIX no TEF</strong>
+                <small>Marque somente quando a configuração também incluir PIX.</small>
+              </span>
+            </label>
+            <label id="tef-additional-info-field" class="field form-span-2" hidden>
+              <span>Informações adicionais do PIX</span>
+              <textarea id="tef-additional-info" rows="5" maxlength="1000" placeholder="Informe dados e orientações adicionais necessários para a configuração do PIX."></textarea>
+              <small class="field-counter"><span id="tef-additional-info-count">0</span>/1000 caracteres</small>
+            </label>
           </div>
         </section>
 
@@ -763,7 +779,7 @@
       <div id="request-audit" class="request-audit" hidden></div>
       <p id="request-error" class="form-error" hidden></p>
       <div class="modal-actions">
-        <div class="modal-actions-left admin-only">
+        <div class="modal-actions-left">
           <button id="copy-request-button" class="button button-copy" type="button" hidden>⧉ Copiar dados</button>
           <button id="archive-request-button" class="button button-secondary admin-only" type="button" hidden>▣ Arquivar</button>
           <button id="delete-request-button" class="button button-danger admin-only" type="button" hidden>Excluir</button>
@@ -1028,13 +1044,14 @@
               <article class="help-step"><span>1</span><div><strong>Confirme os dados técnicos</strong><p>Valide o sistema operacional, a memória da máquina e o sistema Soften utilizado antes de registrar a solicitação.</p></div></article>
               <article class="help-step"><span>2</span><div><strong>Solicite os dados à adquirente</strong><p>O número do estabelecimento e o número lógico do PIN Pad (SAK) normalmente são fornecidos pela adquirente.</p></div></article>
               <article class="help-step"><span>3</span><div><strong>Revise os dados do proprietário</strong><p>Confira CPF, telefone com DDD e e-mail, pois esses dados serão usados para contato durante a configuração.</p></div></article>
-              <article class="help-step"><span>4</span><div><strong>Salve e acompanhe</strong><p>Depois de salvar, a solicitação ficará disponível no Kanban e poderá ser copiada pelo administrador.</p></div></article>
+              <article class="help-step"><span>4</span><div><strong>Salve e acompanhe</strong><p>Depois de salvar, a solicitação ficará disponível no Kanban. Administradores podem copiar qualquer tipo de solicitação; solicitantes também podem copiar as Programações que conseguem visualizar.</p></div></article>
             </div>
 
             <div class="help-form-block">
               <div class="help-form-block-title"><span>✓</span><div><strong>O que informar em cada campo</strong><small>Preencha com os dados confirmados com o cliente e a adquirente.</small></div></div>
               <div class="help-field-list">
                 <div><strong>CNPJ</strong><p>Informe o CNPJ válido do estabelecimento que receberá a configuração do TEF.</p></div>
+                <div><strong>Razão Social</strong><p>Informe o nome empresarial ou nome fantasia do estabelecimento vinculado ao CNPJ.</p></div>
                 <div><strong>Sistema operacional</strong><p>Informe o sistema e, quando possível, a versão instalada. Exemplo: Windows 11 Pro 64 bits.</p></div>
                 <div><strong>Memória RAM</strong><p>Selecione uma opção acima de 4 GB. Caso a máquina tenha 4 GB ou menos, oriente o cliente antes de prosseguir.</p></div>
                 <div><strong>Sistema utilizado</strong><p>Selecione o sistema Soften no qual o TEF será configurado.</p></div>
@@ -1047,6 +1064,7 @@
                 <div><strong>Telefone para contato</strong><p>Informe telefone fixo ou celular com DDD. O campo aplica máscara e valida a quantidade de dígitos.</p></div>
                 <div><strong>E-mail</strong><p>Informe um endereço válido e revise a digitação antes de salvar.</p></div>
                 <div class="help-field-wide"><strong>Valor combinado</strong><p>Registre o valor comercial acordado para o serviço, conforme informado ao cliente.</p></div>
+                <div class="help-field-wide"><strong>Uso de PIX</strong><p>O campo inicia desmarcado. Ao marcar, o painel exibe uma área de até 1000 caracteres para registrar as informações adicionais necessárias para a configuração do PIX.</p></div>
               </div>
             </div>
 
@@ -1075,7 +1093,7 @@
                 <div><strong>Busca e filtros</strong><p>Use a busca por cliente, título ou solicitante. Também é possível filtrar por tipo, prioridade e usuário.</p></div>
                 <div><strong>Responsável</strong><p>O administrador pode atribuir a demanda para um usuário cadastrado.</p></div>
                 <div><strong>Mover no Kanban</strong><p>O administrador pode arrastar o cartão entre as colunas para atualizar o status.</p></div>
-                <div><strong>Botão Copiar dados</strong><p>Disponível para o administrador. Em Programação, copia o formulário formatado; em Cancelamento, copia a lista; em TEF Elgin, copia todos os dados da configuração.</p></div>
+                <div><strong>Botão Copiar dados</strong><p>Administradores podem copiar qualquer solicitação. Solicitantes também podem copiar os dados das Programações que possuem permissão para visualizar. Em Cancelamento e TEF Elgin, a cópia continua exclusiva do administrador.</p></div>
                 <div><strong>Comentários internos</strong><p>Na aba Comentários, registre alinhamentos. O administrador pode selecionar o técnico para gerar uma notificação interna quando faltar alguma informação.</p></div>
                 <div><strong>Bloqueio</strong><p>Use a coluna Bloqueio quando a solicitação não puder avançar por falta de dados, retorno ou validação.</p></div>
                 <div><strong>Arquivamento</strong><p>Solicitações concluídas podem ser arquivadas pelo administrador, retirando registros antigos do Kanban sem perder o histórico.</p></div>
@@ -1230,6 +1248,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=34.0.0"></script>
+  <script type="module" src="app.js?v=35.0.0"></script>
 </body>
 </html>
