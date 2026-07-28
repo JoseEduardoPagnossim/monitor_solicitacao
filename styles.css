@@ -2249,3 +2249,43 @@ body.kanban-focus-mode #bulk-actions-bar {
   border-color: #0f766e;
 }
 :root[data-theme="dark"] .tef-pix-choice small { color: #99f6e4; }
+
+
+/* =========================================================
+   Versao 36: abas fixas no dialogo e mensagens sobre modais
+   ========================================================= */
+#request-dialog .request-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 18;
+  margin: -4px -24px 20px;
+  padding: 8px 24px 10px;
+  background: var(--surface);
+  box-shadow: 0 10px 18px -18px rgba(15, 23, 42, .55);
+}
+
+.dialog-toast-container {
+  position: fixed;
+  z-index: 100000;
+  width: min(420px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.dialog-toast-container .toast {
+  width: 100%;
+  pointer-events: auto;
+}
+
+@media (max-width: 640px) {
+  #request-dialog .request-tabs {
+    margin-right: -18px;
+    margin-left: -18px;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+}
+
+:root[data-theme="dark"] #request-dialog .request-tabs {
+  background: var(--surface);
+  box-shadow: 0 10px 18px -18px rgba(0, 0, 0, .9);
+}

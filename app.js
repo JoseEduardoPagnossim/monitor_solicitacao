@@ -458,11 +458,34 @@ function canCommentOnRequest(item) {
   return Boolean(item) && (isAdmin() || requestIsParticipant(item));
 }
 
+function getToastHost() {
+  const focusedDialog = document.activeElement?.closest?.("dialog[open]");
+  const openDialogs = Array.from(document.querySelectorAll("dialog[open]"));
+  const activeDialog = focusedDialog || openDialogs.at(-1);
+
+  if (!activeDialog) return els.toastContainer;
+
+  let host = activeDialog.querySelector(":scope > .dialog-toast-container");
+  if (!host) {
+    host = document.createElement("div");
+    host.className = "toast-container dialog-toast-container";
+    host.setAttribute("aria-live", "polite");
+    activeDialog.appendChild(host);
+  }
+
+  const dialogRect = activeDialog.getBoundingClientRect();
+  host.style.top = `${Math.max(16, dialogRect.top + 16)}px`;
+  host.style.right = `${Math.max(16, window.innerWidth - dialogRect.right + 16)}px`;
+  host.style.maxWidth = `${Math.max(240, Math.min(420, dialogRect.width - 32))}px`;
+
+  return host;
+}
+
 function showToast(message, type = "success") {
   const toast = document.createElement("div");
   toast.className = `toast ${type}`;
   toast.textContent = message;
-  els.toastContainer.appendChild(toast);
+  getToastHost().appendChild(toast);
   window.setTimeout(() => toast.remove(), 4200);
 }
 
@@ -4865,7 +4888,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v35";
+    versionLabel.textContent = "v36";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }

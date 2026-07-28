@@ -9,7 +9,7 @@ O projeto é publicado no **GitHub Pages** e usa:
 - **GitHub Actions** para publicação e controle automático de build;
 - **PWA** para instalação do painel como aplicativo.
 
-> **Versão 35:** libera a cópia de Programações para solicitantes, corrige o fechamento acidental dos diálogos durante a seleção de texto e amplia o formulário TEF com Razão Social, uso de PIX e informações adicionais.
+> **Versão 36:** mantém as abas Detalhes, Comentários e Histórico visíveis durante a rolagem da solicitação e exibe mensagens de confirmação acima do diálogo ativo.
 
 
 ---
@@ -673,3 +673,14 @@ Os formulários, campos bloqueados, comentários, anexos, tabelas e a Central de
 ### Atalhos na Ajuda
 
 Abra **Ajuda > Produtividade** para consultar a lista completa de atalhos, ações em massa, pausa do tempo, alertas automáticos, filtros salvos, instalação do aplicativo e segurança da sessão.
+
+
+## 21. Ajustes da versão 36
+
+### Abas fixas na solicitação
+
+As abas **Detalhes**, **Comentários** e **Histórico** permanecem fixas no topo do diálogo enquanto o usuário rola o conteúdo. Isso permite trocar de seção sem precisar retornar ao início do formulário.
+
+### Mensagens acima dos diálogos
+
+Mensagens de sucesso, aviso e erro, como a confirmação de **Copiar dados**, agora são renderizadas dentro do diálogo ativo. Assim, elas permanecem visíveis e não ficam apagadas atrás da sobreposição do modal. Quando não existe diálogo aberto, as mensagens continuam aparecendo no canto superior direito do painel.
