@@ -9,7 +9,7 @@ O projeto é publicado no **GitHub Pages** e usa:
 - **GitHub Actions** para publicação e controle automático de build;
 - **PWA** para instalação do painel como aplicativo.
 
-> **Versão 38:** corrige o salvamento que podia permanecer carregando ao aguardar histórico ou notificações complementares. A solicitação agora é liberada assim que a gravação principal é confirmada.
+> **Versão 39:** adiciona proteção contra gravações pendentes no Firestore, nova tentativa automática, identificadores estáveis para evitar duplicidade e testes automatizados executados antes de cada publicação no GitHub Pages.
 
 
 ---
@@ -720,3 +720,53 @@ A gravação principal da solicitação foi separada das rotinas complementares 
 Essa separação evita que uma demora em histórico ou notificações mantenha a tela indefinidamente em **Salvando...**, mesmo quando os dados principais já foram gravados.
 
 A atualização não altera permissões nem a estrutura das regras do Firestore.
+
+
+## 24. Correção da versão 39
+
+### Proteção contra salvamento pendente
+
+O salvamento agora possui um controle de tempo para impedir que o botão permaneça indefinidamente em **Salvando...** quando o Firestore não devolve uma confirmação.
+
+O fluxo funciona assim:
+
+1. o painel prepara os dados e anexos;
+2. tenta gravar a solicitação no Firestore;
+3. se não houver confirmação em 20 segundos, exibe a mensagem de conexão lenta;
+4. realiza uma segunda tentativa automática usando o mesmo identificador da solicitação e dos anexos;
+5. se a segunda tentativa também não for confirmada, libera o botão, mantém o formulário aberto e apresenta uma mensagem clara para nova tentativa.
+
+O mesmo identificador é reutilizado durante as tentativas. Isso reduz o risco de solicitações ou anexos duplicados quando a primeira gravação foi recebida pelo servidor, mas a resposta demorou para chegar ao navegador.
+
+Histórico e notificações continuam complementares e não bloqueiam o salvamento principal.
+
+### Testes automatizados
+
+O projeto agora possui uma rotina sem dependências externas, executada pelo Node.js.
+
+Para testar no Windows:
+
+1. instale o Node.js 20 ou superior;
+2. extraia o pacote do painel;
+3. execute `TESTAR.bat`;
+4. confirme a mensagem **Todos os testes foram aprovados**.
+
+Também é possível executar pelo terminal:
+
+```bash
+npm test
+```
+
+Os testes verificam:
+
+- sintaxe dos arquivos JavaScript;
+- sincronização da versão entre `VERSION`, `index.html`, `version.json` e service worker;
+- existência dos arquivos obrigatórios;
+- timeout e repetição automática da gravação;
+- comportamento em erro de permissão;
+- estabilidade dos identificadores de anexos;
+- ausência do `firebase-config.js` no pacote distribuído.
+
+O workflow `.github/workflows/pages.yml` executa `npm test` automaticamente em cada envio para a branch `main`. A publicação no GitHub Pages só continua se todos os testes forem aprovados.
+
+> Os testes automatizados validam o código e o fluxo de gravação simulado. A confirmação final com o projeto Firebase real ainda deve ser feita após a publicação, criando e editando uma solicitação de teste.

@@ -21,6 +21,14 @@ jobs:
       - name: Baixar os arquivos do repositorio
         uses: actions/checkout@v6
 
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Executar testes automatizados
+        run: npm test
+
       - name: Preparar os arquivos publicados
         shell: bash
         run: |
@@ -30,6 +38,10 @@ jobs:
             --exclude='.git' \
             --exclude='.github' \
             --exclude='_site' \
+            --exclude='tests' \
+            --exclude='package.json' \
+            --exclude='TESTAR.bat' \
+            --exclude='TESTAR.sh' \
             ./ _site/
 
           RELEASE="$(tr -d '[:space:]' < VERSION)"

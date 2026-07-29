@@ -1,0 +1,13 @@
+{
+  "name": "painel-solicitacoes",
+  "private": true,
+  "version": "0.39.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:syntax": "node --check app.js && node --check save-flow.js && node --check service-worker.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -33,6 +33,7 @@ import {
   writeBatch
 } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
+import { commitWithRetry, withTimeout } from "./save-flow.js";
 
 const STATUS_LABELS = {
   nova: "Nova",
@@ -78,6 +79,7 @@ const PAUSED_STATUSES = new Set(["aguardando", "bloqueio"]);
 const SESSION_INACTIVITY_MS = 3 * 60 * 60 * 1000;
 const SESSION_WARNING_MS = 5 * 60 * 1000;
 const AUTO_PAUSE_ALERT_MS = 24 * 60 * 60 * 1000;
+const REQUEST_SAVE_TIMEOUT_MS = 20000;
 const DEFAULT_COMMENT_TEMPLATES = [
   { id: "default-video", title: "Aguardando vídeo", text: "Aguardando o envio do vídeo com o cenário completo para prosseguir com a análise." },
   { id: "default-document", title: "Documento pendente", text: "É necessário enviar o documento ou dado solicitado para que a demanda possa seguir." },
@@ -136,7 +138,8 @@ const state = {
   sessionExpiresAt: null,
   lastActivityAt: Date.now(),
   automaticAlertRunning: false,
-  requestSaveInProgress: false
+  requestSaveInProgress: false,
+  pendingCreateRequestId: ""
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -1059,7 +1062,8 @@ async function handleAttachmentSelection(event) {
 async function buildPendingAttachmentWrites(ownerUid, requestId) {
   const writes = [];
   for (const attachment of state.modalNewAttachments) {
-    const attachmentReference = doc(collection(db, "requestAttachments"));
+    if (!attachment.firestoreId) attachment.firestoreId = doc(collection(db, "requestAttachments")).id;
+    const attachmentReference = doc(db, "requestAttachments", attachment.firestoreId);
     const bytes = new Uint8Array(await attachment.blob.arrayBuffer());
     writes.push({
       reference: attachmentReference,
@@ -1150,6 +1154,10 @@ function initials(name = "") {
 }
 
 function firebaseErrorMessage(error) {
+  if (error?.code === "operation-timeout" && error?.stage === "preparação dos anexos") {
+    return "A preparação dos anexos demorou além do esperado. Remova o arquivo, selecione-o novamente e tente salvar.";
+  }
+
   const messages = {
     "auth/invalid-credential": "E-mail ou senha inválidos.",
     "auth/user-disabled": "Este usuário está desativado.",
@@ -1166,7 +1174,11 @@ function firebaseErrorMessage(error) {
     "invite-expired": "Este convite expirou. Solicite um novo link ao administrador.",
     "permission-denied": "Você não possui permissão para executar esta ação.",
     "resource-exhausted": "O limite gratuito do Firestore foi atingido. Tente novamente mais tarde.",
-    "failed-precondition": "A operação não pôde ser concluída com a configuração atual do Firestore."
+    "failed-precondition": "A operação não pôde ser concluída com a configuração atual do Firestore.",
+    "unavailable": "O Firestore está temporariamente indisponível. Verifique a conexão e tente novamente.",
+    "deadline-exceeded": "O Firestore demorou além do limite para responder. Tente novamente.",
+    "aborted": "A gravação foi interrompida pelo Firestore. Tente novamente.",
+    "operation-timeout": "O Firestore demorou além do esperado para confirmar o salvamento. Verifique sua conexão e tente novamente; o formulário foi mantido aberto."
   };
   return messages[error?.code]
     || messages[error?.message]
@@ -2099,6 +2111,7 @@ function updateRequestTypeFields() {
 
 function resetRequestForm() {
   state.requestSaveInProgress = false;
+  state.pendingCreateRequestId = "";
   setButtonLoading(els.saveRequestButton, false);
   if (state.unsubscribeComments) state.unsubscribeComments();
   if (state.unsubscribeHistory) state.unsubscribeHistory();
@@ -2517,10 +2530,14 @@ async function saveRequest(event) {
     return;
   }
 
+  const pendingCreateId = !id && !existing ? state.pendingCreateRequestId : "";
   const requestDocument = id && existing
     ? doc(db, "requests", id)
-    : doc(collection(db, "requests"));
+    : pendingCreateId
+      ? doc(db, "requests", pendingCreateId)
+      : doc(collection(db, "requests"));
   const requestId = requestDocument.id;
+  if (!id && !existing) state.pendingCreateRequestId = requestId;
   const ownerUid = existing?.requesterUid || state.user.uid;
   const retainedAttachments = type === "programacao" ? retainedModalAttachments() : [];
   const attachmentsToRemove = type === "programacao"
@@ -2558,49 +2575,73 @@ async function saveRequest(event) {
     }
 
     const pendingAttachmentWrites = type === "programacao"
-      ? await buildPendingAttachmentWrites(ownerUid, requestId)
+      ? await withTimeout(
+        () => buildPendingAttachmentWrites(ownerUid, requestId),
+        15000,
+        "preparação dos anexos"
+      )
       : [];
     payload.attachments = [
       ...retainedAttachments,
       ...pendingAttachmentWrites.map((write) => write.metadata)
     ];
 
-    const batch = writeBatch(db);
-    pendingAttachmentWrites.forEach((write) => batch.set(write.reference, write.data));
-    attachmentsToRemove.forEach((attachment) => {
-      const reference = firestoreAttachmentReference(attachment);
-      if (reference) batch.delete(reference);
-    });
-
-    if (id && existing) {
-      if (isAdmin()) {
-        payload.status = VALID_STATUSES.includes(els.requestStatus.value) ? els.requestStatus.value : existing.status;
-        Object.assign(payload, statusTransitionUpdate(existing, payload.status));
-        const assignee = state.users.find((user) => user.uid === els.requestAssignee.value);
-        payload.assigneeUid = assignee?.uid || "";
-        payload.assigneeName = assignee?.name || assignee?.email || "";
-
-      }
-
-      batch.update(requestDocument, payload);
-    } else {
-      batch.set(requestDocument, {
-        ...payload,
-        status: "nova",
-        requesterUid: state.user.uid,
-        requesterName: state.profile.name || state.user.email,
-        requesterEmail: state.user.email,
-        assigneeUid: "",
-        assigneeName: "",
-        createdAt: serverTimestamp(),
-        completedAt: null,
-        pausedDurationMs: 0,
-        pauseStartedAt: null,
-        lastStatusChangedAt: serverTimestamp()
-      });
+    if (id && existing && isAdmin()) {
+      payload.status = VALID_STATUSES.includes(els.requestStatus.value) ? els.requestStatus.value : existing.status;
+      Object.assign(payload, statusTransitionUpdate(existing, payload.status));
+      const assignee = state.users.find((user) => user.uid === els.requestAssignee.value);
+      payload.assigneeUid = assignee?.uid || "";
+      payload.assigneeName = assignee?.name || assignee?.email || "";
     }
 
-    await batch.commit();
+    const commitRequestChanges = async () => {
+      const batch = writeBatch(db);
+      pendingAttachmentWrites.forEach((write) => batch.set(write.reference, write.data));
+      attachmentsToRemove.forEach((attachment) => {
+        const reference = firestoreAttachmentReference(attachment);
+        if (reference) batch.delete(reference);
+      });
+
+      if (id && existing) {
+        batch.update(requestDocument, payload);
+      } else {
+        batch.set(requestDocument, {
+          ...payload,
+          status: "nova",
+          requesterUid: state.user.uid,
+          requesterName: state.profile.name || state.user.email,
+          requesterEmail: state.user.email,
+          assigneeUid: "",
+          assigneeName: "",
+          createdAt: serverTimestamp(),
+          completedAt: null,
+          pausedDurationMs: 0,
+          pauseStartedAt: null,
+          lastStatusChangedAt: serverTimestamp()
+        });
+      }
+
+      return batch.commit();
+    };
+
+    await commitWithRetry(commitRequestChanges, {
+      timeoutMs: REQUEST_SAVE_TIMEOUT_MS,
+      retries: 1,
+      onAttempt: (attempt) => {
+        setButtonLoading(
+          els.saveRequestButton,
+          true,
+          attempt === 1 ? "Salvando..." : "Tentando novamente..."
+        );
+      },
+      onRetry: () => {
+        showFormError(
+          els.requestError,
+          "A confirmação do Firestore está demorando. O painel fará uma nova tentativa automática."
+        );
+      }
+    });
+    showFormError(els.requestError);
 
     const savedItem = {
       ...(existing || {}),
@@ -2627,6 +2668,7 @@ async function saveRequest(event) {
     // Histórico e notificações são complementares. Eles não devem manter o
     // botão preso em “Salvando...” depois que a solicitação já foi gravada.
     runPostSaveTasks(postSaveTasks);
+    state.pendingCreateRequestId = "";
 
     showToast(id && existing
       ? "Solicitação atualizada com sucesso."
@@ -4936,7 +4978,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v38";
+    versionLabel.textContent = "v39";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }
