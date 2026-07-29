@@ -9,7 +9,7 @@ O projeto é publicado no **GitHub Pages** e usa:
 - **GitHub Actions** para publicação e controle automático de build;
 - **PWA** para instalação do painel como aplicativo.
 
-> **Versão 37:** mantém as abas da solicitação fixas e posiciona mensagens de sucesso, aviso e erro no canto superior direito da tela, acima dos diálogos.
+> **Versão 38:** corrige o salvamento que podia permanecer carregando ao aguardar histórico ou notificações complementares. A solicitação agora é liberada assim que a gravação principal é confirmada.
 
 
 ---
@@ -703,3 +703,20 @@ As mensagens:
 
 As abas **Detalhes**, **Comentários** e **Histórico** continuam fixas no topo durante a rolagem da solicitação.
 
+
+
+## 23. Correção da versão 38
+
+### Salvamento sem carregamento infinito
+
+A gravação principal da solicitação foi separada das rotinas complementares de histórico e notificações. Depois que o Firestore confirma a criação ou alteração da solicitação, o painel:
+
+- libera imediatamente o botão **Salvar**;
+- fecha o diálogo e exibe a confirmação de sucesso;
+- registra histórico e envia notificações em segundo plano;
+- impede cliques duplicados enquanto a gravação principal está em andamento;
+- restaura corretamente o botão caso a gravação principal apresente erro.
+
+Essa separação evita que uma demora em histórico ou notificações mantenha a tela indefinidamente em **Salvando...**, mesmo quando os dados principais já foram gravados.
+
+A atualização não altera permissões nem a estrutura das regras do Firestore.

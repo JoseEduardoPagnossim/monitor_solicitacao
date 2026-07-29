@@ -135,7 +135,8 @@ const state = {
   sessionCountdownTimer: null,
   sessionExpiresAt: null,
   lastActivityAt: Date.now(),
-  automaticAlertRunning: false
+  automaticAlertRunning: false,
+  requestSaveInProgress: false
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -504,14 +505,29 @@ function showFormError(element, message = "") {
 }
 
 function setButtonLoading(button, loading, loadingText = "Salvando...") {
+  if (!button) return;
   if (loading) {
-    button.dataset.originalText = button.innerHTML;
+    if (!button.dataset.originalText) button.dataset.originalText = button.innerHTML;
     button.disabled = true;
     button.innerHTML = loadingText;
     return;
   }
   button.disabled = false;
   button.innerHTML = button.dataset.originalText || button.innerHTML;
+  delete button.dataset.originalText;
+}
+
+function runPostSaveTasks(tasks = []) {
+  const validTasks = tasks.filter(Boolean);
+  if (!validTasks.length) return;
+
+  Promise.allSettled(validTasks).then((results) => {
+    results.forEach((result) => {
+      if (result.status === "rejected") {
+        console.warn("Uma rotina complementar do salvamento não foi concluída.", result.reason);
+      }
+    });
+  });
 }
 
 function sanitizeText(value = "") {
@@ -2082,6 +2098,8 @@ function updateRequestTypeFields() {
 }
 
 function resetRequestForm() {
+  state.requestSaveInProgress = false;
+  setButtonLoading(els.saveRequestButton, false);
   if (state.unsubscribeComments) state.unsubscribeComments();
   if (state.unsubscribeHistory) state.unsubscribeHistory();
   state.unsubscribeComments = null;
@@ -2465,6 +2483,7 @@ function buildTefPayload() {
 
 async function saveRequest(event) {
   event.preventDefault();
+  if (state.requestSaveInProgress) return;
   showFormError(els.requestError);
 
   const id = els.requestId.value;
@@ -2530,6 +2549,7 @@ async function saveRequest(event) {
     );
   }
 
+  state.requestSaveInProgress = true;
   setButtonLoading(els.saveRequestButton, true, "Salvando...");
 
   try {
@@ -2581,15 +2601,33 @@ async function saveRequest(event) {
     }
 
     await batch.commit();
-    const savedItem = { ...(existing || {}), id: requestId, ...payload, requesterUid: existing?.requesterUid || state.user.uid, requesterName: existing?.requesterName || state.profile.name || state.user.email };
+
+    const savedItem = {
+      ...(existing || {}),
+      id: requestId,
+      ...payload,
+      requesterUid: existing?.requesterUid || state.user.uid,
+      requesterName: existing?.requesterName || state.profile.name || state.user.email
+    };
+    const postSaveTasks = [];
+
     if (existing) {
       const changes = describeRequestChanges(existing, payload);
-      await recordHistory(savedItem, "update", changes.summary, changes.details);
-      if (isAdmin() && payload.assigneeUid && payload.assigneeUid !== existing.assigneeUid) await notifyAssignment(savedItem, payload.assigneeUid);
-      if (isAdmin() && payload.status && payload.status !== existing.status) await notifyStatusChange(savedItem, payload.status);
+      postSaveTasks.push(recordHistory(savedItem, "update", changes.summary, changes.details));
+      if (isAdmin() && payload.assigneeUid && payload.assigneeUid !== existing.assigneeUid) {
+        postSaveTasks.push(notifyAssignment(savedItem, payload.assigneeUid));
+      }
+      if (isAdmin() && payload.status && payload.status !== existing.status) {
+        postSaveTasks.push(notifyStatusChange(savedItem, payload.status));
+      }
     } else {
-      await recordHistory(savedItem, "create", "Solicitação criada.", { type });
+      postSaveTasks.push(recordHistory(savedItem, "create", "Solicitação criada.", { type }));
     }
+
+    // Histórico e notificações são complementares. Eles não devem manter o
+    // botão preso em “Salvando...” depois que a solicitação já foi gravada.
+    runPostSaveTasks(postSaveTasks);
+
     showToast(id && existing
       ? "Solicitação atualizada com sucesso."
       : type === "cancelamento"
@@ -2602,6 +2640,7 @@ async function saveRequest(event) {
     console.error(error);
     showFormError(els.requestError, firebaseErrorMessage(error));
   } finally {
+    state.requestSaveInProgress = false;
     setButtonLoading(els.saveRequestButton, false);
   }
 }
@@ -4897,7 +4936,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v37";
+    versionLabel.textContent = "v38";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }
