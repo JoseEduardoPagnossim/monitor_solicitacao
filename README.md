@@ -770,3 +770,21 @@ Os testes verificam:
 O workflow `.github/workflows/pages.yml` executa `npm test` automaticamente em cada envio para a branch `main`. A publicação no GitHub Pages só continua se todos os testes forem aprovados.
 
 > Os testes automatizados validam o código e o fluxo de gravação simulado. A confirmação final com o projeto Firebase real ainda deve ser feita após a publicação, criando e editando uma solicitação de teste.
+
+## 25. Correção da versão 40
+
+### Publicação no GitHub Pages
+
+A versão 39 referenciava `actions/checkout@v6` no workflow. Essa referência impedia o início do job de build no GitHub Actions.
+
+A versão 40 corrige o workflow para:
+
+- utilizar `actions/checkout@v5`;
+- utilizar `actions/setup-node@v6` com cache automático desativado;
+- executar `npm test` antes de preparar os arquivos do site;
+- impedir o deploy quando os testes falharem;
+- manter a publicação pelo GitHub Pages somente após o build aprovado.
+
+Também foi adicionado um teste de regressão que verifica as versões utilizadas pelas ações principais do workflow. Isso reduz o risco de uma referência inexistente interromper futuras publicações.
+
+Nenhuma regra ou estrutura do Firestore foi alterada nesta versão.

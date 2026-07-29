@@ -29,7 +29,7 @@ test("versão está sincronizada nos arquivos principais", async () => {
     read("VERSION"), read("index.html"), read("service-worker.js"), read("version.json")
   ]);
   const release = version.trim();
-  assert.equal(release, "39");
+  assert.equal(release, "40");
   assert.match(html, new RegExp(`app\\.js\\?v=${release}\\.0\\.0`));
   assert.match(html, new RegExp(`styles\\.css\\?v=${release}\\.0\\.0`));
   assert.match(serviceWorker, new RegExp(`painel-solicitacoes-v${release}`));
@@ -58,4 +58,13 @@ test("service worker publica o módulo de salvamento", async () => {
 
 test("configuração particular do Firebase não é incluída no pacote versionado", async () => {
   await assert.rejects(access(path.join(root, "firebase-config.js"), fsConstants.F_OK));
+});
+
+test("workflow do GitHub Pages usa ações válidas e testa antes do deploy", async () => {
+  const workflow = await read(".github/workflows/pages.yml");
+  assert.match(workflow, /actions\/checkout@v5/);
+  assert.doesNotMatch(workflow, /actions\/checkout@v6/);
+  assert.match(workflow, /actions\/setup-node@v6/);
+  assert.match(workflow, /run: npm test/);
+  assert.match(workflow, /needs: build/);
 });
