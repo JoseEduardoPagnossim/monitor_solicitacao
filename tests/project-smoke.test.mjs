@@ -13,7 +13,7 @@ test("arquivos obrigatórios da publicação existem", async () => {
   const files = [
     "index.html", "styles.css", "app.js", "save-flow.js", "firestore.rules",
     "service-worker.js", "manifest.webmanifest", "VERSION", "version.json",
-    "README.md", "ATUALIZAR.txt"
+    "README.md"
   ];
   await Promise.all(files.map((file) => access(path.join(root, file), fsConstants.R_OK)));
 });
@@ -29,7 +29,7 @@ test("versão está sincronizada nos arquivos principais", async () => {
     read("VERSION"), read("index.html"), read("service-worker.js"), read("version.json")
   ]);
   const release = version.trim();
-  assert.equal(release, "40");
+  assert.equal(release, "41");
   assert.match(html, new RegExp(`app\\.js\\?v=${release}\\.0\\.0`));
   assert.match(html, new RegExp(`styles\\.css\\?v=${release}\\.0\\.0`));
   assert.match(serviceWorker, new RegExp(`painel-solicitacoes-v${release}`));
@@ -56,8 +56,14 @@ test("service worker publica o módulo de salvamento", async () => {
   assert.match(serviceWorker, /\.\/save-flow\.js/);
 });
 
-test("configuração particular do Firebase não é incluída no pacote versionado", async () => {
-  await assert.rejects(access(path.join(root, "firebase-config.js"), fsConstants.F_OK));
+test("configuração Firebase do repositório é preservada na publicação", async () => {
+  const [app, serviceWorker, workflow] = await Promise.all([
+    read("app.js"), read("service-worker.js"), read(".github/workflows/pages.yml")
+  ]);
+
+  assert.match(app, /from "\.\/firebase-config\.js"/);
+  assert.match(serviceWorker, /\.\/firebase-config\.js/);
+  assert.doesNotMatch(workflow, /--exclude=['"]firebase-config\.js['"]/);
 });
 
 test("workflow do GitHub Pages usa ações válidas e testa antes do deploy", async () => {

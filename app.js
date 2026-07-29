@@ -4978,7 +4978,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v40";
+    versionLabel.textContent = "v41";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }

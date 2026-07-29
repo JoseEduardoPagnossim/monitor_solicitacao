@@ -765,7 +765,7 @@ Os testes verificam:
 - timeout e repetição automática da gravação;
 - comportamento em erro de permissão;
 - estabilidade dos identificadores de anexos;
-- ausência do `firebase-config.js` no pacote distribuído.
+- integração do `firebase-config.js` com o painel e preservação desse arquivo durante a publicação.
 
 O workflow `.github/workflows/pages.yml` executa `npm test` automaticamente em cada envio para a branch `main`. A publicação no GitHub Pages só continua se todos os testes forem aprovados.
 
@@ -786,5 +786,26 @@ A versão 40 corrige o workflow para:
 - manter a publicação pelo GitHub Pages somente após o build aprovado.
 
 Também foi adicionado um teste de regressão que verifica as versões utilizadas pelas ações principais do workflow. Isso reduz o risco de uma referência inexistente interromper futuras publicações.
+
+Nenhuma regra ou estrutura do Firestore foi alterada nesta versão.
+
+
+## 26. Correção da versão 41
+
+### Ajuste dos testes no GitHub Actions
+
+A versão anterior possuía duas verificações incompatíveis com o funcionamento real do repositório:
+
+- tratava `ATUALIZAR.txt` como arquivo obrigatório para a publicação, embora ele seja apenas um documento de orientação;
+- esperava que `firebase-config.js` não existisse no repositório, mesmo sendo necessário para conectar o painel publicado ao Firebase.
+
+A versão 41 corrige essas verificações:
+
+- `ATUALIZAR.txt` permanece no pacote, mas sua ausência no repositório não interrompe o build;
+- o teste não exige mais a ausência de `firebase-config.js`;
+- passa a confirmar que `app.js` e o service worker referenciam a configuração do Firebase;
+- confirma que o workflow não exclui `firebase-config.js` da pasta publicada.
+
+O pacote de atualização continua sem fornecer ou sobrescrever a configuração particular do ambiente. Ao atualizar o repositório, mantenha o `firebase-config.js` já configurado.
 
 Nenhuma regra ou estrutura do Firestore foi alterada nesta versão.
