@@ -226,22 +226,23 @@ export function onAuthStateChanged(auth, callback) {
   let active = true;
   let lastSignature = Symbol("initial");
 
-  const deliver = (user) => {
+  const deliver = (user, event = "UNKNOWN") => {
     if (!active) return;
     const signature = user?.uid || "signed-out";
-    if (signature === lastSignature) return;
+    const isPasswordRecovery = event === "PASSWORD_RECOVERY";
+    if (signature === lastSignature && !isPasswordRecovery) return;
     lastSignature = signature;
     auth.currentUser = user;
-    callback(user);
+    callback(user, event);
   };
 
   auth.client.auth.getSession().then(({ data, error }) => {
     if (error) console.error(error);
-    deliver(mapUser(data?.session?.user || null));
+    deliver(mapUser(data?.session?.user || null), "INITIAL_SESSION");
   });
 
-  const { data: listener } = auth.client.auth.onAuthStateChange((_event, session) => {
-    deliver(mapUser(session?.user || null));
+  const { data: listener } = auth.client.auth.onAuthStateChange((event, session) => {
+    deliver(mapUser(session?.user || null), event);
   });
 
   return () => {

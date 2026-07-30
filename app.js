@@ -110,6 +110,7 @@ const state = {
   inviteData: null,
   inviteRegistrationInProgress: false,
   forcedLogoutMessage: "",
+  passwordRecoveryMode: false,
   filters: { search: "", type: "all", priority: "all", squad: "all", requester: "all" },
   draggedId: null,
   modalEditable: true,
@@ -172,6 +173,12 @@ const els = {
   changePasswordButton: $("#change-password-button"),
   changePasswordDialog: $("#change-password-dialog"),
   changePasswordForm: $("#change-password-form"),
+  changePasswordEyebrow: $("#change-password-eyebrow"),
+  changePasswordTitle: $("#change-password-title"),
+  changePasswordHelp: $("#change-password-help"),
+  currentPasswordField: $("#current-password-field"),
+  changePasswordClose: $("#change-password-close"),
+  changePasswordCancel: $("#change-password-cancel"),
   currentPassword: $("#current-password"),
   newPassword: $("#new-password"),
   confirmNewPassword: $("#confirm-new-password"),
@@ -3284,15 +3291,40 @@ function renderIndicators() {
     : `<tr><td colspan="6" class="report-empty-row">Nenhuma solicitação no período selecionado.</td></tr>`;
   renderExpandedIndicators(items, completed);
 }
+function configurePasswordDialog(recoveryMode = false) {
+  state.passwordRecoveryMode = Boolean(recoveryMode);
+  els.changePasswordDialog.dataset.recoveryMode = state.passwordRecoveryMode ? "true" : "false";
+  els.changePasswordEyebrow.textContent = state.passwordRecoveryMode ? "RECUPERAÇÃO" : "MINHA CONTA";
+  els.changePasswordTitle.textContent = state.passwordRecoveryMode ? "Criar nova senha" : "Alterar senha";
+  els.changePasswordHelp.textContent = state.passwordRecoveryMode
+    ? "Defina uma nova senha para concluir a recuperação da sua conta. Não é necessário informar a senha anterior."
+    : "Confirme sua senha atual e defina uma nova senha. A alteração é feita imediatamente, sem envio de e-mail.";
+  els.currentPasswordField.hidden = state.passwordRecoveryMode;
+  els.currentPassword.required = !state.passwordRecoveryMode;
+  els.changePasswordClose.hidden = state.passwordRecoveryMode;
+  els.changePasswordCancel.hidden = state.passwordRecoveryMode;
+  els.saveNewPasswordButton.textContent = state.passwordRecoveryMode ? "Salvar nova senha" : "Alterar senha";
+}
+
+function openPasswordDialog(recoveryMode = false) {
+  els.changePasswordForm.reset();
+  showFormError(els.changePasswordError);
+  [els.currentPassword, els.newPassword, els.confirmNewPassword].forEach((input) => { input.type = "password"; });
+  configurePasswordDialog(recoveryMode);
+  if (!els.changePasswordDialog.open) els.changePasswordDialog.showModal();
+  window.setTimeout(() => (recoveryMode ? els.newPassword : els.currentPassword).focus(), 50);
+}
+
 async function changeCurrentUserPassword(event) {
   event.preventDefault();
   showFormError(els.changePasswordError);
 
+  const recoveryMode = state.passwordRecoveryMode;
   const currentPassword = els.currentPassword.value;
   const newPassword = els.newPassword.value;
   const confirmation = els.confirmNewPassword.value;
 
-  if (!currentPassword || !newPassword || !confirmation) {
+  if ((!recoveryMode && !currentPassword) || !newPassword || !confirmation) {
     showFormError(els.changePasswordError, "Preencha todos os campos.");
     return;
   }
@@ -3304,7 +3336,7 @@ async function changeCurrentUserPassword(event) {
     showFormError(els.changePasswordError, "A confirmação da nova senha não confere.");
     return;
   }
-  if (currentPassword === newPassword) {
+  if (!recoveryMode && currentPassword === newPassword) {
     showFormError(els.changePasswordError, "A nova senha precisa ser diferente da senha atual.");
     return;
   }
@@ -3313,26 +3345,47 @@ async function changeCurrentUserPassword(event) {
     return;
   }
 
-  setButtonLoading(els.saveNewPasswordButton, true, "Alterando...");
+  setButtonLoading(els.saveNewPasswordButton, true, recoveryMode ? "Salvando..." : "Alterando...");
   try {
-    const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
-    await reauthenticateWithCredential(auth.currentUser, credential);
+    if (!recoveryMode) {
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+    }
+    const recoveredEmail = auth.currentUser.email;
     await updatePassword(auth.currentUser, newPassword);
+    try {
+      await logAccessEvent(
+        recoveryMode ? "password_recovered" : "password_changed",
+        recoveryMode ? "Senha redefinida pelo link de recuperação." : "Senha alterada pelo próprio usuário."
+      );
+    } catch (logError) {
+      console.warn("Não foi possível registrar a alteração de senha.", logError);
+    }
     els.changePasswordForm.reset();
-    [els.currentPassword, els.newPassword, els.confirmNewPassword].forEach((input) => { input.type = "password"; });
+    configurePasswordDialog(false);
     closeModal(els.changePasswordDialog);
-    await logAccessEvent("password_changed", "Senha alterada pelo próprio usuário.");
-    showToast("Senha alterada com sucesso.");
+
+    if (recoveryMode) {
+      els.loginEmail.value = recoveredEmail;
+      localStorage.setItem("painel-email", recoveredEmail);
+      els.rememberEmail.checked = true;
+      await signOut(auth);
+      showToast("Senha redefinida com sucesso. Entre novamente usando a nova senha.");
+    } else {
+      showToast("Senha alterada com sucesso.");
+    }
   } catch (error) {
     console.error(error);
-    const message = ["auth/invalid-credential", "auth/wrong-password"].includes(error?.code)
+    const message = !recoveryMode && ["auth/invalid-credential", "auth/wrong-password"].includes(error?.code)
       ? "A senha atual está incorreta."
       : firebaseErrorMessage(error);
     showFormError(els.changePasswordError, message);
   } finally {
     setButtonLoading(els.saveNewPasswordButton, false);
+    els.saveNewPasswordButton.textContent = state.passwordRecoveryMode ? "Salvar nova senha" : "Alterar senha";
   }
 }
+
 
 function applyFilters() {
   state.filters.search = els.searchInput.value.trim();
@@ -4360,7 +4413,7 @@ async function downloadBackup() {
         throw wrappedError;
       }
     }
-    const backup = { generatedAt: new Date().toISOString(), version: "42", backend: "supabase", projectUrl: supabaseConfig.url, data };
+    const backup = { generatedAt: new Date().toISOString(), version: "43", backend: "supabase", projectUrl: supabaseConfig.url, data };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a"); link.href = url; link.download = `painel-solicitacoes-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(url);
@@ -4555,19 +4608,19 @@ function setupEvents() {
   });
 
   els.logoutButton.addEventListener("click", async () => { await logAccessEvent("logout", "Saída manual do painel."); await signOut(auth); });
-  els.changePasswordButton.addEventListener("click", () => {
-    els.changePasswordForm.reset();
-    showFormError(els.changePasswordError);
-    [els.currentPassword, els.newPassword, els.confirmNewPassword].forEach((input) => { input.type = "password"; });
-    els.changePasswordDialog.showModal();
-    window.setTimeout(() => els.currentPassword.focus(), 50);
-  });
+  els.changePasswordButton.addEventListener("click", () => openPasswordDialog(false));
   els.changePasswordForm.addEventListener("submit", changeCurrentUserPassword);
   els.showChangePasswords.addEventListener("change", () => {
     const type = els.showChangePasswords.checked ? "text" : "password";
     [els.currentPassword, els.newPassword, els.confirmNewPassword].forEach((input) => { input.type = type; });
   });
-  $$(".close-change-password-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.changePasswordDialog)));
+  $$(".close-change-password-modal").forEach((button) => button.addEventListener("click", () => {
+    if (state.passwordRecoveryMode) return;
+    closeModal(els.changePasswordDialog);
+  }));
+  els.changePasswordDialog.addEventListener("cancel", (event) => {
+    if (state.passwordRecoveryMode) event.preventDefault();
+  });
   els.newRequestButton.addEventListener("click", () => openNewRequestModal());
   els.helpButton.addEventListener("click", () => openHelpDialog());
   els.topHelpButton.addEventListener("click", () => openHelpDialog());
@@ -4808,7 +4861,7 @@ function setupEvents() {
 
     dialog.addEventListener("pointerup", (event) => {
       const moved = Math.hypot(event.clientX - pointerStartX, event.clientY - pointerStartY);
-      if (pointerStartedOnBackdrop && event.target === dialog && moved < 8) dialog.close();
+      if (dialog.dataset.recoveryMode !== "true" && pointerStartedOnBackdrop && event.target === dialog && moved < 8) dialog.close();
       pointerStartedOnBackdrop = false;
     });
 
@@ -4909,6 +4962,8 @@ function handleSignedOut() {
   state.currentHistory = [];
   state.bulkMode = false;
   state.bulkSelected.clear();
+  state.passwordRecoveryMode = false;
+  configurePasswordDialog(false);
   updateBulkBar();
   clearSessionTimers();
   toggleNotifications(false);
@@ -4943,7 +4998,7 @@ async function loadAppVersion() {
     if (!response.ok) throw new Error("version-file-unavailable");
 
     const info = await response.json();
-    const release = String(info.release || "42").replace(/^v/i, "");
+    const release = String(info.release || "43").replace(/^v/i, "");
     const isLocal = !info.build || String(info.build).toLowerCase() === "local";
     const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
 
@@ -4978,7 +5033,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v42";
+    versionLabel.textContent = "v43";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }
@@ -4997,7 +5052,17 @@ if (!isConfigReady()) {
   showFormError(els.loginError, "Configure o arquivo supabase-config.js para conectar o painel ao Supabase.");
 }
 if (state.inviteToken) showInviteCard();
-onAuthStateChanged(auth, async (user) => {
+onAuthStateChanged(auth, async (user, authEvent) => {
+  if (authEvent === "PASSWORD_RECOVERY" && user) {
+    state.user = user;
+    state.profile = null;
+    els.appView.hidden = true;
+    els.loginView.hidden = false;
+    finishAuthBootstrap();
+    showLoginCard();
+    openPasswordDialog(true);
+    return;
+  }
   if (state.inviteToken && user && !state.inviteRegistrationInProgress) {
     await signOut(auth);
     return;

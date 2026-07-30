@@ -1,181 +1,212 @@
-# Painel de Solicitações — versão 42
+# Painel de Solicitações — versão 43
 
-Painel interno da Soften Sistemas publicado no GitHub Pages e conectado ao Supabase.
+Aplicação web interna para centralizar solicitações de **Programação**, **Cancelamento** e **TEF Elgin** em um Kanban com autenticação, permissões por Squad, comentários, histórico, notificações, indicadores, arquivamento, backup e recursos administrativos.
 
-## Backend atual
+## Arquitetura atual
 
-- Supabase Auth para login e senha;
-- PostgreSQL para dados do painel;
-- Supabase Storage para anexos;
-- Realtime para atualizações das telas abertas;
-- RLS para segurança por usuário, perfil e Squad.
+- **GitHub Pages**: publicação do painel estático.
+- **Supabase Auth**: login, sessão e recuperação de senha.
+- **Supabase PostgreSQL**: solicitações, usuários, comentários, histórico e configurações.
+- **Supabase Storage**: anexos das solicitações.
+- **Row Level Security — RLS**: controle de acesso no banco.
+- **GitHub Actions**: testes e publicação automática.
+- **PWA**: instalação do painel como aplicativo.
 
-O frontend não utiliza mais Firebase. O Firebase é necessário apenas temporariamente para importar os dados antigos.
+A migração do Firebase para o Supabase está documentada em `MIGRACAO_SUPABASE.md`.
 
-## Principais recursos
+## Perfis e grupos
 
-- Kanban: Nova, Em análise, Aguardando, Bloqueio e Concluída;
-- Programação, Cancelamento e TEF Elgin;
-- Squads A, B, D e E;
-- histórico de alterações;
-- comentários, menções e notificações;
-- anexos privados;
-- ações em massa;
-- filtros salvos;
-- indicadores e comparação de períodos;
-- arquivamento;
-- backup JSON;
-- log de acesso;
-- sessão de 3 horas por inatividade;
-- tema claro e escuro;
-- PWA instalável;
-- atalhos de teclado.
+### Administrador
 
-## Regras de visualização
+- Visualiza solicitações de todos os Squads.
+- Gerencia usuários, grupos, bloqueios e convites.
+- Move, edita, conclui, arquiva e exclui solicitações.
+- Acessa Indicadores, Arquivados, Segurança e Backup.
+- Pode salvar uma preferência de filtro por Squad.
 
-Administradores visualizam todos os grupos.
+### Solicitante
 
-Solicitantes:
+O perfil deve possuir um grupo obrigatório:
 
-- Squad A ou B: Programações dos Squads A e B;
-- Squad D ou E: Programações dos Squads D e E;
-- Cancelamento e TEF Elgin: somente quando criou a solicitação ou foi atribuído como responsável.
+- Squad A;
+- Squad B;
+- Squad D;
+- Squad E.
 
-O Squad é obrigatório para solicitantes e para todas as solicitações.
+Visibilidade das Programações:
 
-## Estrutura do projeto
+- Squads A e B visualizam Programações de A e B.
+- Squads D e E visualizam Programações de D e E.
 
-```text
-.github/workflows/pages.yml
-app.js
-supabase-compat.js
-supabase-config.js
-save-flow.js
-styles.css
-index.html
-service-worker.js
-manifest.webmanifest
-VERSION
-version.json
-supabase/schema.sql
-supabase/bootstrap-admin.sql
-scripts/migrate-firestore-to-supabase.mjs
-scripts/import-backup-to-supabase.mjs
-scripts/migration-common.mjs
-tests/
-MIGRACAO_SUPABASE.md
-```
+Cancelamentos e TEF Elgin permanecem limitados ao criador, responsável ou administrador, conforme as políticas RLS.
 
-## Configuração rápida
+## Funcionalidades principais
 
-1. Crie o projeto Supabase.
-2. Execute `supabase/schema.sql` no SQL Editor.
-3. Configure a URL do GitHub Pages em Authentication.
-4. Desative a confirmação de e-mail para os convites internos.
-5. Crie o primeiro usuário em Authentication.
-6. Execute `supabase/bootstrap-admin.sql`.
-7. Preencha `supabase-config.js` com Project URL e chave anon/publishable.
-8. Execute o teste e a migração dos dados.
-9. Publique no GitHub somente após conferir o relatório.
+- Kanban com etapas Nova, Em análise, Aguardando, Bloqueio e Concluída.
+- Filtros por texto, tipo, prioridade, Squad e solicitante.
+- Filtros salvos por usuário.
+- Modo ampliado do Kanban.
+- Ações em massa e seleção por coluna para administradores.
+- Histórico automático das alterações.
+- Comentários internos, menções e modelos de comentários.
+- Notificações internas.
+- Pausa automática do tempo em Aguardando e Bloqueio.
+- Indicadores e comparação por período.
+- Arquivamento e restauração.
+- Backup JSON administrativo.
+- Log de acesso.
+- Tema claro e escuro.
+- Atalhos de teclado.
+- Instalação como PWA.
 
-O procedimento completo está em [MIGRACAO_SUPABASE.md](MIGRACAO_SUPABASE.md).
+## Tipos de solicitação
 
-## Configuração pública
+### Programação
 
-```js
+Inclui cliente, CNPJ, solicitante, contato, título, descrição, comportamento atual, comportamento esperado, justificativa, vídeo e anexos.
+
+O botão **Copiar dados** pode ser utilizado por administradores e solicitantes que possuam acesso à Programação.
+
+### Cancelamento
+
+Permite montar uma lista de clientes e acompanhar a marcação individual de cancelamento no CRM.
+
+### TEF Elgin
+
+Inclui CNPJ, Razão Social, sistema operacional, memória, sistema utilizado, estabelecimento, SAK, PIN Pad, adquirente, responsável, CPF, contato, valor combinado e informações de PIX.
+
+A opção **Vai utilizar PIX** inicia desmarcada. Quando marcada, libera um campo adicional de até 1.000 caracteres.
+
+## Recuperação e alteração de senha
+
+### Esqueci minha senha
+
+O Supabase envia um link de recuperação por e-mail. Quando o usuário abre o link, o painel identifica o evento `PASSWORD_RECOVERY` e mostra a tela obrigatória **Criar nova senha**.
+
+Nesse fluxo:
+
+- não é solicitada a senha anterior;
+- o usuário informa a nova senha e a confirmação;
+- a janela não fecha pelo fundo, pelo botão cancelar ou pela tecla `Esc`;
+- a senha é atualizada com `updateUser` na sessão temporária de recuperação;
+- a sessão temporária é encerrada;
+- o usuário retorna ao login para entrar com a nova senha.
+
+### Alterar senha dentro do painel
+
+O botão de chave continua utilizando o fluxo normal e exige:
+
+- senha atual;
+- nova senha;
+- confirmação da nova senha.
+
+## SMTP para recuperação de senha
+
+O envio de e-mails deve ser configurado no Supabase em **Authentication → SMTP Settings**.
+
+Exemplo com Brevo:
+
+- Host: `smtp-relay.brevo.com`;
+- Porta: `587`;
+- Username: login SMTP fornecido pelo Brevo;
+- Password: chave SMTP;
+- Sender email: remetente validado no Brevo.
+
+Nunca coloque senha SMTP, `service_role`, `sb_secret_`, senha do banco ou credenciais administrativas em arquivos do GitHub.
+
+## Configuração pública do Supabase
+
+O painel importa `supabase-config.js`:
+
+```javascript
 export const supabaseConfig = {
   url: "https://SEU-PROJETO.supabase.co",
-  anonKey: "SUA_CHAVE_ANON_OU_PUBLISHABLE"
+  anonKey: "SUA_CHAVE_PUBLICA_PUBLISHABLE"
 };
 ```
 
-Nunca coloque `service_role` no frontend ou no GitHub.
+Apenas a URL pública e a chave `publishable`/`anon` devem ficar nesse arquivo. A segurança dos dados depende das políticas RLS.
 
-## Migração dos usuários
+Ao atualizar versões, preserve o seu `supabase-config.js` já preenchido.
 
-As senhas do Firebase não são copiadas. A migração pode criar automaticamente os usuários no Supabase Auth usando os mesmos e-mails antigos. Depois, cada colaborador usa **Esqueci minha senha** para definir uma nova senha. Também é possível criar os usuários antes por convites manuais.
+## Publicação no GitHub Pages
 
-## Migração dos dados
+1. Mantenha o `supabase-config.js` atual do repositório.
+2. Substitua os demais arquivos da versão.
+3. Faça o commit.
+4. O GitHub Actions executará `npm test`.
+5. O deploy ocorre apenas se os testes passarem.
+6. Após a publicação, atualize com `Ctrl + Shift + R`.
 
-Direto do Firestore:
-
-```bash
-npm install
-npm run migrate:firebase:dry
-npm run migrate:firebase:create-users
-```
-
-Por backup JSON:
-
-```bash
-npm install
-npm run import:backup -- "caminho-do-backup.json" --dry-run
-npm run import:backup:create-users -- "caminho-do-backup.json"
-```
-
-Os comandos exigem variáveis de ambiente descritas em `MIGRACAO_SUPABASE.md`.
+A versão 43 não exige executar novamente `schema.sql`, refazer a migração ou alterar políticas RLS.
 
 ## Testes automatizados
 
-```bash
-npm test
+Execute no Windows:
+
+```powershell
+npm.cmd test
 ```
 
-Os testes verificam:
+Ou:
+
+```text
+TESTAR.bat
+```
+
+A versão 43 possui testes para:
 
 - arquivos obrigatórios;
-- sintaxe do frontend e scripts de migração;
+- sintaxe JavaScript;
 - sincronização da versão;
-- ausência do SDK Firebase no frontend;
-- presença da configuração Supabase;
-- ausência de `service_role` no arquivo público;
-- timeout e repetição do salvamento;
-- uso do Storage nos anexos;
-- cache da PWA;
-- workflow de publicação;
-- tabelas, RLS, políticas por Squad e Storage no SQL.
+- estrutura e políticas do Supabase;
+- fluxo de salvamento e novas tentativas;
+- scripts de migração;
+- evento `PASSWORD_RECOVERY`;
+- abertura da tela específica de nova senha;
+- atualização sem exigir senha anterior;
+- bloqueio do fechamento acidental da recuperação.
 
-O GitHub Actions só publica quando todos os testes passam.
+Os testes automatizados não substituem a validação real do e-mail, do link de recuperação e das credenciais do projeto Supabase.
 
 ## Atalhos
 
 | Atalho | Ação |
 |---|---|
 | `N` | Nova solicitação |
-| `F` | Busca |
+| `F` | Focar a busca |
 | `K` | Kanban ampliado |
-| `R` | Atualizar tela |
-| `?` | Ajuda |
-| `T` | Tema |
-| `M` | Notificações |
-| `S` | Filtros salvos |
-| `B` | Ações em massa — admin |
-| `I` | Indicadores — admin |
-| `A` | Arquivados — admin |
-| `U` | Usuários — admin |
+| `R` | Atualizar o painel |
+| `?` | Abrir Ajuda |
+| `T` | Alternar tema |
+| `M` | Abrir notificações |
+| `S` | Focar filtros salvos |
+| `B` | Ações em massa — administrador |
+| `I` | Indicadores — administrador |
+| `A` | Arquivados — administrador |
+| `U` | Usuários — administrador |
 | `Shift + A` | Selecionar cards visíveis |
-| `Shift + Esc` | Limpar seleção |
-| `C` | Comentários |
-| `L` | Histórico |
+| `Shift + Esc` | Limpar seleção em massa |
+| `C` | Abrir Comentários |
+| `L` | Abrir Histórico |
 | `Ctrl + Enter` | Salvar ou enviar comentário |
-| `Esc` | Fechar diálogo |
+| `Esc` | Fechar diálogo comum ou modo ampliado |
 
-## Segurança
-
-- políticas RLS são a proteção principal;
-- anexos ficam em bucket privado;
-- `service_role` é usada somente nos scripts locais de migração;
-- o JSON da conta de serviço Firebase não pode ser versionado;
-- usuários desativados ou bloqueados não passam pelas políticas de acesso;
-- solicitantes não podem alterar perfil, Squad ou permissões privilegiadas.
+Durante a recuperação de senha, `Esc` não fecha a janela obrigatória.
 
 ## Versionamento
 
-Até a versão 99 permanece a numeração sequencial atual.
+- Até a versão 99: numeração sequencial.
+- Depois da 99: `1.0.0`.
+- Correções: `1.0.1`, `1.0.2`.
+- Melhorias menores: `1.1.0`, `1.2.0`.
+- Grandes evoluções: `2.0.0`, `3.0.0`.
 
-Depois:
+## Alteração da versão 43
 
-- `1.0.0`: primeira versão semântica;
-- `1.0.1`: correção;
-- `1.1.0`: melhoria menor;
-- `2.0.0`: evolução grande ou incompatível.
+- Corrige o redirecionamento do link de recuperação.
+- Reconhece o evento oficial `PASSWORD_RECOVERY` do Supabase.
+- Abre a tela **Criar nova senha** sem solicitar a senha anterior.
+- Encerra a sessão temporária após a atualização.
+- Adiciona testes de regressão específicos para recuperação de senha.
+- Atualiza cache da PWA e controle de versão.

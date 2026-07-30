@@ -1,26 +1,21 @@
-PAINEL DE SOLICITAÇÕES — VERSÃO 42
+PAINEL DE SOLICITAÇÕES — VERSÃO 43
 
-Esta versão troca o backend Firebase pelo Supabase.
+CORREÇÃO DA RECUPERAÇÃO DE SENHA NO SUPABASE
 
-ANTES DE PUBLICAR:
-1. Crie o projeto Supabase.
-2. Execute supabase/schema.sql no SQL Editor.
-3. Configure Authentication e desative Confirm email.
-4. Crie o primeiro administrador e execute supabase/bootstrap-admin.sql.
-5. Preencha supabase-config.js com URL e chave anon/publishable.
+- o link recebido por e-mail agora abre diretamente a tela Criar nova senha;
+- a recuperação não solicita a senha anterior;
+- o usuário informa somente a nova senha e a confirmação;
+- após salvar, a sessão temporária de recuperação é encerrada;
+- o usuário volta ao login e entra com a nova senha;
+- a janela obrigatória não fecha pelo fundo, pelo Esc ou pelo botão cancelar.
 
-MIGRAÇÃO — FAÇA ANTES DA PUBLICAÇÃO:
-- leia MIGRACAO_SUPABASE.md;
-- use o comando create-users para criar automaticamente os usuários pelos mesmos e-mails antigos;
-- após a migração, cada usuário deve usar Esqueci minha senha;
-- execute primeiro o modo --dry-run;
-- depois execute a migração real;
-- confira migration-report.json.
+ATUALIZAÇÃO
 
-PUBLICAÇÃO:
-- somente depois da migração, envie os arquivos da versão 42 ao GitHub;
-- remova firebase-config.js e firestore.rules do repositório;
-- nunca envie a service_role nem o JSON da conta de serviço Firebase;
-- aguarde os testes e o deploy.
+1. Preserve o seu supabase-config.js já preenchido.
+2. Substitua os demais arquivos do projeto pelos arquivos da versão 43.
+3. Não é necessário executar novamente schema.sql nem refazer a migração.
+4. Aguarde o GitHub Actions concluir.
+5. Atualize com Ctrl + Shift + R.
+6. Teste o fluxo Esqueci minha senha em uma janela anônima.
 
-Não exclua o projeto Firebase antes de validar chamados, usuários e anexos no Supabase.
+Nenhuma alteração de banco, RLS ou Storage foi necessária.

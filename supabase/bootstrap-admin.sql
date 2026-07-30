@@ -5,13 +5,13 @@ insert into public.profiles (id, email, name, role, squad, active, access_locked
 select
   id,
   email,
-  'josepagnossim@softensistemas.com.br',
+  'NOME DO ADMINISTRADOR',
   'admin',
   '',
   true,
   false,
   jsonb_build_object(
-    'name', 'Jose Eduardo Pagnossim',
+    'name', 'NOME DO ADMINISTRADOR',
     'email', email,
     'role', 'admin',
     'squad', '',
