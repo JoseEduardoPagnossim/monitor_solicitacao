@@ -11,10 +11,10 @@ test("withTimeout devolve o resultado quando a operação termina", async () => 
 
 test("withTimeout interrompe operações que ficam pendentes", async () => {
   await assert.rejects(
-    withTimeout(new Promise(() => {}), 15, "gravação no Firestore"),
+    withTimeout(new Promise(() => {}), 15, "gravação no Supabase"),
     (error) => error instanceof OperationTimeoutError
       && error.code === "operation-timeout"
-      && error.stage === "gravação no Firestore"
+      && error.stage === "gravação no Supabase"
   );
 });
 
@@ -49,7 +49,7 @@ test("commitWithRetry repete uma gravação que excedeu o tempo", async () => {
 
 
 
-test("commitWithRetry repete indisponibilidade temporária do Firestore", async () => {
+test("commitWithRetry repete indisponibilidade temporária do Supabase", async () => {
   let attempts = 0;
   const result = await commitWithRetry(async () => {
     attempts += 1;

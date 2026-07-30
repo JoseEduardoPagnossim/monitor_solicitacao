@@ -40,23 +40,29 @@ jobs:
             --exclude='.github' \
             --exclude='_site' \
             --exclude='tests' \
+            --exclude='scripts' \
+            --exclude='supabase' \
+            --exclude='firestore.rules' \
             --exclude='package.json' \
+            --exclude='package-lock.json' \
             --exclude='TESTAR.bat' \
             --exclude='TESTAR.sh' \
+            --exclude='ATUALIZAR.txt' \
+            --exclude='MIGRACAO_SUPABASE.md' \
             ./ _site/
 
           RELEASE="$(tr -d '[:space:]' < VERSION)"
           SHORT_SHA="${GITHUB_SHA::7}"
           BUILT_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-          cat > _site/version.json <<EOF
+          cat > _site/version.json <<EOF_VERSION
           {
             "release": "${RELEASE}",
             "build": "${GITHUB_RUN_NUMBER}",
             "commit": "${SHORT_SHA}",
             "builtAt": "${BUILT_AT}"
           }
-          EOF
+          EOF_VERSION
 
           touch _site/.nojekyll
 

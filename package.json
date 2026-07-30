@@ -1,11 +1,20 @@
 {
   "name": "painel-solicitacoes",
   "private": true,
-  "version": "0.41.0",
+  "version": "0.42.0",
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "test:syntax": "node --check app.js && node --check save-flow.js && node --check service-worker.js"
+    "test:syntax": "node --check app.js && node --check supabase-compat.js && node --check save-flow.js && node --check service-worker.js",
+    "migrate:firebase": "node scripts/migrate-firestore-to-supabase.mjs",
+    "migrate:firebase:dry": "node scripts/migrate-firestore-to-supabase.mjs --dry-run",
+    "import:backup": "node scripts/import-backup-to-supabase.mjs",
+    "migrate:firebase:create-users": "node scripts/migrate-firestore-to-supabase.mjs --create-missing-users",
+    "import:backup:create-users": "node scripts/import-backup-to-supabase.mjs --create-missing-users"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.110.8",
+    "firebase-admin": "14.2.0"
   },
   "engines": {
     "node": ">=20"

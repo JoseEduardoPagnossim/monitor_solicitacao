@@ -1,3 +1,8 @@
-.DS_Store
-Thumbs.db
-.vscode/
+node_modules/
+_site/
+migration-report.json
+firebase-service-account*.json
+*serviceAccount*.json
+.env
+.env.*
+!.env.example

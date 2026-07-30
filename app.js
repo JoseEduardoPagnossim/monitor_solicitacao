@@ -1,5 +1,5 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
 import {
+  initializeApp,
   getAuth,
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -12,9 +12,7 @@ import {
   updatePassword,
   setPersistence,
   browserLocalPersistence,
-  browserSessionPersistence
-} from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
-import {
+  browserSessionPersistence,
   getFirestore,
   collection,
   doc,
@@ -31,8 +29,8 @@ import {
   Bytes,
   increment,
   writeBatch
-} from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js";
+} from "./supabase-compat.js";
+import { supabaseConfig } from "./supabase-config.js";
 import { commitWithRetry, withTimeout } from "./save-flow.js";
 
 const STATUS_LABELS = {
@@ -88,7 +86,7 @@ const DEFAULT_COMMENT_TEMPLATES = [
   { id: "default-tef", title: "Dados TEF pendentes", text: "Para prosseguir com o TEF, confirme o número do estabelecimento, o SAK e o modelo do PIN Pad." }
 ];
 
-const app = initializeApp(firebaseConfig);
+const app = initializeApp(supabaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -416,10 +414,10 @@ const els = {
 };
 
 function isConfigReady() {
-  return firebaseConfig.apiKey
-    && !firebaseConfig.apiKey.includes("COLE_")
-    && firebaseConfig.projectId
-    && firebaseConfig.projectId !== "SEU_PROJETO";
+  return supabaseConfig.url
+    && !supabaseConfig.url.includes("COLE_AQUI")
+    && supabaseConfig.anonKey
+    && !supabaseConfig.anonKey.includes("COLE_AQUI");
 }
 
 function isAdmin() {
@@ -816,7 +814,7 @@ function totalModalAttachments() {
   return retainedModalAttachments().length + state.modalNewAttachments.length;
 }
 
-async function openFirestoreAttachment(attachment, button = null) {
+async function openStoredAttachment(attachment, button = null) {
   if (!attachment?.id) return;
   const originalText = button?.textContent;
   if (button) {
@@ -887,7 +885,7 @@ function renderAttachmentList() {
       <div class="attachment-icon">${file.contentType === "text/plain" ? "TXT" : "IMG"}</div>
       <div class="attachment-info">
         <strong>${escapeHtml(file.name)}</strong>
-        <small>${formatFileSize(file.size)} · pronto para salvar no Firestore</small>
+        <small>${formatFileSize(file.size)} · pronto para salvar no Supabase</small>
       </div>
       ${state.modalEditable ? `<button class="icon-button remove-attachment" type="button" data-attachment-source="new" data-attachment-index="${index}" title="Remover anexo" aria-label="Remover anexo">×</button>` : ""}
     </div>`).join("");
@@ -899,7 +897,7 @@ function renderAttachmentList() {
   $$(".attachment-open-link", els.attachmentList).forEach((button) => {
     button.addEventListener("click", () => {
       const attachment = retainedExisting.find((item) => item.id === button.dataset.attachmentId);
-      openFirestoreAttachment(attachment, button);
+      openStoredAttachment(attachment, button);
     });
   });
 
@@ -1166,19 +1164,21 @@ function firebaseErrorMessage(error) {
     "auth/missing-password": "Informe sua senha.",
     "auth/network-request-failed": "Falha de conexão. Verifique sua internet.",
     "auth/user-not-found": "Usuário não encontrado.",
-    "auth/email-already-in-use": "Este e-mail já possui uma conta no Firebase.",
+    "auth/email-already-in-use": "Este e-mail já possui uma conta no Supabase.",
     "auth/weak-password": "A senha deve possuir pelo menos 6 caracteres.",
     "auth/wrong-password": "A senha atual está incorreta.",
     "auth/requires-recent-login": "Confirme novamente sua senha atual para continuar.",
     "invite-invalid": "Este convite não existe ou não está mais disponível.",
     "invite-expired": "Este convite expirou. Solicite um novo link ao administrador.",
     "permission-denied": "Você não possui permissão para executar esta ação.",
-    "resource-exhausted": "O limite gratuito do Firestore foi atingido. Tente novamente mais tarde.",
-    "failed-precondition": "A operação não pôde ser concluída com a configuração atual do Firestore.",
-    "unavailable": "O Firestore está temporariamente indisponível. Verifique a conexão e tente novamente.",
-    "deadline-exceeded": "O Firestore demorou além do limite para responder. Tente novamente.",
-    "aborted": "A gravação foi interrompida pelo Firestore. Tente novamente.",
-    "operation-timeout": "O Firestore demorou além do esperado para confirmar o salvamento. Verifique sua conexão e tente novamente; o formulário foi mantido aberto."
+    "resource-exhausted": "O limite gratuito do serviço foi atingido. Tente novamente mais tarde.",
+    "failed-precondition": "A operação não pôde ser concluída com a configuração atual do Supabase.",
+    "unavailable": "O Supabase está temporariamente indisponível. Verifique a conexão e tente novamente.",
+    "deadline-exceeded": "O Supabase demorou além do limite para responder. Tente novamente.",
+    "aborted": "A gravação foi interrompida. Tente novamente.",
+    "operation-timeout": "O Supabase demorou além do esperado para confirmar o salvamento. Verifique sua conexão e tente novamente; o formulário foi mantido aberto.",
+    "auth/email-not-confirmed": "Confirme o e-mail antes de entrar ou desative a confirmação de e-mail no Supabase para este painel interno.",
+    "auth/email-confirmation-required": "Desative a opção Confirm email no Supabase antes de usar os convites internos."
   };
   return messages[error?.code]
     || messages[error?.message]
@@ -2637,7 +2637,7 @@ async function saveRequest(event) {
       onRetry: () => {
         showFormError(
           els.requestError,
-          "A confirmação do Firestore está demorando. O painel fará uma nova tentativa automática."
+          "A confirmação do Supabase está demorando. O painel fará uma nova tentativa automática."
         );
       }
     });
@@ -4360,7 +4360,7 @@ async function downloadBackup() {
         throw wrappedError;
       }
     }
-    const backup = { generatedAt: new Date().toISOString(), version: "28", projectId: firebaseConfig.projectId, data };
+    const backup = { generatedAt: new Date().toISOString(), version: "42", backend: "supabase", projectUrl: supabaseConfig.url, data };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a"); link.href = url; link.download = `painel-solicitacoes-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(url);
@@ -4368,7 +4368,7 @@ async function downloadBackup() {
     showToast("Backup gerado com sucesso.");
   } catch (error) {
     const message = error?.message?.startsWith("Nao foi possivel ler a colecao")
-      ? `${error.message} Publique as regras da versao 28 no Firestore.`
+      ? `${error.message} Confira as políticas RLS do Supabase.`
       : firebaseErrorMessage(error);
     showToast(message, "error");
   }
@@ -4506,7 +4506,7 @@ function setupEvents() {
     showFormError(els.loginError);
 
     if (!isConfigReady()) {
-      showFormError(els.loginError, "Configure o arquivo firebase-config.js antes de usar o painel.");
+      showFormError(els.loginError, "Configure o arquivo supabase-config.js antes de usar o painel.");
       return;
     }
 
@@ -4943,7 +4943,7 @@ async function loadAppVersion() {
     if (!response.ok) throw new Error("version-file-unavailable");
 
     const info = await response.json();
-    const release = String(info.release || "34").replace(/^v/i, "");
+    const release = String(info.release || "42").replace(/^v/i, "");
     const isLocal = !info.build || String(info.build).toLowerCase() === "local";
     const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
 
@@ -4978,7 +4978,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v41";
+    versionLabel.textContent = "v42";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }
@@ -4994,7 +4994,7 @@ if (rememberedEmail) {
   els.rememberEmail.checked = true;
 }
 if (!isConfigReady()) {
-  showFormError(els.loginError, "Configure o arquivo firebase-config.js para conectar o painel ao Firebase.");
+  showFormError(els.loginError, "Configure o arquivo supabase-config.js para conectar o painel ao Supabase.");
 }
 if (state.inviteToken) showInviteCard();
 onAuthStateChanged(auth, async (user) => {

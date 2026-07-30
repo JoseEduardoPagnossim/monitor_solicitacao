@@ -1,757 +1,121 @@
-# Painel de Solicitações
+# Painel de Solicitações — versão 42
 
-Aplicação web interna para centralizar solicitações de **Programação**, **Cancelamento** e **TEF Elgin** em um Kanban com autenticação, permissões, comentários, notificações, histórico, indicadores, arquivamento e recursos administrativos.
+Painel interno da Soften Sistemas publicado no GitHub Pages e conectado ao Supabase.
 
-O projeto é publicado no **GitHub Pages** e usa:
+## Backend atual
 
-- **Firebase Authentication** para login por e-mail e senha;
-- **Cloud Firestore** para solicitações, usuários, comentários, anexos e configurações;
-- **GitHub Actions** para publicação e controle automático de build;
-- **PWA** para instalação do painel como aplicativo.
+- Supabase Auth para login e senha;
+- PostgreSQL para dados do painel;
+- Supabase Storage para anexos;
+- Realtime para atualizações das telas abertas;
+- RLS para segurança por usuário, perfil e Squad.
 
-> **Versão 39:** adiciona proteção contra gravações pendentes no Firestore, nova tentativa automática, identificadores estáveis para evitar duplicidade e testes automatizados executados antes de cada publicação no GitHub Pages.
+O frontend não utiliza mais Firebase. O Firebase é necessário apenas temporariamente para importar os dados antigos.
 
+## Principais recursos
 
----
-
-## 1. Funcionalidades principais
-
-### Acesso e usuários
-
-- Login individual por e-mail e senha.
-- restauração da sessão sem exibir rapidamente a tela de login durante a atualização da página;
-- Recuperação de senha por e-mail.
-- Alteração da própria senha dentro do painel.
-- Perfis `admin` e `solicitante`;
-- solicitantes dos Squads A e B visualizam Programações dos Squads A e B; solicitantes dos Squads D e E visualizam Programações dos Squads D e E;
-- solicitações de Cancelamento e TEF Elgin continuam visíveis apenas para quem criou, recebeu como responsável ou possui perfil administrador.
-- Cadastro de usuários por convite.
-- Convites válidos por 7 dias.
-- Alteração de nome, perfil e Squad pela interface administrativa.
-- Ativação e desativação sem apagar o histórico.
-- Bloqueio temporário de acesso pelo administrador.
-- Desbloqueio do acesso pela tela **Usuários**.
-- Registro de último acesso e quantidade de entradas.
-- Desconexão em tempo real quando o acesso é desativado ou bloqueado.
-
-### Kanban
-
-Etapas disponíveis:
-
-1. **Nova**;
-2. **Em análise**;
-3. **Aguardando**;
-4. **Bloqueio**;
-5. **Concluída**.
-
-Recursos:
-
-- atualização em tempo real;
-- arrastar e soltar para administradores;
-- rolagem independente por coluna;
-- modo ampliado mostrando somente o Kanban e encerrando automaticamente qualquer ação em massa ativa;
-- ordenação da demanda mais antiga para a mais recente;
-- destaque visual da solicitação mais antiga;
-- busca por cliente, CNPJ, título ou solicitante;
-- filtros por tipo, prioridade, grupo de atendimento e solicitante;
-- grupos disponíveis: **Squad A**, **Squad B**, **Squad D** e **Squad E**;
-- filtros favoritos salvos por usuário;
-- contador de comentários e anexos no card;
-- CNPJ completo no card de Programação;
-- seleção de todos os cards visíveis de uma coluna no modo de ações em massa;
-- o modo em massa sempre inicia desativado após login, atualização da página ou troca de sessão.
-
-### Grupos de atendimento
-
-Toda solicitação deve ser vinculada a um grupo responsável:
-
-- **Squad A**;
-- **Squad B**;
-- **Squad D**;
-- **Squad E**.
-
-O grupo aparece no card, nos detalhes, no texto copiado e no histórico. O filtro por grupo está disponível no Kanban, em Indicadores e em Arquivados. Os filtros favoritos também guardam o grupo escolhido. A classificação por Squad também controla a leitura das Programações para solicitantes. Administradores continuam vendo todos os grupos. O filtro do administrador salva automaticamente a última opção escolhida no perfil, inclusive **Todos os grupos**.
-
-### Tipos de solicitação
-
-#### Programação
-
-Campos principais:
-
-- Grupo de atendimento;
-- Razão Social;
-- CNPJ obrigatório e validado;
-- Solicitante;
-- Cargo;
-- E-mail;
-- Telefone com DDD;
-- Título;
-- Descrição da solicitação;
-- Comportamento atual;
-- Comportamento esperado;
-- Justificativa;
-- Link de vídeo opcional;
-- até dois anexos opcionais.
-
-Depois do primeiro salvamento, o **tipo da solicitação não pode ser alterado**.
-
-#### Cancelamento
-
-O formulário também exige a seleção do grupo de atendimento responsável.
-
-Para cada cliente é obrigatório informar:
-
-- CPF/CNPJ **ou** Razão Social;
-- Motivo.
-
-O técnico preenche os campos fixos, adiciona o cliente à lista e repete o processo. O administrador pode marcar individualmente ou em massa os clientes já cancelados no CRM.
-
-#### TEF Elgin
-
-O formulário também exige a seleção do grupo de atendimento responsável.
-
-Campos:
-
-- CNPJ validado;
-- Razão Social;
-- sistema operacional;
-- memória RAM acima de 4 GB;
-- sistema utilizado;
-- número do estabelecimento;
-- número lógico do PIN Pad — SAK;
-- modelo do PIN Pad;
-- adquirente;
-- proprietário;
-- CPF validado;
-- telefone com DDD;
-- e-mail;
-- valor combinado;
-- opção **Vai utilizar PIX**, desmarcada por padrão;
-- informações adicionais do PIX com até 1000 caracteres, exibidas quando a opção de PIX é marcada.
-
-### Cópia de dados
-
-- Administradores podem copiar qualquer tipo de solicitação.
-- Solicitantes podem copiar as Programações que possuem permissão para visualizar.
-- Cancelamentos e TEF Elgin permanecem disponíveis para cópia apenas aos administradores.
-
-Os diálogos só fecham ao clicar diretamente no fundo externo. Arrastar o mouse para selecionar textos e dados dentro do conteúdo não fecha mais a tela.
-
----
-
-## 2. Histórico de alterações
-
-Cada solicitação salva possui a aba **Histórico**.
-
-O painel registra automaticamente as principais ações:
-
-- criação;
-- edição de campos;
-- alteração de status;
-- alteração de responsável;
-- comentários;
-- controle de cancelamento no CRM;
+- Kanban: Nova, Em análise, Aguardando, Bloqueio e Concluída;
+- Programação, Cancelamento e TEF Elgin;
+- Squads A, B, D e E;
+- histórico de alterações;
+- comentários, menções e notificações;
+- anexos privados;
 - ações em massa;
-- arquivamento;
-- restauração.
-
-Cada registro contém usuário, data, horário e resumo da ação.
-
-Os históricos ficam na coleção:
-
-```text
-requestHistory
-```
-
-Solicitantes visualizam o histórico das solicitações às quais possuem acesso. Administradores também visualizam o histórico de solicitações arquivadas.
-
----
-
-## 3. Pausa do tempo
-
-O painel diferencia **tempo total** e **tempo ativo**.
-
-### Quando o tempo é pausado
-
-O contador de tempo ativo para automaticamente quando a solicitação entra em:
-
-- **Aguardando**;
-- **Bloqueio**.
-
-### Quando o tempo volta a contar
-
-A contagem continua quando a solicitação volta para:
-
-- **Nova**;
-- **Em análise**.
-
-Ao concluir uma solicitação que estava pausada, o período atual de pausa também é acumulado.
-
-### Campos utilizados
-
-```text
-pausedDurationMs
-pauseStartedAt
-lastStatusChangedAt
-```
-
-Solicitações antigas continuam funcionando. Os campos são criados quando ocorrer uma nova mudança de status.
-
-### Exibição
-
-- O card mostra **TEMPO PAUSADO** nas etapas Aguardando e Bloqueio.
-- O tempo apresentado no card é o tempo efetivo em atividade.
-- Os detalhes da solicitação mostram tempo ativo e tempo pausado.
-- Os indicadores somam o tempo pausado no período.
-
----
-
-## 4. Comentários, modelos e notificações
-
-### Comentários internos
-
-A aba **Comentários** permite registrar alinhamentos sem alterar a descrição original.
-
-- O administrador pode marcar o solicitante ou o responsável.
-- O usuário marcado recebe uma notificação interna.
-- Ao clicar na notificação, a solicitação abre diretamente nos comentários.
-
-### Modelos de comentários
-
-O painel possui modelos padrão, como:
-
-- Aguardando vídeo;
-- Documento pendente;
-- CNPJ inválido;
-- Em análise;
-- Dados TEF pendentes.
-
-Administradores podem criar e excluir modelos compartilhados pelo botão **Gerenciar**.
-
-Os modelos personalizados ficam em:
-
-```text
-commentTemplates
-```
-
-### Alertas automáticos
-
-O painel gera notificações quando:
-
-- uma solicitação é atribuída a um usuário;
-- um usuário é mencionado em comentário;
-- o status muda;
-- a solicitação entra em Bloqueio;
-- a solicitação permanece com o tempo pausado por mais de 24 horas.
-
-O alerta de pausa de 24 horas é enviado uma vez por ciclo de pausa.
-
----
-
-## 5. Ações em massa
-
-Disponíveis somente para administradores.
-
-1. Clique em **Em massa**.
-2. Marque os cards desejados individualmente ou use a caixa **Todos** no topo de uma coluna.
-3. A caixa da coluna seleciona apenas os cards atualmente visíveis naquela etapa e respeita busca e filtros.
-4. Escolha uma ação.
-
-Ações disponíveis:
-
-- alterar status;
-- definir responsável;
-- marcar todos os cancelamentos no CRM;
-- arquivar solicitações concluídas.
-
-Atalhos relacionados:
-
-- `B`: entrar ou sair do modo em massa;
-- `Shift + A`: selecionar todos os cards visíveis;
-- `Shift + Esc`: limpar a seleção.
-
----
-
-## 6. Filtros salvos
-
-Cada usuário pode salvar combinações de:
-
-- texto de busca;
-- tipo;
-- prioridade;
-- solicitante.
-
-### Como usar
-
-1. Configure os filtros.
-2. Clique em **Salvar filtro**.
-3. Informe um nome.
-4. Use o seletor **Filtros salvos** para reaplicar.
-5. Use o botão `×` ao lado do seletor para excluir o filtro selecionado.
-
-Os filtros são pessoais e ficam em:
-
-```text
-savedFilters
-```
-
----
-
-## 7. Indicadores gerenciais
-
-A tela **Indicadores** é exclusiva para administradores.
-
-Indicadores disponíveis:
-
-- solicitações criadas;
-- solicitações concluídas;
-- tempo médio ativo de conclusão;
-- quantidade em Bloqueio;
-- taxa de conclusão;
-- quantidade arquivada;
-- tempo total pausado;
-- variação do volume em relação ao período anterior;
-- distribuição por status;
-- distribuição por tipo;
-- tempo médio ativo por tipo;
-- volume e desempenho por técnico.
-
-### Comparação por período
-
-O painel compara o intervalo selecionado com o período imediatamente anterior de mesma duração.
-
-Exemplo:
-
-- período selecionado: 1 a 30 de julho;
-- comparação automática: 1 a 30 de junho.
-
-A variação é apresentada em percentual.
-
----
-
-## 8. Arquivamento
-
-- Somente solicitações concluídas podem ser arquivadas.
-- Apenas administradores arquivam e restauram.
-- A solicitação sai da coleção ativa e deixa de pesar no Kanban.
-- Dados, comentários, anexos e histórico são mantidos.
-- Existe uma ação para arquivar concluídas há mais de 30 dias.
-
-Coleções:
-
-```text
-requests
-archivedRequests
-```
-
----
-
-## 9. Backup e log de acesso
-
-A tela **Segurança e backup** é exclusiva para administradores.
-
-### Backup
-
-O botão **Baixar backup JSON** gera uma cópia contendo:
-
-- solicitações ativas;
-- solicitações arquivadas;
-- comentários;
-- histórico;
-- anexos do Firestore;
-- usuários;
-- convites;
-- notificações;
 - filtros salvos;
-- modelos de comentários;
-- logs de acesso.
+- indicadores e comparação de períodos;
+- arquivamento;
+- backup JSON;
+- log de acesso;
+- sessão de 3 horas por inatividade;
+- tema claro e escuro;
+- PWA instalável;
+- atalhos de teclado.
 
-> O painel gera a cópia para segurança e consulta. A importação automática do backup não está implementada nesta versão.
+## Regras de visualização
 
-Como os anexos podem estar no arquivo, o backup pode ficar grande. Armazene-o em local protegido.
+Administradores visualizam todos os grupos.
 
-### Log de acesso
+Solicitantes:
 
-São registrados:
+- Squad A ou B: Programações dos Squads A e B;
+- Squad D ou E: Programações dos Squads D e E;
+- Cancelamento e TEF Elgin: somente quando criou a solicitação ou foi atribuído como responsável.
 
-- login;
-- logout manual;
-- expiração por inatividade;
-- alteração de senha;
-- geração de backup.
+O Squad é obrigatório para solicitantes e para todas as solicitações.
 
-Os eventos ficam em:
-
-```text
-accessLogs
-```
-
-A tabela administrativa mostra data, usuário, evento e navegador/dispositivo.
-
----
-
-## 10. Sessão e segurança
-
-### Expiração por inatividade
-
-A sessão expira após **3 horas sem atividade**.
-
-Atividades consideradas:
-
-- clique ou toque;
-- movimentação do mouse;
-- teclado;
-- rolagem.
-
-Nos últimos **5 minutos**, o painel abre um diálogo com contador regressivo.
-
-O usuário pode:
-
-- clicar em **Continuar conectado**;
-- sair imediatamente;
-- deixar o contador terminar e ser desconectado.
-
-### Bloqueio temporário administrativo
-
-Na tela **Usuários**, o administrador pode:
-
-- bloquear temporariamente um acesso;
-- desbloquear o usuário;
-- desativar completamente;
-- reativar.
-
-O bloqueio temporário não apaga dados e desconecta o usuário quando o perfil é atualizado.
-
-O Firebase Authentication também possui proteções próprias contra abuso de tentativas de login. O painel não cria um bloqueio automático global baseado em senha incorreta, pois o projeto é estático e não utiliza servidor administrativo.
-
----
-
-## 11. Aplicativo instalável — PWA
-
-A instalação PWA utiliza:
+## Estrutura do projeto
 
 ```text
-manifest.webmanifest
+.github/workflows/pages.yml
+app.js
+supabase-compat.js
+supabase-config.js
+save-flow.js
+styles.css
+index.html
 service-worker.js
-icon-192.png
-icon-512.png
+manifest.webmanifest
+VERSION
+version.json
+supabase/schema.sql
+supabase/bootstrap-admin.sql
+scripts/migrate-firestore-to-supabase.mjs
+scripts/import-backup-to-supabase.mjs
+scripts/migration-common.mjs
+tests/
+MIGRACAO_SUPABASE.md
 ```
 
-Quando o navegador permitir a instalação, aparece um botão de download no rodapé lateral.
+## Configuração rápida
 
-A instalação funciona melhor no GitHub Pages, porque PWA requer HTTPS. O painel pode ser aberto em uma janela própria, como aplicativo.
+1. Crie o projeto Supabase.
+2. Execute `supabase/schema.sql` no SQL Editor.
+3. Configure a URL do GitHub Pages em Authentication.
+4. Desative a confirmação de e-mail para os convites internos.
+5. Crie o primeiro usuário em Authentication.
+6. Execute `supabase/bootstrap-admin.sql`.
+7. Preencha `supabase-config.js` com Project URL e chave anon/publishable.
+8. Execute o teste e a migração dos dados.
+9. Publique no GitHub somente após conferir o relatório.
 
-A autenticação e a sincronização dos dados continuam exigindo conexão com o Firebase.
+O procedimento completo está em [MIGRACAO_SUPABASE.md](MIGRACAO_SUPABASE.md).
 
----
+## Configuração pública
 
-## 12. Tema claro e escuro
-
-Use o botão `◐` no rodapé para alternar o tema.
-
-A preferência é salva no navegador:
-
-```text
-localStorage: painel-theme
+```js
+export const supabaseConfig = {
+  url: "https://SEU-PROJETO.supabase.co",
+  anonKey: "SUA_CHAVE_ANON_OU_PUBLISHABLE"
+};
 ```
 
-Na primeira abertura, o painel respeita a preferência de tema do sistema operacional.
+Nunca coloque `service_role` no frontend ou no GitHub.
 
----
+## Migração dos usuários
 
-## 13. Atalhos de teclado
+As senhas do Firebase não são copiadas. A migração pode criar automaticamente os usuários no Supabase Auth usando os mesmos e-mails antigos. Depois, cada colaborador usa **Esqueci minha senha** para definir uma nova senha. Também é possível criar os usuários antes por convites manuais.
 
-As teclas simples não são executadas enquanto o usuário estiver digitando em um campo, textarea ou seletor.
+## Migração dos dados
 
-### Globais
+Direto do Firestore:
 
-| Atalho | Ação |
-|---|---|
-| `N` | Abrir Nova solicitação |
-| `F` | Focar a busca |
-| `K` | Ativar ou sair do Kanban ampliado |
-| `R` | Atualizar a renderização do painel |
-| `?` | Abrir a Ajuda na seção de produtividade |
-| `T` | Alternar tema claro/escuro |
-| `M` | Abrir notificações |
-| `S` | Focar o seletor de filtros salvos |
-
-### Administrador
-
-| Atalho | Ação |
-|---|---|
-| `B` | Ativar ou sair de Ações em massa |
-| `I` | Abrir Indicadores |
-| `A` | Abrir Arquivados |
-| `U` | Abrir Usuários |
-| `Shift + A` | Selecionar todos os cards visíveis no modo em massa |
-| `Shift + Esc` | Limpar a seleção em massa |
-
-### Solicitação aberta
-
-| Atalho | Ação |
-|---|---|
-| `C` | Abrir Comentários |
-| `L` | Abrir Histórico |
-| `Ctrl + Enter` | Salvar formulário ou enviar comentário |
-| `Esc` | Fechar diálogo ou sair do Kanban ampliado |
-
----
-
-## 14. Estrutura de arquivos
-
-```text
-painel-solicitacoes/
-├── .github/
-│   └── workflows/
-│       └── pages.yml
-├── index.html
-├── styles.css
-├── app.js
-├── firebase-config.js
-├── firestore.rules
-├── logo-soften.png
-├── icon-192.png
-├── icon-512.png
-├── manifest.webmanifest
-├── service-worker.js
-├── VERSION
-├── version.json
-├── README.md
-└── ATUALIZAR.txt
+```bash
+npm install
+npm run migrate:firebase:dry
+npm run migrate:firebase:create-users
 ```
 
----
+Por backup JSON:
 
-## 15. Configuração inicial do Firebase
-
-### Criar o projeto
-
-1. Crie um projeto no Console do Firebase.
-2. Adicione um aplicativo Web.
-3. Copie o objeto `firebaseConfig`.
-4. Cole os dados em `firebase-config.js`.
-
-Mantenha o início do arquivo como:
-
-```javascript
-export const firebaseConfig = {
+```bash
+npm install
+npm run import:backup -- "caminho-do-backup.json" --dry-run
+npm run import:backup:create-users -- "caminho-do-backup.json"
 ```
 
-### Authentication
+Os comandos exigem variáveis de ambiente descritas em `MIGRACAO_SUPABASE.md`.
 
-1. Abra **Authentication**.
-2. Ative **E-mail/senha**.
-3. Autorize o domínio do GitHub Pages.
-
-Exemplo:
-
-```text
-joseeduardopagnossim.github.io
-```
-
-### Firestore
-
-1. Crie o Firestore em modo de produção.
-2. Abra **Firestore Database → Regras**.
-3. Cole todo o conteúdo de `firestore.rules`.
-4. Clique em **Publicar**.
-
-As coleções novas são criadas automaticamente durante o uso.
-
----
-
-## 16. Perfil do primeiro administrador
-
-Depois de criar o usuário em **Authentication**, copie o UID.
-
-Crie no Firestore:
-
-```text
-users/UID_DO_ADMIN
-```
-
-Campos:
-
-| Campo | Tipo | Valor |
-|---|---|---|
-| `name` | string | Nome do administrador |
-| `email` | string | Mesmo e-mail do Authentication |
-| `role` | string | `admin` |
-| `active` | boolean | `true` |
-| `accessLocked` | boolean | `false` |
-
-Os demais usuários podem ser cadastrados por convite dentro do painel.
-
----
-
-## 17. Publicação no GitHub Pages
-
-O repositório deve usar **GitHub Actions** como fonte.
-
-1. Envie todos os arquivos para a branch `main`.
-2. Abra **Settings → Pages**.
-3. Em **Source**, selecione **GitHub Actions**.
-4. Abra **Actions** e acompanhe o workflow **Publicar painel no GitHub Pages**.
-5. Aguarde a execução ficar verde.
-6. Atualize o painel com `Ctrl + F5`.
-
-### Política de versionamento a partir da versão 100
-
-Até a versão 99, o projeto mantém a numeração sequencial atual. A versão seguinte será publicada como **1.0.0**. A partir daí:
-
-- correções de erro: incrementam o último número (`1.0.1`, `1.0.2`);
-- melhorias menores e compatíveis: incrementam o número central (`1.1.0`, `1.2.0`);
-- grandes evoluções ou mudanças estruturais: incrementam o primeiro número (`2.0.0`, `3.0.0`).
-
-O workflow já aceita valores como `1.0.0` no arquivo `VERSION`, portanto não será necessário alterar o processo de publicação no GitHub Actions.
-
-O arquivo `VERSION` contém o número funcional da versão. O workflow gera automaticamente:
-
-- número do build;
-- commit;
-- data de publicação.
-
----
-
-## 18. Atualização para a versão 31
-
-Envie ao GitHub todos os arquivos deste pacote, mantendo o seu `firebase-config.js` atual.
-
-Depois, publique obrigatoriamente o novo `firestore.rules` no Firebase. Antes de liberar o acesso, abra a tela **Usuários** e atribua um Squad a cada solicitante existente.
-
-### Cache da PWA
-
-Se o navegador continuar mostrando uma versão anterior:
-
-1. aguarde o GitHub Actions terminar;
-2. pressione `Ctrl + F5`;
-3. se necessário, abra as ferramentas do navegador;
-4. em **Application → Service Workers**, clique em **Update** ou remova o service worker antigo;
-5. abra o painel novamente.
-
----
-
-## 19. Coleções utilizadas
-
-```text
-users
-userInvites
-requests
-archivedRequests
-requestComments
-requestHistory
-requestAttachments
-notifications
-savedFilters
-commentTemplates
-accessLogs
-```
-
----
-
-## 20. Segurança importante
-
-- O `firebase-config.js` é público por natureza em aplicações Web Firebase.
-- A proteção real depende do Authentication e do `firestore.rules`.
-- Não use regras abertas em produção.
-- Teste as permissões com contas `admin` e `solicitante`.
-- Guarde backups em local restrito.
-- Não compartilhe arquivos de backup em canais públicos.
-- O projeto usa armazenamento de anexos no Firestore para permanecer no plano gratuito; respeite o limite de tamanho definido no painel.
-
-## Correções e orientações da versão 28
-
-### Backup administrativo
-
-O backup consulta todas as coleções necessárias, inclusive filtros salvos de todos os usuários. Por isso, depois de atualizar o painel, é obrigatório publicar o arquivo `firestore.rules` da mesma versão. Se as regras antigas permanecerem publicadas, o Firebase exibirá erro de permissão ao gerar a cópia.
-
-### Tema escuro
-
-Os formulários, campos bloqueados, comentários, anexos, tabelas e a Central de Ajuda possuem estilos próprios para o tema escuro. O conteúdo deve permanecer legível tanto no modo claro quanto no escuro.
-
-### Atalhos na Ajuda
-
-Abra **Ajuda > Produtividade** para consultar a lista completa de atalhos, ações em massa, pausa do tempo, alertas automáticos, filtros salvos, instalação do aplicativo e segurança da sessão.
-
-
-## 21. Ajustes da versão 36
-
-### Abas fixas na solicitação
-
-As abas **Detalhes**, **Comentários** e **Histórico** permanecem fixas no topo do diálogo enquanto o usuário rola o conteúdo. Isso permite trocar de seção sem precisar retornar ao início do formulário.
-
-### Mensagens acima dos diálogos
-
-Mensagens de sucesso, aviso e erro, como a confirmação de **Copiar dados**, agora são renderizadas dentro do diálogo ativo. Assim, elas permanecem visíveis e não ficam apagadas atrás da sobreposição do modal. Quando não existe diálogo aberto, as mensagens continuam aparecendo no canto superior direito do painel.
-
-## 22. Ajuste da versão 37
-
-### Mensagens no canto superior direito
-
-As mensagens rápidas do painel, como **Dados copiados para a área de transferência**, agora utilizam uma camada global de primeiro plano. Mesmo quando um diálogo estiver aberto, a mensagem aparece no canto superior direito da tela, acima do fundo escurecido e sem ocupar espaço dentro da janela da solicitação.
-
-O painel utiliza a camada nativa de *popover* do navegador para manter a mensagem acima dos diálogos. Em navegadores compatíveis, isso evita problemas de `z-index` com a camada superior dos elementos `<dialog>`.
-
-As mensagens:
-
-- permanecem visíveis por aproximadamente quatro segundos;
-- aceitam os estados de sucesso, aviso e erro;
-- podem ser exibidas em sequência;
-- ajustam a largura automaticamente em telas menores;
-- continuam aparecendo no mesmo local quando nenhum diálogo está aberto.
-
-As abas **Detalhes**, **Comentários** e **Histórico** continuam fixas no topo durante a rolagem da solicitação.
-
-
-
-## 23. Correção da versão 38
-
-### Salvamento sem carregamento infinito
-
-A gravação principal da solicitação foi separada das rotinas complementares de histórico e notificações. Depois que o Firestore confirma a criação ou alteração da solicitação, o painel:
-
-- libera imediatamente o botão **Salvar**;
-- fecha o diálogo e exibe a confirmação de sucesso;
-- registra histórico e envia notificações em segundo plano;
-- impede cliques duplicados enquanto a gravação principal está em andamento;
-- restaura corretamente o botão caso a gravação principal apresente erro.
-
-Essa separação evita que uma demora em histórico ou notificações mantenha a tela indefinidamente em **Salvando...**, mesmo quando os dados principais já foram gravados.
-
-A atualização não altera permissões nem a estrutura das regras do Firestore.
-
-
-## 24. Correção da versão 39
-
-### Proteção contra salvamento pendente
-
-O salvamento agora possui um controle de tempo para impedir que o botão permaneça indefinidamente em **Salvando...** quando o Firestore não devolve uma confirmação.
-
-O fluxo funciona assim:
-
-1. o painel prepara os dados e anexos;
-2. tenta gravar a solicitação no Firestore;
-3. se não houver confirmação em 20 segundos, exibe a mensagem de conexão lenta;
-4. realiza uma segunda tentativa automática usando o mesmo identificador da solicitação e dos anexos;
-5. se a segunda tentativa também não for confirmada, libera o botão, mantém o formulário aberto e apresenta uma mensagem clara para nova tentativa.
-
-O mesmo identificador é reutilizado durante as tentativas. Isso reduz o risco de solicitações ou anexos duplicados quando a primeira gravação foi recebida pelo servidor, mas a resposta demorou para chegar ao navegador.
-
-Histórico e notificações continuam complementares e não bloqueiam o salvamento principal.
-
-### Testes automatizados
-
-O projeto agora possui uma rotina sem dependências externas, executada pelo Node.js.
-
-Para testar no Windows:
-
-1. instale o Node.js 20 ou superior;
-2. extraia o pacote do painel;
-3. execute `TESTAR.bat`;
-4. confirme a mensagem **Todos os testes foram aprovados**.
-
-Também é possível executar pelo terminal:
+## Testes automatizados
 
 ```bash
 npm test
@@ -759,53 +123,59 @@ npm test
 
 Os testes verificam:
 
-- sintaxe dos arquivos JavaScript;
-- sincronização da versão entre `VERSION`, `index.html`, `version.json` e service worker;
-- existência dos arquivos obrigatórios;
-- timeout e repetição automática da gravação;
-- comportamento em erro de permissão;
-- estabilidade dos identificadores de anexos;
-- integração do `firebase-config.js` com o painel e preservação desse arquivo durante a publicação.
+- arquivos obrigatórios;
+- sintaxe do frontend e scripts de migração;
+- sincronização da versão;
+- ausência do SDK Firebase no frontend;
+- presença da configuração Supabase;
+- ausência de `service_role` no arquivo público;
+- timeout e repetição do salvamento;
+- uso do Storage nos anexos;
+- cache da PWA;
+- workflow de publicação;
+- tabelas, RLS, políticas por Squad e Storage no SQL.
 
-O workflow `.github/workflows/pages.yml` executa `npm test` automaticamente em cada envio para a branch `main`. A publicação no GitHub Pages só continua se todos os testes forem aprovados.
+O GitHub Actions só publica quando todos os testes passam.
 
-> Os testes automatizados validam o código e o fluxo de gravação simulado. A confirmação final com o projeto Firebase real ainda deve ser feita após a publicação, criando e editando uma solicitação de teste.
+## Atalhos
 
-## 25. Correção da versão 40
+| Atalho | Ação |
+|---|---|
+| `N` | Nova solicitação |
+| `F` | Busca |
+| `K` | Kanban ampliado |
+| `R` | Atualizar tela |
+| `?` | Ajuda |
+| `T` | Tema |
+| `M` | Notificações |
+| `S` | Filtros salvos |
+| `B` | Ações em massa — admin |
+| `I` | Indicadores — admin |
+| `A` | Arquivados — admin |
+| `U` | Usuários — admin |
+| `Shift + A` | Selecionar cards visíveis |
+| `Shift + Esc` | Limpar seleção |
+| `C` | Comentários |
+| `L` | Histórico |
+| `Ctrl + Enter` | Salvar ou enviar comentário |
+| `Esc` | Fechar diálogo |
 
-### Publicação no GitHub Pages
+## Segurança
 
-A versão 39 referenciava `actions/checkout@v6` no workflow. Essa referência impedia o início do job de build no GitHub Actions.
+- políticas RLS são a proteção principal;
+- anexos ficam em bucket privado;
+- `service_role` é usada somente nos scripts locais de migração;
+- o JSON da conta de serviço Firebase não pode ser versionado;
+- usuários desativados ou bloqueados não passam pelas políticas de acesso;
+- solicitantes não podem alterar perfil, Squad ou permissões privilegiadas.
 
-A versão 40 corrige o workflow para:
+## Versionamento
 
-- utilizar `actions/checkout@v5`;
-- utilizar `actions/setup-node@v6` com cache automático desativado;
-- executar `npm test` antes de preparar os arquivos do site;
-- impedir o deploy quando os testes falharem;
-- manter a publicação pelo GitHub Pages somente após o build aprovado.
+Até a versão 99 permanece a numeração sequencial atual.
 
-Também foi adicionado um teste de regressão que verifica as versões utilizadas pelas ações principais do workflow. Isso reduz o risco de uma referência inexistente interromper futuras publicações.
+Depois:
 
-Nenhuma regra ou estrutura do Firestore foi alterada nesta versão.
-
-
-## 26. Correção da versão 41
-
-### Ajuste dos testes no GitHub Actions
-
-A versão anterior possuía duas verificações incompatíveis com o funcionamento real do repositório:
-
-- tratava `ATUALIZAR.txt` como arquivo obrigatório para a publicação, embora ele seja apenas um documento de orientação;
-- esperava que `firebase-config.js` não existisse no repositório, mesmo sendo necessário para conectar o painel publicado ao Firebase.
-
-A versão 41 corrige essas verificações:
-
-- `ATUALIZAR.txt` permanece no pacote, mas sua ausência no repositório não interrompe o build;
-- o teste não exige mais a ausência de `firebase-config.js`;
-- passa a confirmar que `app.js` e o service worker referenciam a configuração do Firebase;
-- confirma que o workflow não exclui `firebase-config.js` da pasta publicada.
-
-O pacote de atualização continua sem fornecer ou sobrescrever a configuração particular do ambiente. Ao atualizar o repositório, mantenha o `firebase-config.js` já configurado.
-
-Nenhuma regra ou estrutura do Firestore foi alterada nesta versão.
+- `1.0.0`: primeira versão semântica;
+- `1.0.1`: correção;
+- `1.1.0`: melhoria menor;
+- `2.0.0`: evolução grande ou incompatível.

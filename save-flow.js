@@ -36,7 +36,7 @@ export async function commitWithRetry(commitFactory, options = {}) {
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     onAttempt(attempt + 1, retries + 1);
     try {
-      return await withTimeout(() => commitFactory(attempt), timeoutMs, "gravação no Firestore");
+      return await withTimeout(() => commitFactory(attempt), timeoutMs, "gravação no Supabase");
     } catch (error) {
       lastError = error;
       const retryableCodes = new Set(["operation-timeout", "unavailable", "deadline-exceeded", "aborted"]);

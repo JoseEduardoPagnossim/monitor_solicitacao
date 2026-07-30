@@ -9,31 +9,51 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (name) => readFile(path.join(root, name), "utf8");
 
-test("arquivos obrigatórios da publicação existem", async () => {
+test("arquivos obrigatórios da publicação e migração existem", async () => {
   const files = [
-    "index.html", "styles.css", "app.js", "save-flow.js", "firestore.rules",
-    "service-worker.js", "manifest.webmanifest", "VERSION", "version.json",
-    "README.md"
+    "index.html", "styles.css", "app.js", "supabase-compat.js", "supabase-config.js",
+    "save-flow.js", "service-worker.js", "manifest.webmanifest", "VERSION", "version.json",
+    "README.md", "MIGRACAO_SUPABASE.md", "supabase/schema.sql", "supabase/bootstrap-admin.sql",
+    "scripts/migrate-firestore-to-supabase.mjs", "scripts/import-backup-to-supabase.mjs"
   ];
   await Promise.all(files.map((file) => access(path.join(root, file), fsConstants.R_OK)));
 });
 
-test("JavaScript publicado possui sintaxe válida", () => {
-  for (const file of ["app.js", "save-flow.js", "service-worker.js"]) {
+test("JavaScript publicado e scripts de migração possuem sintaxe válida", () => {
+  for (const file of [
+    "app.js", "supabase-compat.js", "save-flow.js", "service-worker.js",
+    "scripts/migration-common.mjs", "scripts/migrate-firestore-to-supabase.mjs",
+    "scripts/import-backup-to-supabase.mjs"
+  ]) {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
   }
 });
 
 test("versão está sincronizada nos arquivos principais", async () => {
-  const [version, html, serviceWorker, versionJson] = await Promise.all([
-    read("VERSION"), read("index.html"), read("service-worker.js"), read("version.json")
+  const [version, html, serviceWorker, versionJson, packageJson] = await Promise.all([
+    read("VERSION"), read("index.html"), read("service-worker.js"), read("version.json"), read("package.json")
   ]);
   const release = version.trim();
-  assert.equal(release, "41");
+  assert.equal(release, "42");
   assert.match(html, new RegExp(`app\\.js\\?v=${release}\\.0\\.0`));
   assert.match(html, new RegExp(`styles\\.css\\?v=${release}\\.0\\.0`));
   assert.match(serviceWorker, new RegExp(`painel-solicitacoes-v${release}`));
   assert.equal(JSON.parse(versionJson).release, release);
+  assert.equal(JSON.parse(packageJson).version, "0.42.0");
+});
+
+test("frontend usa Supabase e não carrega SDK do Firebase", async () => {
+  const app = await read("app.js");
+  assert.match(app, /from "\.\/supabase-compat\.js"/);
+  assert.match(app, /from "\.\/supabase-config\.js"/);
+  assert.doesNotMatch(app, /gstatic\.com\/firebasejs/);
+  assert.doesNotMatch(app, /firebase-config\.js/);
+});
+
+test("configuração pública não contém service_role", async () => {
+  const config = await read("supabase-config.js");
+  assert.match(config, /anonKey/);
+  assert.doesNotMatch(config, /service[_-]?role\s*:/i);
 });
 
 test("rotina de salvamento possui timeout, repetição e bloqueio de duplo clique", async () => {
@@ -45,32 +65,41 @@ test("rotina de salvamento possui timeout, repetição e bloqueio de duplo cliqu
   assert.match(app, /Tentando novamente/);
 });
 
-test("anexos reutilizam o mesmo identificador durante novas tentativas", async () => {
-  const app = await read("app.js");
+test("anexos mantêm identificador e são direcionados ao Storage", async () => {
+  const [app, compat] = await Promise.all([read("app.js"), read("supabase-compat.js")]);
   assert.match(app, /attachment\.firestoreId/);
   assert.match(app, /doc\(db, "requestAttachments", attachment\.firestoreId\)/);
+  assert.match(compat, /request-attachments/);
+  assert.match(compat, /storagePath/);
+  assert.match(compat, /\.upload\(/);
 });
 
-test("service worker publica o módulo de salvamento", async () => {
+test("service worker publica os módulos do Supabase", async () => {
   const serviceWorker = await read("service-worker.js");
+  assert.match(serviceWorker, /\.\/supabase-compat\.js/);
+  assert.match(serviceWorker, /\.\/supabase-config\.js/);
   assert.match(serviceWorker, /\.\/save-flow\.js/);
+  assert.doesNotMatch(serviceWorker, /firebase-config\.js/);
 });
 
-test("configuração Firebase do repositório é preservada na publicação", async () => {
-  const [app, serviceWorker, workflow] = await Promise.all([
-    read("app.js"), read("service-worker.js"), read(".github/workflows/pages.yml")
-  ]);
-
-  assert.match(app, /from "\.\/firebase-config\.js"/);
-  assert.match(serviceWorker, /\.\/firebase-config\.js/);
-  assert.doesNotMatch(workflow, /--exclude=['"]firebase-config\.js['"]/);
-});
-
-test("workflow do GitHub Pages usa ações válidas e testa antes do deploy", async () => {
+test("workflow testa antes do deploy e não publica arquivos administrativos", async () => {
   const workflow = await read(".github/workflows/pages.yml");
   assert.match(workflow, /actions\/checkout@v5/);
-  assert.doesNotMatch(workflow, /actions\/checkout@v6/);
   assert.match(workflow, /actions\/setup-node@v6/);
   assert.match(workflow, /run: npm test/);
   assert.match(workflow, /needs: build/);
+  assert.match(workflow, /--exclude='scripts'/);
+  assert.match(workflow, /--exclude='supabase'/);
+  assert.match(workflow, /--exclude='firestore\.rules'/);
+});
+
+
+test("migração pode criar usuários ausentes sem expor senha temporária", async () => {
+  const common = await readFile(path.join(root, "scripts/migration-common.mjs"), "utf8");
+  const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+  assert.match(common, /auth\.admin\.createUser/);
+  assert.match(common, /randomBytes\(32\)/);
+  assert.doesNotMatch(common, /console\.log\([^\n]*temporaryPassword/);
+  assert.match(packageJson.scripts["migrate:firebase:create-users"], /--create-missing-users/);
+  assert.match(packageJson.scripts["import:backup:create-users"], /--create-missing-users/);
 });

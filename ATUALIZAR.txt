@@ -1,0 +1,26 @@
+PAINEL DE SOLICITAÇÕES — VERSÃO 42
+
+Esta versão troca o backend Firebase pelo Supabase.
+
+ANTES DE PUBLICAR:
+1. Crie o projeto Supabase.
+2. Execute supabase/schema.sql no SQL Editor.
+3. Configure Authentication e desative Confirm email.
+4. Crie o primeiro administrador e execute supabase/bootstrap-admin.sql.
+5. Preencha supabase-config.js com URL e chave anon/publishable.
+
+MIGRAÇÃO — FAÇA ANTES DA PUBLICAÇÃO:
+- leia MIGRACAO_SUPABASE.md;
+- use o comando create-users para criar automaticamente os usuários pelos mesmos e-mails antigos;
+- após a migração, cada usuário deve usar Esqueci minha senha;
+- execute primeiro o modo --dry-run;
+- depois execute a migração real;
+- confira migration-report.json.
+
+PUBLICAÇÃO:
+- somente depois da migração, envie os arquivos da versão 42 ao GitHub;
+- remova firebase-config.js e firestore.rules do repositório;
+- nunca envie a service_role nem o JSON da conta de serviço Firebase;
+- aguarde os testes e o deploy.
+
+Não exclua o projeto Firebase antes de validar chamados, usuários e anexos no Supabase.
