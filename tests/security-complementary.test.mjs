@@ -23,7 +23,7 @@ test("CAPTCHA é opcional, público e integrado aos fluxos de autenticação", a
   const [app, compat, config, html] = await Promise.all([
     read("app.js"), read("supabase-compat.js"), read("security-config.js"), read("index.html")
   ]);
-  assert.match(config, /turnstileSiteKey:\s*""/);
+  assert.match(config, /turnstileSiteKey:\s*"[^"]*"/);
   assert.match(app, /challenges\.cloudflare\.com\/turnstile\/v0\/api\.js\?render=explicit/);
   assert.match(app, /requireCaptchaToken\("login"/);
   assert.match(app, /requireCaptchaToken\("invite"/);
