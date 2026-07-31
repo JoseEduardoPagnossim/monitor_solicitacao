@@ -1,4 +1,4 @@
-# Painel de Solicitações — versão 48
+# Painel de Solicitações — versão 49
 
 Aplicação web interna para controlar solicitações em um **Kanban único de projetos**, com formulários configuráveis, autenticação, permissões por perfil e Squad, comentários, histórico, notificações, indicadores, arquivamento, backup e recursos administrativos.
 
@@ -218,6 +218,12 @@ Durante a recuperação de senha, `Esc` não fecha a janela obrigatória.
 - Melhorias menores: `1.1.0`, `1.2.0`.
 - Grandes evoluções: `2.0.0`, `3.0.0`.
 
+
+## Alteração da versão 49
+
+- Corrige o posicionamento dos controles dos campos personalizados.
+- Corrige a perda de foco ao digitar o texto de orientação (placeholder).
+- Não exige nova execução de SQL para quem já está na versão 48.
 
 ## Alteração da versão 48
 

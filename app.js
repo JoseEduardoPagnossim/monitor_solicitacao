@@ -1787,13 +1787,25 @@ function renderProjectsAdmin() {
   els.projectsEmptyState.hidden = projects.length > 0;
 }
 
-function projectFieldBuilderRow(field, index) {
+function projectFieldBuilderRow(field, index, fields) {
+  const isFirst = index === 0;
+  const isLast = index === fields.length - 1;
   return `<article class="project-field-builder-row" data-project-field-row="${escapeHtml(field.id)}">
-    <div class="project-field-number">${index + 1}</div>
-    <label class="field"><span>Nome do campo *</span><input type="text" maxlength="100" data-project-field-label value="${escapeHtml(field.label || "")}" placeholder="Ex.: Motivo da solicitação" required></label>
-    <label class="field form-span-2"><span>Texto de orientação (placeholder)</span><textarea rows="3" maxlength="1000" data-project-field-placeholder placeholder="Descreva o que o solicitante deve informar.">${escapeHtml(field.placeholder || "")}</textarea></label>
-    <label class="config-checkbox compact"><input type="checkbox" data-project-field-required ${field.required ? "checked" : ""}><span><strong>Obrigatório</strong><small>Impede o envio sem resposta.</small></span></label>
-    <div class="field-row-actions"><button class="button button-secondary compact-button" type="button" data-project-field-move="up" title="Mover para cima">↑</button><button class="button button-secondary compact-button" type="button" data-project-field-move="down" title="Mover para baixo">↓</button><button class="button button-danger compact-button" type="button" data-project-field-remove>Remover</button></div>
+    <div class="project-field-number" aria-hidden="true">${index + 1}</div>
+    <div class="project-field-content">
+      <div class="project-field-inputs">
+        <label class="field"><span>Nome do campo *</span><input type="text" maxlength="100" data-project-field-label value="${escapeHtml(field.label || "")}" placeholder="Ex.: Motivo da solicitação" required></label>
+        <label class="field"><span>Texto de orientação (placeholder)</span><textarea rows="3" maxlength="1000" data-project-field-placeholder placeholder="Descreva o que o solicitante deve informar.">${escapeHtml(field.placeholder || "")}</textarea></label>
+      </div>
+      <div class="project-field-footer">
+        <label class="config-checkbox compact project-field-required"><input type="checkbox" data-project-field-required ${field.required ? "checked" : ""}><span><strong>Obrigatório</strong><small>Impede o envio sem resposta.</small></span></label>
+        <div class="field-row-actions" aria-label="Ações do campo">
+          <button class="button button-secondary compact-button" type="button" data-project-field-move="up" title="Mover para cima" aria-label="Mover campo para cima" ${isFirst ? "disabled" : ""}>↑</button>
+          <button class="button button-secondary compact-button" type="button" data-project-field-move="down" title="Mover para baixo" aria-label="Mover campo para baixo" ${isLast ? "disabled" : ""}>↓</button>
+          <button class="button button-danger compact-button" type="button" data-project-field-remove>Remover</button>
+        </div>
+      </div>
+    </div>
   </article>`;
 }
 
@@ -1854,6 +1866,28 @@ function updateProjectFormPreview() {
     : `<div class="config-builder-empty">Marque campos padrão ou adicione campos personalizados para visualizar o formulário.</div>`;
 }
 
+let projectPreviewFrame = 0;
+
+function scheduleProjectFormPreviewUpdate(event) {
+  const activeField = event?.target?.matches?.("[data-project-field-label], [data-project-field-placeholder]")
+    ? event.target
+    : null;
+  const selectionStart = activeField && typeof activeField.selectionStart === "number" ? activeField.selectionStart : null;
+  const selectionEnd = activeField && typeof activeField.selectionEnd === "number" ? activeField.selectionEnd : null;
+
+  if (projectPreviewFrame) cancelAnimationFrame(projectPreviewFrame);
+  projectPreviewFrame = requestAnimationFrame(() => {
+    projectPreviewFrame = 0;
+    updateProjectFormPreview();
+
+    if (!activeField?.isConnected || document.activeElement === activeField) return;
+    activeField.focus({ preventScroll: true });
+    if (selectionStart !== null && selectionEnd !== null && typeof activeField.setSelectionRange === "function") {
+      activeField.setSelectionRange(selectionStart, selectionEnd);
+    }
+  });
+}
+
 function openProjectDialog(projectId = "") {
   if (!isAdmin()) return;
   const existing = state.projects.find((project) => project.id === projectId);
@@ -1888,7 +1922,7 @@ function addProjectField() {
   const id = `${slugifyIdentifier("campo", "field")}_${crypto.randomUUID().slice(0, 8)}`;
   state.projectFormFields = [...readProjectFieldBuilder(), normalizeProjectField({ id, label: "", placeholder: "", required: false, order: (state.projectFormFields.length + 1) * 10 })];
   renderProjectFieldsBuilder();
-  window.setTimeout(() => $$('[data-project-field-label]', els.projectFieldsBuilder).at(-1)?.focus(), 0);
+  $$('[data-project-field-label]', els.projectFieldsBuilder).at(-1)?.focus({ preventScroll: true });
 }
 
 function handleProjectFieldBuilderClick(event) {
@@ -5892,7 +5926,7 @@ async function downloadBackup(purpose) {
       metadata: {
         generatedAt: generatedAt.toISOString(),
         deleteAfter: deleteAfter.toISOString(),
-        version: "48",
+        version: "49",
         backend: "supabase",
         classification: "CONFIDENCIAL - DADOS DE CLIENTES",
         purpose,
@@ -6170,7 +6204,7 @@ function setupEvents() {
   els.projectForm?.addEventListener("submit", saveProjectDefinition);
   els.addProjectFieldButton?.addEventListener("click", addProjectField);
   els.projectFieldsBuilder?.addEventListener("click", handleProjectFieldBuilderClick);
-  els.projectFieldsBuilder?.addEventListener("input", updateProjectFormPreview);
+  els.projectFieldsBuilder?.addEventListener("input", scheduleProjectFormPreviewUpdate);
   $$('[data-project-standard-enabled], [data-project-standard-required]').forEach((input) => input.addEventListener("change", syncStandardRequiredControls));
   $$(".close-project-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.projectDialog)));
   els.newColumnButton?.addEventListener("click", () => openColumnDialog());
