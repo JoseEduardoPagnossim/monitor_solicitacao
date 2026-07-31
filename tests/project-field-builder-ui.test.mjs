@@ -31,3 +31,14 @@ test("digitacao no placeholder preserva foco e posicao do cursor", async () => {
   assert.match(app, /addEventListener\("input", scheduleProjectFormPreviewUpdate\)/);
   assert.match(app, /\.at\(-1\)\?\.focus\(\{ preventScroll: true \}\)/);
 });
+
+
+test("cliques nos inputs nao remontam o construtor e o campo possui acao de inserir", async () => {
+  const app = await read("app.js");
+
+  assert.match(app, /data-project-field-insert>Inserir campo<\/button>/);
+  assert.match(app, /const action = event\.target\.closest\('\[data-project-field-insert\], \[data-project-field-remove\], \[data-project-field-move\]'\);/);
+  assert.match(app, /if \(!action \|\| els\.projectFieldsBuilder\.dataset\.locked === "true"\) return;/);
+  assert.match(app, /Campo inserido na pré-visualização/);
+  assert.doesNotMatch(app, /function handleProjectFieldBuilderClick\(event\) \{\s*const row = event\.target\.closest\('\[data-project-field-row\]'\);/);
+});

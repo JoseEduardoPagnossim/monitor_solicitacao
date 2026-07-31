@@ -2519,6 +2519,11 @@ body.kanban-focus-mode #bulk-actions-bar {
   gap: 6px;
 }
 .field-row-actions .compact-button { min-height: 40px; }
+.project-field-insert-button { min-width: 124px; }
+.project-field-builder-row.is-inserted {
+  border-color: #86efac;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, .10);
+}
 .field-row-actions .button-secondary { min-width: 40px; padding-inline: 11px; }
 .field-row-actions button:disabled { opacity: .4; cursor: not-allowed; }
 .config-builder-empty {
@@ -2605,8 +2610,9 @@ body.kanban-focus-mode #bulk-actions-bar {
 }
 
 @media (max-width: 460px) {
-  .field-row-actions { display: grid; grid-template-columns: 40px 40px minmax(0, 1fr); }
-  .field-row-actions [data-project-field-remove] { width: 100%; margin-left: 0; }
+  .field-row-actions { display: grid; grid-template-columns: minmax(0, 1fr) 40px 40px; }
+  .field-row-actions .project-field-insert-button { grid-column: 1 / -1; width: 100%; }
+  .field-row-actions [data-project-field-remove] { grid-column: 1 / -1; width: 100%; margin-left: 0; }
 }
 
 :root[data-theme="dark"] .column-rule-badge { color: #fcd34d; background: rgba(245, 158, 11, .16); }

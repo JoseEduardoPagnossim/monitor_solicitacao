@@ -1800,6 +1800,7 @@ function projectFieldBuilderRow(field, index, fields) {
       <div class="project-field-footer">
         <label class="config-checkbox compact project-field-required"><input type="checkbox" data-project-field-required ${field.required ? "checked" : ""}><span><strong>Obrigatório</strong><small>Impede o envio sem resposta.</small></span></label>
         <div class="field-row-actions" aria-label="Ações do campo">
+          <button class="button button-primary compact-button project-field-insert-button" type="button" data-project-field-insert>Inserir campo</button>
           <button class="button button-secondary compact-button" type="button" data-project-field-move="up" title="Mover para cima" aria-label="Mover campo para cima" ${isFirst ? "disabled" : ""}>↑</button>
           <button class="button button-secondary compact-button" type="button" data-project-field-move="down" title="Mover para baixo" aria-label="Mover campo para baixo" ${isLast ? "disabled" : ""}>↓</button>
           <button class="button button-danger compact-button" type="button" data-project-field-remove>Remover</button>
@@ -1825,7 +1826,7 @@ function readProjectFieldBuilder() {
 function renderProjectFieldsBuilder() {
   els.projectFieldsBuilder.innerHTML = state.projectFormFields.length
     ? state.projectFormFields.map(projectFieldBuilderRow).join("")
-    : `<div class="config-builder-empty">Nenhum campo personalizado. Use “Adicionar campo” para criar uma caixa de até 1.000 caracteres.</div>`;
+    : `<div class="config-builder-empty">Nenhum campo personalizado. Use “Novo campo” para criar uma caixa de até 1.000 caracteres.</div>`;
   updateProjectFormPreview();
 }
 
@@ -1926,13 +1927,40 @@ function addProjectField() {
 }
 
 function handleProjectFieldBuilderClick(event) {
-  const row = event.target.closest('[data-project-field-row]');
-  if (!row || els.projectFieldsBuilder.dataset.locked === "true") return;
+  const action = event.target.closest('[data-project-field-insert], [data-project-field-remove], [data-project-field-move]');
+  if (!action || els.projectFieldsBuilder.dataset.locked === "true") return;
+
+  const row = action.closest('[data-project-field-row]');
+  if (!row) return;
+
   const fields = readProjectFieldBuilder();
   const index = fields.findIndex((field) => field.id === row.dataset.projectFieldRow);
   if (index < 0) return;
-  if (event.target.closest('[data-project-field-remove]')) fields.splice(index, 1);
-  const direction = event.target.closest('[data-project-field-move]')?.dataset.projectFieldMove;
+
+  if (action.matches('[data-project-field-insert]')) {
+    const labelInput = $('[data-project-field-label]', row);
+    if (!fields[index].label) {
+      labelInput?.focus({ preventScroll: true });
+      showFormError(els.projectFormError, "Informe o nome do campo antes de inseri-lo no formulário.");
+      return;
+    }
+
+    showFormError(els.projectFormError);
+    state.projectFormFields = fields;
+    updateProjectFormPreview();
+    row.classList.add("is-inserted");
+    action.textContent = "Campo inserido ✓";
+    window.setTimeout(() => {
+      if (!action.isConnected) return;
+      action.textContent = "Inserir campo";
+      row.classList.remove("is-inserted");
+    }, 1400);
+    showToast("Campo inserido na pré-visualização. Clique em Salvar e publicar para concluir.");
+    return;
+  }
+
+  if (action.matches('[data-project-field-remove]')) fields.splice(index, 1);
+  const direction = action.dataset.projectFieldMove;
   if (direction === "up" && index > 0) [fields[index - 1], fields[index]] = [fields[index], fields[index - 1]];
   if (direction === "down" && index < fields.length - 1) [fields[index + 1], fields[index]] = [fields[index], fields[index + 1]];
   state.projectFormFields = fields;
