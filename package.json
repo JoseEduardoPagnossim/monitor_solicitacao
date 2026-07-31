@@ -13,7 +13,7 @@
     "import:backup:create-users": "node scripts/import-backup-to-supabase.mjs --create-missing-users"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.110.8",
+    "@supabase/supabase-js": "2.111.0",
     "firebase-admin": "14.2.0"
   },
   "engines": {
