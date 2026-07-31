@@ -41,6 +41,7 @@ jobs:
             index.html
             styles.css
             app.js
+            project-system.js
             supabase-compat.js
             supabase-config.js
             security-config.js

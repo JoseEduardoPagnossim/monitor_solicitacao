@@ -7,19 +7,19 @@
   <meta name="referrer" content="same-origin">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://aszedsiqgtdycoasptrt.supabase.co wss://aszedsiqgtdycoasptrt.supabase.co https://cdn.jsdelivr.net https://challenges.cloudflare.com; manifest-src 'self'; worker-src 'self' blob:; frame-src 'self' https://challenges.cloudflare.com; form-action 'self'">
   <title>Painel de Solicitações</title>
-  <link rel="icon" type="image/png" href="logo-soften.png?v=47.0.0">
+  <link rel="icon" type="image/png" href="logo-soften.png?v=48.0.0">
   <meta name="theme-color" content="#2563eb">
-  <link rel="manifest" href="manifest.webmanifest?v=47.0.0">
-  <link rel="apple-touch-icon" href="icon-192.png?v=47.0.0">
+  <link rel="manifest" href="manifest.webmanifest?v=48.0.0">
+  <link rel="apple-touch-icon" href="icon-192.png?v=48.0.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=47.0.0">
+  <link rel="stylesheet" href="styles.css?v=48.0.0">
 </head>
 <body class="auth-pending">
   <div id="app-bootstrap" class="app-bootstrap" role="status" aria-live="polite">
     <div class="app-bootstrap-card">
-      <img src="logo-soften.png?v=47.0.0" alt="Logo Soften">
+      <img src="logo-soften.png?v=48.0.0" alt="Logo Soften">
       <div class="app-bootstrap-spinner" aria-hidden="true"></div>
       <strong>Carregando o painel...</strong>
       <span>Validando sua sessão com segurança.</span>
@@ -30,7 +30,7 @@
 
   <section id="login-view" class="login-view">
     <div class="login-visual">
-      <div class="brand-mark"><img src="logo-soften.png?v=47.0.0" alt="Logo Soften"></div>
+      <div class="brand-mark"><img src="logo-soften.png?v=48.0.0" alt="Logo Soften"></div>
       <div>
         <span class="eyebrow">CONTROLE INTERNO</span>
         <h1>Solicitações organizadas, prioridades visíveis.</h1>
@@ -46,7 +46,7 @@
     <div class="login-panel">
       <form id="login-form" class="auth-card" autocomplete="on">
         <div class="auth-header">
-          <span class="mobile-logo"><img src="logo-soften.png?v=47.0.0" alt="Logo Soften"></span>
+          <span class="mobile-logo"><img src="logo-soften.png?v=48.0.0" alt="Logo Soften"></span>
           <h2>Entrar no painel</h2>
           <p>Use o e-mail e a senha cadastrados pelo administrador.</p>
         </div>
@@ -78,7 +78,7 @@
 
       <form id="invite-registration-form" class="auth-card" autocomplete="on" hidden>
         <div class="auth-header">
-          <span class="mobile-logo"><img src="logo-soften.png?v=47.0.0" alt="Logo Soften"></span>
+          <span class="mobile-logo"><img src="logo-soften.png?v=48.0.0" alt="Logo Soften"></span>
           <span class="eyebrow">CONVITE DE ACESSO</span>
           <h2>Concluir cadastro</h2>
           <p>Confira seus dados e crie uma senha para acessar o painel.</p>
@@ -126,7 +126,7 @@
   <div id="app-view" class="app-view" hidden>
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <div class="brand-mark small"><img src="logo-soften.png?v=47.0.0" alt="Logo Soften"></div>
+        <div class="brand-mark small"><img src="logo-soften.png?v=48.0.0" alt="Logo Soften"></div>
         <div>
           <strong>Painel</strong>
           <span>Solicitações</span>
@@ -137,15 +137,6 @@
         <button class="nav-item active" data-view="kanban">
           <span class="nav-icon">▦</span> Kanban
         </button>
-        <button class="nav-item" data-filter-type="programacao">
-          <span class="nav-icon">⌘</span> Programação
-        </button>
-        <button class="nav-item" data-filter-type="cancelamento">
-          <span class="nav-icon">⊘</span> Cancelamentos
-        </button>
-        <button class="nav-item" data-filter-type="tef_elgin">
-          <span class="nav-icon">▤</span> TEF Elgin
-        </button>
         <button id="indicators-nav-button" class="nav-item admin-only" data-view="indicators" type="button">
           <span class="nav-icon">◫</span> Indicadores
         </button>
@@ -154,6 +145,12 @@
         </button>
         <button id="users-nav-button" class="nav-item admin-only" data-view="users" type="button">
           <span class="nav-icon">♙</span> Usuários
+        </button>
+        <button id="projects-nav-button" class="nav-item admin-only" data-view="projects" type="button">
+          <span class="nav-icon">▥</span> Projetos e formulários
+        </button>
+        <button id="columns-nav-button" class="nav-item admin-only" data-view="columns" type="button">
+          <span class="nav-icon">▦</span> Colunas do Kanban
         </button>
         <button id="security-nav-button" class="nav-item admin-only" data-view="security" type="button">
           <span class="nav-icon">◈</span> Segurança e backup
@@ -182,7 +179,7 @@
         <div id="app-version-card" class="app-version-card" title="Informações da versão publicada">
           <div class="app-version-main">
             <span>VERSÃO</span>
-            <strong id="app-version-label">v26</strong>
+            <strong id="app-version-label">v48</strong>
           </div>
           <span id="app-version-details" class="app-version-details">Ambiente local</span>
         </div>
@@ -221,7 +218,7 @@
         </article>
         <article class="metric-card">
           <div class="metric-icon purple">⌘</div>
-          <div><span>Programações</span><strong id="metric-programming">0</strong></div>
+          <div><span>Projetos em aberto</span><strong id="metric-programming">0</strong></div>
         </article>
         <article class="metric-card">
           <div class="metric-icon green">✓</div>
@@ -234,11 +231,8 @@
           <span>⌕</span>
           <input id="search-input" type="search" placeholder="Buscar cliente, CNPJ, título ou solicitante...">
         </div>
-        <select id="type-filter" class="select-control" aria-label="Filtrar por tipo">
-          <option value="all">Todos os tipos</option>
-          <option value="programacao">Programação</option>
-          <option value="cancelamento">Cancelamento</option>
-          <option value="tef_elgin">TEF Elgin</option>
+        <select id="type-filter" class="select-control" aria-label="Filtrar por projeto">
+          <option value="all">Todos os projetos</option>
         </select>
         <select id="priority-filter" class="select-control" aria-label="Filtrar por prioridade">
           <option value="all">Todas as prioridades</option>
@@ -265,7 +259,7 @@
 
       <section id="bulk-actions-bar" class="bulk-actions-bar admin-only" hidden>
         <div><strong><span id="bulk-selected-count">0</span> selecionadas</strong><span>Marque os cards que deseja atualizar.</span></div>
-        <select id="bulk-status-select" class="select-control"><option value="">Alterar status...</option><option value="nova">Nova</option><option value="analise">Em análise</option><option value="aguardando">Aguardando</option><option value="bloqueio">Bloqueio</option><option value="concluida">Concluída</option></select>
+        <select id="bulk-status-select" class="select-control"><option value="">Alterar coluna...</option></select>
         <select id="bulk-assignee-select" class="select-control"><option value="">Definir responsável...</option></select>
         <button id="bulk-crm-button" class="button button-secondary" type="button">Marcar CRM</button>
         <button id="bulk-archive-button" class="button button-secondary" type="button">Arquivar concluídas</button>
@@ -274,34 +268,13 @@
 
       <header id="kanban-focus-header" class="kanban-focus-header" hidden>
         <div class="kanban-focus-title">
-          <img src="logo-soften.png?v=47.0.0" alt="Logo Soften">
+          <img src="logo-soften.png?v=48.0.0" alt="Logo Soften">
           <div><strong>Kanban de solicitações</strong><span>Visualização ampliada das etapas</span></div>
         </div>
         <button id="exit-kanban-focus-button" class="kanban-focus-exit" type="button" title="Voltar ao painel" aria-label="Voltar ao painel">✕ Voltar ao painel</button>
       </header>
 
-      <section id="kanban-board" class="kanban-board" aria-label="Quadro Kanban">
-        <div class="kanban-column" data-status="nova">
-          <header><div><span class="status-dot new"></span><h2>Novas</h2></div><div class="column-header-actions"><label class="bulk-column-select" data-bulk-column-wrapper="nova" hidden title="Selecionar todos os cards visíveis desta coluna"><input type="checkbox" data-bulk-column="nova"><span>Todos</span></label><span class="column-count" data-count="nova">0</span></div></header>
-          <div class="column-body" data-dropzone="nova"></div>
-        </div>
-        <div class="kanban-column" data-status="analise">
-          <header><div><span class="status-dot analysis"></span><h2>Em análise</h2></div><div class="column-header-actions"><label class="bulk-column-select" data-bulk-column-wrapper="analise" hidden title="Selecionar todos os cards visíveis desta coluna"><input type="checkbox" data-bulk-column="analise"><span>Todos</span></label><span class="column-count" data-count="analise">0</span></div></header>
-          <div class="column-body" data-dropzone="analise"></div>
-        </div>
-        <div class="kanban-column" data-status="aguardando">
-          <header><div><span class="status-dot waiting"></span><h2>Aguardando</h2></div><div class="column-header-actions"><label class="bulk-column-select" data-bulk-column-wrapper="aguardando" hidden title="Selecionar todos os cards visíveis desta coluna"><input type="checkbox" data-bulk-column="aguardando"><span>Todos</span></label><span class="column-count" data-count="aguardando">0</span></div></header>
-          <div class="column-body" data-dropzone="aguardando"></div>
-        </div>
-        <div class="kanban-column" data-status="bloqueio">
-          <header><div><span class="status-dot blocked"></span><h2>Bloqueio</h2></div><div class="column-header-actions"><label class="bulk-column-select" data-bulk-column-wrapper="bloqueio" hidden title="Selecionar todos os cards visíveis desta coluna"><input type="checkbox" data-bulk-column="bloqueio"><span>Todos</span></label><span class="column-count" data-count="bloqueio">0</span></div></header>
-          <div class="column-body" data-dropzone="bloqueio"></div>
-        </div>
-        <div class="kanban-column" data-status="concluida">
-          <header><div><span class="status-dot done"></span><h2>Concluídas</h2></div><div class="column-header-actions"><label class="bulk-column-select" data-bulk-column-wrapper="concluida" hidden title="Selecionar todos os cards visíveis desta coluna"><input type="checkbox" data-bulk-column="concluida"><span>Todos</span></label><span class="column-count" data-count="concluida">0</span></div></header>
-          <div class="column-body" data-dropzone="concluida"></div>
-        </div>
-      </section>
+      <section id="kanban-board" class="kanban-board" aria-label="Quadro Kanban"></section>
 
       <div id="empty-state" class="empty-state" hidden>
         <div>▦</div>
@@ -378,11 +351,8 @@
         <section class="toolbar reports-toolbar">
           <label class="compact-field"><span>De</span><input id="indicator-start-date" type="date"></label>
           <label class="compact-field"><span>Até</span><input id="indicator-end-date" type="date"></label>
-          <select id="indicator-type-filter" class="select-control" aria-label="Filtrar indicadores por tipo">
-            <option value="all">Todos os tipos</option>
-            <option value="programacao">Programação</option>
-            <option value="cancelamento">Cancelamento</option>
-            <option value="tef_elgin">TEF Elgin</option>
+          <select id="indicator-type-filter" class="select-control" aria-label="Filtrar indicadores por projeto">
+            <option value="all">Todos os projetos</option>
           </select>
           <select id="indicator-squad-filter" class="select-control" aria-label="Filtrar indicadores por grupo">
             <option value="all">Todos os grupos</option>
@@ -398,7 +368,7 @@
           <article class="metric-card"><div class="metric-icon blue">▣</div><div><span>Criadas no período</span><strong id="indicator-created">0</strong></div></article>
           <article class="metric-card"><div class="metric-icon green">✓</div><div><span>Concluídas</span><strong id="indicator-completed">0</strong></div></article>
           <article class="metric-card"><div class="metric-icon amber">◷</div><div><span>Tempo médio</span><strong id="indicator-average-time">—</strong></div></article>
-          <article class="metric-card"><div class="metric-icon red">!</div><div><span>Em bloqueio</span><strong id="indicator-blocked">0</strong></div></article>
+          <article class="metric-card"><div class="metric-icon red">!</div><div><span>Em pausa</span><strong id="indicator-blocked">0</strong></div></article>
           <article class="metric-card"><div class="metric-icon purple">%</div><div><span>Taxa de conclusão</span><strong id="indicator-completion-rate">0%</strong></div></article>
           <article class="metric-card"><div class="metric-icon gray">▣</div><div><span>Arquivadas</span><strong id="indicator-archived">0</strong></div></article>
           <article class="metric-card"><div class="metric-icon cyan">⏸</div><div><span>Tempo pausado</span><strong id="indicator-paused-time">—</strong></div></article>
@@ -411,19 +381,19 @@
             <div id="indicator-status-bars" class="report-bars"></div>
           </article>
           <article class="report-card">
-            <header><div><span class="eyebrow">VOLUME</span><h2>Por tipo</h2></div></header>
+            <header><div><span class="eyebrow">VOLUME</span><h2>Por projeto</h2></div></header>
             <div id="indicator-type-bars" class="report-bars"></div>
           </article>
           <article class="report-card report-card-wide">
             <header><div><span class="eyebrow">EQUIPE</span><h2>Solicitações por técnico</h2></div></header>
-            <div class="report-table-wrap"><table class="report-table"><thead><tr><th>Técnico</th><th>Criadas</th><th>Concluídas</th><th>Em aberto</th><th>Bloqueadas</th><th>Tempo médio ativo</th></tr></thead><tbody id="indicator-requester-table"></tbody></table></div>
+            <div class="report-table-wrap"><table class="report-table"><thead><tr><th>Técnico</th><th>Criadas</th><th>Concluídas</th><th>Em aberto</th><th>Em pausa</th><th>Tempo médio ativo</th></tr></thead><tbody id="indicator-requester-table"></tbody></table></div>
           </article>
           <article class="report-card">
             <header><div><span class="eyebrow">COMPARAÇÃO</span><h2>Período anterior</h2></div></header>
             <div id="indicator-comparison" class="comparison-list"></div>
           </article>
           <article class="report-card">
-            <header><div><span class="eyebrow">EFICIÊNCIA</span><h2>Tempo médio por tipo</h2></div></header>
+            <header><div><span class="eyebrow">EFICIÊNCIA</span><h2>Tempo médio por projeto</h2></div></header>
             <div id="indicator-type-time-bars" class="report-bars"></div>
           </article>
         </section>
@@ -445,11 +415,8 @@
 
         <section class="toolbar archived-toolbar">
           <div class="search-box"><span>⌕</span><input id="archived-search-input" type="search" placeholder="Buscar cliente, CNPJ, título ou solicitante..."></div>
-          <select id="archived-type-filter" class="select-control" aria-label="Filtrar arquivados por tipo">
-            <option value="all">Todos os tipos</option>
-            <option value="programacao">Programação</option>
-            <option value="cancelamento">Cancelamento</option>
-            <option value="tef_elgin">TEF Elgin</option>
+          <select id="archived-type-filter" class="select-control" aria-label="Filtrar arquivados por projeto">
+            <option value="all">Todos os projetos</option>
           </select>
           <select id="archived-squad-filter" class="select-control" aria-label="Filtrar arquivados por grupo">
             <option value="all">Todos os grupos</option>
@@ -463,13 +430,36 @@
         <section class="archived-panel">
           <div class="archived-table-wrap">
             <table class="archived-table">
-              <thead><tr><th>Solicitação</th><th>Tipo</th><th>Grupo</th><th>Solicitante</th><th>Concluída</th><th>Arquivada</th><th>Ações</th></tr></thead>
+              <thead><tr><th>Solicitação</th><th>Projeto</th><th>Grupo</th><th>Solicitante</th><th>Concluída</th><th>Arquivada</th><th>Ações</th></tr></thead>
               <tbody id="archived-table-body"></tbody>
             </table>
           </div>
           <div id="archived-empty-state" class="users-empty-state" hidden><div>▣</div><h2>Nenhuma solicitação arquivada</h2><p>As solicitações concluídas podem ser arquivadas pelo administrador.</p></div>
         </section>
       </section>
+      <section id="projects-view" class="app-section admin-view" hidden>
+        <header class="topbar">
+          <div><button class="icon-button mobile-menu" type="button" aria-label="Abrir menu">☰</button><span class="eyebrow">ADMINISTRAÇÃO</span><h1>Projetos e formulários</h1><p>Crie novos tipos de solicitação e configure os campos apresentados aos usuários.</p></div>
+          <div class="topbar-actions"><button id="new-project-button" class="button button-primary" type="button">+ Novo projeto</button><button id="refresh-projects-button" class="button button-secondary" type="button">↻ Atualizar</button></div>
+        </header>
+        <section class="admin-config-panel">
+          <div class="admin-config-help"><strong>Como funciona</strong><p>Todo tipo de solicitação é um projeto do mesmo Kanban. Projetos publicados aparecem no seletor de nova solicitação para os perfis autorizados.</p></div>
+          <div class="config-table-wrap"><table class="config-table"><thead><tr><th>Projeto</th><th>Quem pode criar</th><th>Campos</th><th>Situação</th><th>Solicitações</th><th>Ações</th></tr></thead><tbody id="projects-table-body"></tbody></table></div>
+          <div id="projects-empty-state" class="users-empty-state" hidden><div>▥</div><h2>Nenhum projeto configurado</h2><p>Crie o primeiro projeto pela interface.</p></div>
+        </section>
+      </section>
+
+      <section id="columns-view" class="app-section admin-view" hidden>
+        <header class="topbar">
+          <div><button class="icon-button mobile-menu" type="button" aria-label="Abrir menu">☰</button><span class="eyebrow">ADMINISTRAÇÃO</span><h1>Colunas do Kanban</h1><p>Defina as etapas globais utilizadas por todos os projetos.</p></div>
+          <div class="topbar-actions"><button id="new-column-button" class="button button-primary" type="button">+ Nova coluna</button><button id="refresh-columns-button" class="button button-secondary" type="button">↻ Atualizar</button></div>
+        </header>
+        <section class="admin-config-panel">
+          <div class="admin-config-help"><strong>Regras importantes</strong><p>Ao menos uma coluna aberta deve permanecer ativa. Uma coluna com solicitações não é excluída: mova os cards e depois arquive a etapa. Colunas marcadas como pausa interrompem a contagem de tempo.</p></div>
+          <div id="columns-admin-list" class="columns-admin-list"></div>
+        </section>
+      </section>
+
       <section id="security-view" class="app-section admin-view" hidden>
         <header class="topbar">
           <div><button class="icon-button mobile-menu" type="button" aria-label="Abrir menu">☰</button><span class="eyebrow">ADMINISTRAÇÃO</span><h1>Segurança e backup</h1><p>Acompanhe acessos, sessões e faça cópias dos dados do painel.</p></div>
@@ -512,11 +502,9 @@
       <input id="request-id" type="hidden">
       <div class="form-grid">
         <label class="field">
-          <span>Tipo da solicitação *</span>
+          <span>Projeto *</span>
           <select id="request-type" required>
-            <option value="programacao">Solicitação de programação</option>
-            <option value="cancelamento">Chamado para cancelamento</option>
-            <option value="tef_elgin">Solicitação TEF Elgin</option>
+            <option value="">Selecione o projeto</option>
           </select>
         </label>
         <label class="field">
@@ -768,15 +756,17 @@
           </div>
         </section>
 
+        <section id="custom-project-fields" class="dynamic-section form-span-2" aria-label="Campos personalizados do projeto" hidden>
+          <div class="form-section-heading custom-project-heading">
+            <div><span class="eyebrow">FORMULÁRIO DO PROJETO</span><h3 id="custom-project-title">Dados da solicitação</h3><p id="custom-project-description"></p></div>
+          </div>
+          <div id="custom-standard-fields" class="form-grid nested-grid"></div>
+          <div id="custom-fields-container" class="form-grid nested-grid"></div>
+        </section>
+
         <label id="status-field" class="field admin-only">
           <span>Status</span>
-          <select id="request-status">
-            <option value="nova">Nova</option>
-            <option value="analise">Em análise</option>
-            <option value="aguardando">Aguardando</option>
-            <option value="bloqueio">Bloqueio</option>
-            <option value="concluida">Concluída</option>
-          </select>
+          <select id="request-status"></select>
         </label>
         <label id="assignee-field" class="field admin-only">
           <span>Responsável</span>
@@ -821,6 +811,46 @@
     </form>
   </dialog>
 
+
+  <dialog id="project-dialog" class="modal config-dialog">
+    <form id="project-form" method="dialog" class="modal-content">
+      <div class="modal-header"><div><span class="eyebrow">CONSTRUTOR DE FORMULÁRIO</span><h2 id="project-dialog-title">Novo projeto</h2></div><button class="icon-button close-project-modal" type="button" aria-label="Fechar">×</button></div>
+      <input id="project-id" type="hidden">
+      <div class="form-grid">
+        <label class="field"><span>Nome do projeto *</span><input id="project-name" type="text" maxlength="100" placeholder="Ex.: Solicitação de acesso" required></label>
+        <label class="field"><span>Quem pode criar *</span><select id="project-audience" required><option value="all">Administradores e solicitantes</option><option value="solicitante">Somente solicitantes</option><option value="admin">Somente administradores</option></select></label>
+        <label class="field form-span-2"><span>Descrição</span><textarea id="project-description" rows="3" maxlength="500" placeholder="Explique o objetivo deste projeto."></textarea></label>
+        <label class="field"><span>Situação</span><select id="project-status"><option value="published">Publicado</option><option value="draft">Rascunho</option><option value="archived">Arquivado</option></select></label>
+        <label class="field"><span>Ordem de exibição</span><input id="project-order" type="number" min="1" max="9999" value="100"></label>
+      </div>
+      <section class="config-form-section"><div class="form-section-heading"><div><span class="eyebrow">CAMPOS PADRÃO</span><h3>Dados validados</h3><p>Marque os campos que devem ser criados automaticamente no formulário.</p></div></div>
+        <div class="standard-field-config-grid">
+          <div class="standard-field-config" data-standard-config="document"><label><input type="checkbox" data-project-standard-enabled="document"> CPF/CNPJ</label><label><input type="checkbox" data-project-standard-required="document"> Obrigatório</label></div>
+          <div class="standard-field-config" data-standard-config="companyName"><label><input type="checkbox" data-project-standard-enabled="companyName"> Razão Social</label><label><input type="checkbox" data-project-standard-required="companyName"> Obrigatório</label></div>
+          <div class="standard-field-config" data-standard-config="phone"><label><input type="checkbox" data-project-standard-enabled="phone"> Telefone</label><label><input type="checkbox" data-project-standard-required="phone"> Obrigatório</label></div>
+          <div class="standard-field-config" data-standard-config="email"><label><input type="checkbox" data-project-standard-enabled="email"> E-mail</label><label><input type="checkbox" data-project-standard-required="email"> Obrigatório</label></div>
+        </div>
+      </section>
+      <section class="config-form-section"><div class="form-section-heading"><div><span class="eyebrow">CAMPOS PERSONALIZADOS</span><h3>Chave e orientação</h3><p>A chave é o nome do campo. O texto de orientação será exibido como placeholder. Cada resposta aceita até 1.000 caracteres.</p></div><button id="add-project-field-button" class="button button-secondary" type="button">+ Adicionar campo</button></div><div id="project-fields-builder" class="project-fields-builder"></div></section>
+      <section class="config-form-section"><div class="form-section-heading"><div><span class="eyebrow">PRÉ-VISUALIZAÇÃO</span><h3>Formulário para o solicitante</h3></div></div><div id="project-form-preview" class="project-form-preview"></div></section>
+      <p id="project-form-error" class="form-error" hidden></p>
+      <div class="modal-actions modal-actions-end"><button class="button button-secondary close-project-modal" type="button">Cancelar</button><button id="save-project-button" class="button button-primary" type="submit">Salvar e publicar</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="column-dialog" class="modal modal-small config-dialog">
+    <form id="column-form" method="dialog" class="modal-content">
+      <div class="modal-header"><div><span class="eyebrow">ETAPA DO FLUXO</span><h2 id="column-dialog-title">Nova coluna</h2></div><button class="icon-button close-column-modal" type="button" aria-label="Fechar">×</button></div>
+      <input id="column-id" type="hidden">
+      <label class="field"><span>Nome da coluna *</span><input id="column-name" type="text" maxlength="80" placeholder="Ex.: Aguardando validação" required></label>
+      <label class="field"><span>Posição *</span><input id="column-order" type="number" min="1" max="9999" value="60" required><small>Use números menores para exibir a coluna antes.</small></label>
+      <label class="config-checkbox"><input id="column-pauses-timer" type="checkbox"><span><strong>Pausar contagem de tempo</strong><small>Use quando a demanda estiver aguardando uma condição externa.</small></span></label>
+      <label class="config-checkbox"><input id="column-completed" type="checkbox"><span><strong>Representa conclusão</strong><small>Cards nesta coluna serão contabilizados como concluídos.</small></span></label>
+      <label class="field"><span>Identificação visual</span><select id="column-color"><option value="blue">Azul</option><option value="purple">Roxo</option><option value="amber">Âmbar</option><option value="red">Vermelho</option><option value="green">Verde</option><option value="cyan">Ciano</option><option value="gray">Cinza</option></select></label>
+      <p id="column-form-error" class="form-error" hidden></p>
+      <div class="modal-actions modal-actions-end"><button class="button button-secondary close-column-modal" type="button">Cancelar</button><button id="save-column-button" class="button button-primary" type="submit">Salvar coluna</button></div>
+    </form>
+  </dialog>
 
   <dialog id="user-invite-dialog" class="modal modal-small user-dialog">
     <form id="user-invite-form" method="dialog" class="modal-content">
@@ -1139,24 +1169,37 @@
             </div>
             <div class="help-form-block">
               <div class="help-field-list single-column">
-                <div><strong>Indicadores gerenciais</strong><p>Disponíveis apenas para administradores. Use o período e o tipo para analisar solicitações criadas, concluídas, bloqueadas, tempo médio e desempenho por técnico.</p></div>
+                <div><strong>Indicadores gerenciais</strong><p>Disponíveis apenas para administradores. Use o período e o projeto para analisar solicitações criadas, concluídas, bloqueadas, tempo médio e desempenho por técnico.</p></div>
                 <div><strong>Arquivar uma solicitação</strong><p>Abra uma solicitação concluída e clique em Arquivar. Ela sairá do Kanban principal, mas continuará com dados, comentários e anexos no histórico.</p></div>
                 <div><strong>Arquivamento em lote</strong><p>Na tela Arquivados, o administrador pode mover de uma vez as solicitações concluídas há mais de 30 dias.</p></div>
                 <div><strong>Restaurar</strong><p>Use Restaurar para devolver uma solicitação arquivada ao Kanban, na coluna Concluídas.</p></div>
                 <div><strong>Comparação de períodos</strong><p>Os indicadores comparam automaticamente o período selecionado com o intervalo anterior de mesma duração.</p></div>
-                <div><strong>Backup</strong><p>Na tela Segurança e backup, o administrador pode baixar uma cópia JSON completa. Para funcionar, as regras do Firestore da mesma versão do painel precisam estar publicadas.</p></div>
+                <div><strong>Backup</strong><p>Na tela Segurança e backup, o administrador pode baixar uma cópia JSON completa. Para funcionar, as políticas RLS e os scripts SQL da mesma versão precisam estar aplicados no Supabase.</p></div>
                 <div><strong>Log de acesso</strong><p>Entradas, saídas, troca de senha e expiração de sessão são registradas para consulta administrativa.</p></div>
               </div>
             </div>
             <div class="help-notice"><strong>Melhoria de desempenho</strong><p>O Kanban carrega somente solicitações ativas. Registros arquivados são consultados apenas quando o administrador abre o histórico ou os indicadores.</p></div>
           </section>
 
+          <section id="help-projects" class="help-section admin-only">
+            <div class="help-section-title"><span class="help-section-number">08</span><div><span class="eyebrow">ADMINISTRAÇÃO DO KANBAN</span><h3>Como criar projetos e colunas</h3></div></div>
+            <div class="help-steps">
+              <article class="help-step"><span>1</span><div><strong>Crie um projeto</strong><p>Acesse <strong>Projetos e formulários</strong>, clique em Novo projeto e informe nome, descrição e quem poderá abrir solicitações.</p></div></article>
+              <article class="help-step"><span>2</span><div><strong>Escolha os campos validados</strong><p>Marque CPF/CNPJ, Razão Social, Telefone e E-mail. Em cada um, defina se o preenchimento será obrigatório.</p></div></article>
+              <article class="help-step"><span>3</span><div><strong>Adicione campos personalizados</strong><p>Informe o nome do campo e escreva a orientação que aparecerá dentro da caixa. A resposta terá até 1.000 caracteres.</p></div></article>
+              <article class="help-step"><span>4</span><div><strong>Publique</strong><p>Projetos publicados aparecem no seletor de Nova solicitação para os perfis autorizados. Projetos arquivados continuam preservados nas solicitações antigas.</p></div></article>
+              <article class="help-step"><span>5</span><div><strong>Crie uma coluna</strong><p>Acesse <strong>Colunas do Kanban</strong>, informe o nome e a posição. Marque se a etapa pausa o tempo ou representa conclusão.</p></div></article>
+              <article class="help-step"><span>6</span><div><strong>Arquive com segurança</strong><p>Uma coluna que possui cards não pode ser arquivada antes que as solicitações sejam movidas para outra etapa.</p></div></article>
+            </div>
+            <div class="help-warning"><strong>Preservação de histórico</strong><p>Campos, projetos e colunas utilizados não são apagados dos registros antigos. A interface trabalha com arquivamento para evitar perda de informações.</p></div>
+          </section>
+
           <section id="help-productivity" class="help-section">
-            <div class="help-section-title"><span class="help-section-number">08</span><div><span class="eyebrow">PRODUTIVIDADE E SEGURANÇA</span><h3>Atalhos, tempo pausado e recursos internos</h3></div></div>
+            <div class="help-section-title"><span class="help-section-number">09</span><div><span class="eyebrow">PRODUTIVIDADE E SEGURANÇA</span><h3>Atalhos, tempo pausado e recursos internos</h3></div></div>
             <div class="help-form-block"><div class="help-field-list single-column">
-              <div><strong>Pausa do tempo</strong><p>O tempo ativo fica pausado automaticamente nas colunas Aguardando e Bloqueio. Ao voltar para Nova ou Em análise, a contagem continua de onde parou. O tempo total pausado é preservado nos indicadores.</p></div>
-              <div><strong>Alertas automáticos</strong><p>O painel notifica atribuições, menções, mudanças para Bloqueio e solicitações pausadas por mais de 24 horas.</p></div>
-              <div><strong>Ações em massa</strong><p>Administradores podem selecionar cards visíveis e alterar status, responsável, controle de CRM ou arquivar concluídas. No topo de cada coluna, a opção <strong>Todos</strong> seleciona ou desmarca todos os cards visíveis daquela etapa, respeitando os filtros aplicados.</p></div>
+              <div><strong>Pausa do tempo</strong><p>O tempo ativo fica pausado automaticamente nas colunas configuradas pelo administrador com a opção “Pausar contagem de tempo”. Ao voltar para uma etapa normal, a contagem continua de onde parou. O tempo total pausado é preservado nos indicadores.</p></div>
+              <div><strong>Alertas automáticos</strong><p>O painel notifica atribuições, menções, mudanças de etapa relevantes e solicitações pausadas por mais de 24 horas.</p></div>
+              <div><strong>Ações em massa</strong><p>Administradores podem selecionar cards visíveis e alterar coluna, responsável, controle de CRM ou arquivar concluídas. No topo de cada coluna, a opção <strong>Todos</strong> seleciona ou desmarca todos os cards visíveis daquela etapa, respeitando os filtros aplicados.</p></div>
               <div><strong>Modelos de comentários</strong><p>Selecione um texto pronto antes de comentar. Administradores podem criar e excluir modelos compartilhados.</p></div>
               <div><strong>Filtros salvos</strong><p>Configure os filtros, clique em Salvar filtro e reutilize a combinação pelo seletor Filtros salvos.</p></div>
               <div><strong>Aplicativo instalável</strong><p>Quando disponível, use o ícone de instalação no rodapé para abrir o painel como aplicativo no computador.</p></div>
@@ -1325,6 +1368,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=47.0.0"></script>
+  <script type="module" src="app.js?v=48.0.0"></script>
 </body>
 </html>

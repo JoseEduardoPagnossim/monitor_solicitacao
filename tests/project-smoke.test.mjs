@@ -11,9 +11,9 @@ const read = (name) => readFile(path.join(root, name), "utf8");
 
 test("arquivos obrigatórios da publicação e migração existem", async () => {
   const files = [
-    "index.html", "styles.css", "app.js", "supabase-compat.js", "supabase-config.js", "security-config.js", "legal-config.js",
+    "index.html", "styles.css", "app.js", "project-system.js", "supabase-compat.js", "supabase-config.js", "security-config.js", "legal-config.js",
     "save-flow.js", "service-worker.js", "manifest.webmanifest", "VERSION", "version.json",
-    "README.md", "MIGRACAO_SUPABASE.md", "SECURITY.md", "SEGURANCA_URGENTE.md", "SEGURANCA_COMPLEMENTAR_V46.md", "POLITICA_E_TERMO_DE_USO.md", "TERMO_DE_USO_V47.md", "legal/termo-uso-confidencialidade-v1.html", "supabase/schema.sql", "supabase/bootstrap-admin.sql", "supabase/security-hardening-v45.sql", "supabase/security-hardening-v46.sql", "supabase/legal-terms-v47.sql",
+    "README.md", "PROJETOS_E_KANBAN_V48.md", "MIGRACAO_SUPABASE.md", "SECURITY.md", "SEGURANCA_URGENTE.md", "SEGURANCA_COMPLEMENTAR_V46.md", "POLITICA_E_TERMO_DE_USO.md", "TERMO_DE_USO_V47.md", "legal/termo-uso-confidencialidade-v1.html", "supabase/schema.sql", "supabase/bootstrap-admin.sql", "supabase/security-hardening-v45.sql", "supabase/security-hardening-v46.sql", "supabase/legal-terms-v47.sql", "supabase/projects-kanban-v48.sql",
     "scripts/migrate-firestore-to-supabase.mjs", "scripts/import-backup-to-supabase.mjs"
   ];
   await Promise.all(files.map((file) => access(path.join(root, file), fsConstants.R_OK)));
@@ -21,7 +21,7 @@ test("arquivos obrigatórios da publicação e migração existem", async () => 
 
 test("JavaScript publicado e scripts de migração possuem sintaxe válida", () => {
   for (const file of [
-    "app.js", "supabase-compat.js", "save-flow.js", "service-worker.js",
+    "app.js", "project-system.js", "supabase-compat.js", "save-flow.js", "service-worker.js",
     "scripts/migration-common.mjs", "scripts/migrate-firestore-to-supabase.mjs",
     "scripts/import-backup-to-supabase.mjs"
   ]) {
@@ -34,14 +34,14 @@ test("versão está sincronizada nos arquivos principais", async () => {
     read("VERSION"), read("index.html"), read("service-worker.js"), read("version.json"), read("package.json"), read("package-lock.json")
   ]);
   const release = version.trim();
-  assert.equal(release, "47");
+  assert.equal(release, "48");
   assert.match(html, new RegExp(`app\\.js\\?v=${release}\\.0\\.0`));
   assert.match(html, new RegExp(`styles\\.css\\?v=${release}\\.0\\.0`));
   assert.match(serviceWorker, new RegExp(`painel-solicitacoes-v${release}`));
   assert.equal(JSON.parse(versionJson).release, release);
-  assert.equal(JSON.parse(packageJson).version, "0.47.0");
-  assert.equal(JSON.parse(packageLock).version, "0.47.0");
-  assert.equal(JSON.parse(packageLock).packages[""].version, "0.47.0");
+  assert.equal(JSON.parse(packageJson).version, "0.48.0");
+  assert.equal(JSON.parse(packageLock).version, "0.48.0");
+  assert.equal(JSON.parse(packageLock).packages[""].version, "0.48.0");
 });
 
 test("frontend usa Supabase e não carrega SDK do Firebase", async () => {
@@ -78,6 +78,7 @@ test("anexos mantêm identificador e são direcionados ao Storage", async () => 
 
 test("service worker publica os módulos do Supabase", async () => {
   const serviceWorker = await read("service-worker.js");
+  assert.match(serviceWorker, /\.\/project-system\.js/);
   assert.match(serviceWorker, /\.\/supabase-compat\.js/);
   assert.match(serviceWorker, /\.\/supabase-config\.js/);
   assert.match(serviceWorker, /\.\/security-config\.js/);
@@ -94,6 +95,7 @@ test("workflow testa antes do deploy e não publica arquivos administrativos", a
   assert.match(workflow, /run: npm test/);
   assert.match(workflow, /needs: build/);
   assert.match(workflow, /PUBLIC_FILES=\(/);
+  assert.match(workflow, /project-system\.js/);
   assert.match(workflow, /supabase-config\.js/);
   assert.match(workflow, /security-config\.js/);
   assert.match(workflow, /legal-config\.js/);

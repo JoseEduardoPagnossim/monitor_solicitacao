@@ -1,6 +1,6 @@
-# Painel de Solicitações — versão 47
+# Painel de Solicitações — versão 48
 
-Aplicação web interna para centralizar solicitações de **Programação**, **Cancelamento** e **TEF Elgin** em um Kanban com autenticação, permissões por Squad, comentários, histórico, notificações, indicadores, arquivamento, backup e recursos administrativos.
+Aplicação web interna para controlar solicitações em um **Kanban único de projetos**, com formulários configuráveis, autenticação, permissões por perfil e Squad, comentários, histórico, notificações, indicadores, arquivamento, backup e recursos administrativos.
 
 ## Arquitetura atual
 
@@ -42,8 +42,9 @@ Cancelamentos e TEF Elgin permanecem limitados ao criador, responsável ou admin
 
 ## Funcionalidades principais
 
-- Kanban com etapas Nova, Em análise, Aguardando, Bloqueio e Concluída.
-- Filtros por texto, tipo, prioridade, Squad e solicitante.
+- Kanban único com colunas configuráveis pela interface administrativa.
+- Projetos e formulários configuráveis, mantendo Programação, Cancelamento e TEF Elgin como projetos padrão.
+- Filtros por texto, projeto, prioridade, Squad e solicitante.
 - Filtros salvos por usuário.
 - Modo ampliado do Kanban.
 - Ações em massa e seleção por coluna para administradores.
@@ -59,7 +60,7 @@ Cancelamentos e TEF Elgin permanecem limitados ao criador, responsável ou admin
 - Atalhos de teclado.
 - Instalação como PWA.
 
-## Tipos de solicitação
+## Projetos e tipos de solicitação
 
 ### Programação
 
@@ -138,7 +139,7 @@ Ao atualizar versões, preserve o seu `supabase-config.js` já preenchido.
 5. O deploy ocorre apenas se os testes passarem.
 6. Após a publicação, atualize com `Ctrl + Shift + R`.
 
-A versão 47 não exige refazer a migração. Depois de publicar os arquivos, execute uma vez `supabase/legal-terms-v47.sql` no SQL Editor do Supabase. Não execute novamente o `schema.sql` completo.
+A versão 48 não exige refazer a migração. Depois de publicar os arquivos, execute uma vez `supabase/projects-kanban-v48.sql` no SQL Editor do Supabase. Não execute novamente o `schema.sql` completo.
 
 ## Testes automatizados
 
@@ -154,7 +155,7 @@ Ou:
 TESTAR.bat
 ```
 
-A versão 47 possui testes para:
+A versão 48 possui testes para:
 
 - arquivos obrigatórios;
 - sintaxe JavaScript;
@@ -177,6 +178,10 @@ A versão 47 possui testes para:
 - integridade e retenção do backup;
 - validação da assinatura real dos anexos;
 - cache restrito aos arquivos públicos do aplicativo;
+- criação, audiência, publicação e arquivamento de projetos;
+- validações de formulários dinâmicos e limite de 1.000 caracteres;
+- colunas dinâmicas, pausa, conclusão e preservação histórica;
+- migração e proteção SQL da versão 48.
 
 Os testes automatizados não substituem a validação real do e-mail, do link de recuperação e das credenciais do projeto Supabase.
 
@@ -212,6 +217,30 @@ Durante a recuperação de senha, `Esc` não fecha a janela obrigatória.
 - Correções: `1.0.1`, `1.0.2`.
 - Melhorias menores: `1.1.0`, `1.2.0`.
 - Grandes evoluções: `2.0.0`, `3.0.0`.
+
+
+## Alteração da versão 48
+
+### Projetos, formulários e Kanban dinâmico
+
+- converte Programação, Cancelamento e TEF Elgin em projetos padrão do mesmo Kanban;
+- permite criar, editar, publicar, arquivar e reativar projetos pela interface;
+- controla quem pode criar solicitações: administradores, solicitantes ou todos;
+- oferece CPF/CNPJ, Razão Social, Telefone e E-mail com validação e obrigatoriedade configuráveis;
+- permite campos personalizados com nome, placeholder, ordem, obrigatoriedade e até 1.000 caracteres;
+- permite criar, editar, ordenar, arquivar e reativar colunas;
+- permite marcar colunas que pausam o tempo ou representam conclusão;
+- preserva o formulário original de cada solicitação por snapshot;
+- move o filtro de projeto para dentro da tela do Kanban;
+- valida projetos, colunas, campos e permissões também no Supabase por RLS e trigger.
+
+Depois de publicar, execute uma única vez:
+
+```text
+supabase/projects-kanban-v48.sql
+```
+
+O passo a passo administrativo está em `PROJETOS_E_KANBAN_V48.md` e também na tela **Ajuda** do painel.
 
 ## Alteração da versão 47
 

@@ -1,15 +1,36 @@
-PAINEL DE SOLICITAÇÕES — VERSÃO 44
+PAINEL DE SOLICITAÇÕES — VERSÃO 48
 
-CORREÇÃO PRINCIPAL
-- Solicitantes migrados do Firebase voltam a criar e editar solicitações.
-- Inclusões e atualizações agora usam operações separadas no Supabase.
-- A política RLS de inclusão valida diretamente o usuário e o Squad enviados.
+PROJETOS, FORMULÁRIOS E KANBAN DINÂMICO
+- Programação, Cancelamento e TEF Elgin passam a ser projetos do mesmo Kanban.
+- Administradores podem criar projetos e formulários pela interface.
+- Campos padrão: CPF/CNPJ, Razão Social, Telefone e E-mail, com validação e obrigatoriedade.
+- Campos personalizados: nome, placeholder, obrigatoriedade, ordem e até 1.000 caracteres.
+- Administradores podem criar, editar, ordenar, arquivar e reativar colunas.
+- Colunas podem pausar o tempo ou representar conclusão.
+- O filtro de projeto fica dentro do Kanban.
+- Solicitações antigas preservam o formulário e os nomes de campos usados na criação.
 
 ATUALIZAÇÃO
-1. Preserve o seu arquivo supabase-config.js já preenchido.
-2. Substitua os demais arquivos do projeto pelos arquivos desta versão.
+1. Preserve o supabase-config.js que já está preenchido no GitHub.
+2. Substitua os demais arquivos do repositório pelos arquivos desta versão.
 3. No Supabase, abra SQL Editor > New query.
-4. Cole todo o conteúdo de supabase/fix-request-save-v44.sql e clique em Run.
-5. Aguarde o GitHub Actions concluir e atualize com Ctrl + Shift + R.
+4. Cole todo o conteúdo de supabase/projects-kanban-v48.sql e clique em Run.
+5. Faça o commit e aguarde os testes e o deploy do GitHub Actions.
+6. Atualize o painel com Ctrl + Shift + R.
+7. Entre como administrador e confira Projetos e formulários e Colunas do Kanban.
+8. Crie um projeto de teste, publique e abra uma solicitação com um perfil autorizado.
 
-Não refaça a migração e não execute novamente o schema completo.
+NÃO FAÇA
+- Não refaça a migração do Firebase.
+- Não execute novamente o schema.sql completo em uma base existente.
+- Não execute novamente os SQLs das versões 44 a 47 se eles já foram aplicados.
+- Não envie node_modules, migration-report.json, backups ou credenciais.
+- Não apague Programação, Cancelamento ou TEF Elgin da base.
+
+VALIDAÇÃO RECOMENDADA
+- Criar projeto para todos, somente admin e somente solicitante.
+- Testar CPF/CNPJ, Telefone, E-mail e campos obrigatórios.
+- Criar e reordenar uma nova coluna.
+- Testar coluna que pausa o tempo e coluna de conclusão.
+- Confirmar que solicitações antigas continuam abrindo normalmente.
+- Executar npm.cmd test e confirmar todos os testes aprovados.

@@ -43,6 +43,26 @@ import { supabaseConfig } from "./supabase-config.js";
 import { securityConfig } from "./security-config.js";
 import { legalPolicyConfig } from "./legal-config.js";
 import { commitWithRetry, withTimeout } from "./save-flow.js";
+import {
+  DEFAULT_PROJECTS,
+  DEFAULT_KANBAN_COLUMNS,
+  STANDARD_FIELD_DEFINITIONS,
+  mergeProjects,
+  mergeKanbanColumns,
+  normalizeProject,
+  normalizeKanbanColumn,
+  normalizeProjectField,
+  projectAllowsCreation,
+  projectVisibleToRole,
+  projectForRequest,
+  firstOpenColumn,
+  completedColumnIds,
+  pausedColumnIds,
+  slugifyIdentifier,
+  validateProjectDefinition,
+  validateDynamicRequest,
+  requestSearchText
+} from "./project-system.js";
 
 const STATUS_LABELS = {
   nova: "Nova",
@@ -72,7 +92,6 @@ const SQUAD_LABELS = {
   squad_e: "Squad E"
 };
 
-const VALID_STATUSES = Object.keys(STATUS_LABELS);
 const VALID_TYPES = Object.keys(TYPE_LABELS);
 const VALID_PRIORITIES = Object.keys(PRIORITY_LABELS);
 const VALID_SQUADS = Object.keys(SQUAD_LABELS);
@@ -84,7 +103,6 @@ const MAX_IMAGE_DIMENSION = 1600;
 const ALLOWED_ATTACHMENT_TYPES = new Set(["image/jpeg", "image/png", "text/plain"]);
 const INVITE_VALID_DAYS = 7;
 const VALID_USER_ROLES = ["admin", "solicitante"];
-const PAUSED_STATUSES = new Set(["aguardando", "bloqueio"]);
 const SESSION_INACTIVITY_MS = 3 * 60 * 60 * 1000;
 const SESSION_WARNING_MS = 5 * 60 * 1000;
 const AUTO_PAUSE_ALERT_MS = 24 * 60 * 60 * 1000;
@@ -110,6 +128,10 @@ const state = {
   user: null,
   profile: null,
   requests: [],
+  projects: mergeProjects([]),
+  kanbanColumns: mergeKanbanColumns([]),
+  unsubscribeProjects: null,
+  unsubscribeKanbanColumns: null,
   archivedRequests: [],
   users: [],
   invites: [],
@@ -171,7 +193,10 @@ const state = {
   legalRequiredMode: false,
   legalDocumentVerified: false,
   legalScrollReached: false,
-  legalAcceptanceInProgress: false
+  legalAcceptanceInProgress: false,
+  projectFormFields: [],
+  projectSaveInProgress: false,
+  columnSaveInProgress: false
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -269,6 +294,15 @@ const els = {
   userAvatar: $("#user-avatar"),
   welcomeMessage: $("#welcome-message"),
   newRequestButton: $("#new-request-button"),
+  projectsView: $("#projects-view"),
+  columnsView: $("#columns-view"),
+  newProjectButton: $("#new-project-button"),
+  refreshProjectsButton: $("#refresh-projects-button"),
+  projectsTableBody: $("#projects-table-body"),
+  projectsEmptyState: $("#projects-empty-state"),
+  newColumnButton: $("#new-column-button"),
+  refreshColumnsButton: $("#refresh-columns-button"),
+  columnsAdminList: $("#columns-admin-list"),
   helpButton: $("#help-button"),
   topHelpButton: $("#top-help-button"),
   notificationButton: $("#notification-button"),
@@ -399,6 +433,31 @@ const els = {
   archivedSquadFilter: $("#archived-squad-filter"),
   archivedTableBody: $("#archived-table-body"),
   archivedEmptyState: $("#archived-empty-state"),
+  projectDialog: $("#project-dialog"),
+  projectForm: $("#project-form"),
+  projectDialogTitle: $("#project-dialog-title"),
+  projectId: $("#project-id"),
+  projectName: $("#project-name"),
+  projectDescription: $("#project-description"),
+  projectAudience: $("#project-audience"),
+  projectStatus: $("#project-status"),
+  projectOrder: $("#project-order"),
+  projectFieldsBuilder: $("#project-fields-builder"),
+  projectFormPreview: $("#project-form-preview"),
+  projectFormError: $("#project-form-error"),
+  addProjectFieldButton: $("#add-project-field-button"),
+  saveProjectButton: $("#save-project-button"),
+  columnDialog: $("#column-dialog"),
+  columnForm: $("#column-form"),
+  columnDialogTitle: $("#column-dialog-title"),
+  columnId: $("#column-id"),
+  columnName: $("#column-name"),
+  columnOrder: $("#column-order"),
+  columnPausesTimer: $("#column-pauses-timer"),
+  columnCompleted: $("#column-completed"),
+  columnColor: $("#column-color"),
+  columnFormError: $("#column-form-error"),
+  saveColumnButton: $("#save-column-button"),
   requestDialog: $("#request-dialog"),
   requestForm: $("#request-form"),
   requestModalTitle: $("#request-modal-title"),
@@ -458,6 +517,11 @@ const els = {
   cancellationList: $("#cancellation-list"),
   addCancellationItem: $("#add-cancellation-item"),
   tefFields: $("#tef-fields"),
+  customProjectFields: $("#custom-project-fields"),
+  customProjectTitle: $("#custom-project-title"),
+  customProjectDescription: $("#custom-project-description"),
+  customStandardFields: $("#custom-standard-fields"),
+  customFieldsContainer: $("#custom-fields-container"),
   tefCnpj: $("#tef-cnpj"),
   tefClientName: $("#tef-client-name"),
   tefOperatingSystem: $("#tef-operating-system"),
@@ -520,9 +584,113 @@ function isSolicitante() {
   return state.profile?.role === "solicitante";
 }
 
+function projectIdForRequest(item = {}) {
+  return String(item.projectId || item.type || "programacao");
+}
+
+function projectById(projectId) {
+  return state.projects.find((project) => project.id === projectId)
+    || DEFAULT_PROJECTS.find((project) => project.id === projectId)
+    || normalizeProject({ id: projectId, name: projectId || "Projeto", legacyType: "custom" });
+}
+
+function projectForItem(item = {}) {
+  return projectForRequest(item, state.projects);
+}
+
+function projectDefinitionForRequest(item = {}) {
+  const project = projectForItem(item);
+  const snapshot = item?.projectFormSnapshot && typeof item.projectFormSnapshot === "object"
+    ? item.projectFormSnapshot
+    : null;
+  if (!snapshot) return project;
+  return normalizeProject({
+    ...project,
+    name: snapshot.projectName || project.name,
+    standardFields: snapshot.standardFields && typeof snapshot.standardFields === "object"
+      ? snapshot.standardFields
+      : project.standardFields,
+    customFields: Array.isArray(snapshot.customFields) ? snapshot.customFields : project.customFields
+  });
+}
+
+function projectSnapshotForRequest(item = {}) {
+  const project = projectDefinitionForRequest(item);
+  return {
+    projectName: project.name,
+    standardFields: project.standardFields || {},
+    customFields: project.customFields || []
+  };
+}
+
+function projectLabel(itemOrId) {
+  const id = typeof itemOrId === "string" ? itemOrId : projectIdForRequest(itemOrId || {});
+  return projectById(id).name || TYPE_LABELS[id] || "Solicitação";
+}
+
+function projectLegacyType(projectOrId) {
+  const project = typeof projectOrId === "string" ? projectById(projectOrId) : normalizeProject(projectOrId || {});
+  return project.legacyType || (VALID_TYPES.includes(project.id) ? project.id : "custom");
+}
+
+function creatableProjects() {
+  const role = state.profile?.role || "solicitante";
+  return state.projects.filter((project) => projectAllowsCreation(project, role));
+}
+
+function filterableProjects() {
+  if (isAdmin()) return [...state.projects];
+  const role = state.profile?.role || "solicitante";
+  const usedProjectIds = new Set([...state.requests, ...state.archivedRequests].map(projectIdForRequest));
+  return state.projects.filter((project) => projectVisibleToRole(project, role) || usedProjectIds.has(project.id));
+}
+
+function activeKanbanColumns() {
+  return mergeKanbanColumns(state.kanbanColumns).filter((column) => column.active !== false);
+}
+
+function columnById(columnId) {
+  return mergeKanbanColumns(state.kanbanColumns).find((column) => column.id === columnId)
+    || normalizeKanbanColumn({ id: columnId, name: STATUS_LABELS[columnId] || columnId || "Etapa" });
+}
+
+function statusLabel(status) {
+  return columnById(status).name || STATUS_LABELS[status] || status || "Etapa";
+}
+
+function validStatusIds() {
+  return activeKanbanColumns().map((column) => column.id);
+}
+
+function initialStatusId() {
+  return firstOpenColumn(activeKanbanColumns()).id;
+}
+
+function isCompletedStatus(status) {
+  return completedColumnIds(activeKanbanColumns()).has(status);
+}
+
+function isPausedStatus(status) {
+  return pausedColumnIds(activeKanbanColumns()).has(status);
+}
+
+function completedStatusFallback() {
+  return activeKanbanColumns().find((column) => column.completed)?.id || initialStatusId();
+}
+
+function projectTagClass(projectId) {
+  const legacy = projectLegacyType(projectId);
+  return legacy === "custom" ? "custom-project" : legacy;
+}
+
+function buildSelectOptions(items, selected = "", emptyLabel = "") {
+  const empty = emptyLabel ? `<option value="">${escapeHtml(emptyLabel)}</option>` : "";
+  return empty + items.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === selected ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
+}
+
 function canCopyRequest(item) {
   if (!item) return false;
-  return isAdmin() || (isSolicitante() && item.type === "programacao" && requestIsAccessible(item));
+  return isAdmin() || (isSolicitante() && projectLegacyType(projectForItem(item)) === "programacao" && requestIsAccessible(item));
 }
 
 function squadVisibilityGroup(squad) {
@@ -536,7 +704,7 @@ function userHasValidSquad(profile = state.profile) {
 }
 
 function canViewSquadProgramming(item) {
-  if (!item || !isSolicitante() || item.type !== "programacao") return false;
+  if (!item || !isSolicitante() || projectLegacyType(projectForItem(item)) !== "programacao") return false;
   return squadVisibilityGroup(state.profile?.squad).includes(item.squad);
 }
 
@@ -1469,6 +1637,468 @@ function populateRequesterFilterForViewer() {
   }
 }
 
+function populateProjectAndColumnControls() {
+  const allProjects = filterableProjects();
+  const currentTypeFilter = state.filters.type || "all";
+  const currentArchivedType = state.archivedFilters.type || "all";
+  const currentIndicatorType = state.indicatorFilters.type || "all";
+  const currentRequestProject = els.requestType?.value || "";
+
+  const filterOptions = allProjects
+    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "pt-BR"))
+    .map((project) => {
+      const suffix = project.status === "archived" ? " (arquivado)" : project.status === "draft" ? " (rascunho)" : "";
+      return `<option value="${escapeHtml(project.id)}">${escapeHtml(project.name + suffix)}</option>`;
+    })
+    .join("");
+  if (els.typeFilter) els.typeFilter.innerHTML = `<option value="all">Todos os projetos</option>${filterOptions}`;
+  if (els.archivedTypeFilter) els.archivedTypeFilter.innerHTML = `<option value="all">Todos os projetos</option>${filterOptions}`;
+  if (els.indicatorTypeFilter) els.indicatorTypeFilter.innerHTML = `<option value="all">Todos os projetos</option>${filterOptions}`;
+
+  if (els.typeFilter) els.typeFilter.value = allProjects.some((project) => project.id === currentTypeFilter) ? currentTypeFilter : "all";
+  if (els.archivedTypeFilter) els.archivedTypeFilter.value = allProjects.some((project) => project.id === currentArchivedType) ? currentArchivedType : "all";
+  if (els.indicatorTypeFilter) els.indicatorTypeFilter.value = allProjects.some((project) => project.id === currentIndicatorType) ? currentIndicatorType : "all";
+
+  const requestProjects = creatableProjects();
+  if (els.requestType) {
+    els.requestType.innerHTML = `<option value="">Selecione o projeto</option>${requestProjects.map((project) => `<option value="${escapeHtml(project.id)}">${escapeHtml(project.name)}</option>`).join("")}`;
+    if (requestProjects.some((project) => project.id === currentRequestProject)) els.requestType.value = currentRequestProject;
+  }
+
+  const columns = activeKanbanColumns();
+  const statusOptions = columns.map((column) => `<option value="${escapeHtml(column.id)}">${escapeHtml(column.name)}</option>`).join("");
+  const currentRequestStatus = els.requestStatus?.value || initialStatusId();
+  if (els.requestStatus) {
+    els.requestStatus.innerHTML = statusOptions;
+    els.requestStatus.value = columns.some((column) => column.id === currentRequestStatus) ? currentRequestStatus : initialStatusId();
+  }
+  const currentBulkStatus = els.bulkStatusSelect?.value || "";
+  if (els.bulkStatusSelect) {
+    els.bulkStatusSelect.innerHTML = `<option value="">Alterar coluna...</option>${statusOptions}`;
+    els.bulkStatusSelect.value = columns.some((column) => column.id === currentBulkStatus) ? currentBulkStatus : "";
+  }
+}
+
+function renderKanbanStructure() {
+  const columns = activeKanbanColumns();
+  els.kanbanBoard.style.setProperty("--kanban-column-count", String(Math.max(1, columns.length)));
+  els.kanbanBoard.innerHTML = columns.map((column) => `
+    <div class="kanban-column column-${escapeHtml(column.color)}" data-status="${escapeHtml(column.id)}">
+      <header>
+        <div><span class="status-dot ${escapeHtml(column.color)}"></span><h2>${escapeHtml(column.name)}</h2>${column.pausesTimer ? '<span class="column-rule-badge">⏸ pausa</span>' : ''}${column.completed ? '<span class="column-rule-badge done">✓ conclusão</span>' : ''}</div>
+        <div class="column-header-actions"><label class="bulk-column-select" data-bulk-column-wrapper="${escapeHtml(column.id)}" hidden title="Selecionar todos os cards visíveis desta coluna"><input type="checkbox" data-bulk-column="${escapeHtml(column.id)}"><span>Todos</span></label><span class="column-count" data-count="${escapeHtml(column.id)}">0</span></div>
+      </header>
+      <div class="column-body" data-dropzone="${escapeHtml(column.id)}"></div>
+    </div>`).join("");
+  $$('[data-bulk-column]', els.kanbanBoard).forEach((input) => {
+    input.addEventListener("change", () => setBulkColumnSelection(input.dataset.bulkColumn, input.checked));
+  });
+  setupDropzones();
+}
+
+function normalizeProjectDocuments(snapshot) {
+  return snapshot.docs.map((documentSnapshot) => normalizeProject({ id: documentSnapshot.id, ...documentSnapshot.data() }));
+}
+
+function normalizeColumnDocuments(snapshot) {
+  return snapshot.docs.map((documentSnapshot, index) => normalizeKanbanColumn({ id: documentSnapshot.id, ...documentSnapshot.data() }, index));
+}
+
+function refreshProjectConfigurationUi() {
+  state.projects = mergeProjects(state.projects);
+  state.kanbanColumns = mergeKanbanColumns(state.kanbanColumns);
+  populateProjectAndColumnControls();
+  renderKanbanStructure();
+  if (isAdmin()) {
+    renderProjectsAdmin();
+    renderColumnsAdmin();
+  }
+  renderAll();
+}
+
+function subscribeProjectConfiguration() {
+  if (state.unsubscribeProjects) state.unsubscribeProjects();
+  if (state.unsubscribeKanbanColumns) state.unsubscribeKanbanColumns();
+
+  state.unsubscribeProjects = onSnapshot(collection(db, "requestProjects"), (snapshot) => {
+    state.projects = mergeProjects(normalizeProjectDocuments(snapshot));
+    populateProjectAndColumnControls();
+    if (isAdmin()) renderProjectsAdmin();
+    renderAll();
+  }, (error) => {
+    console.error("Falha ao carregar projetos.", error);
+    state.projects = mergeProjects([]);
+    populateProjectAndColumnControls();
+    renderAll();
+  });
+
+  state.unsubscribeKanbanColumns = onSnapshot(collection(db, "kanbanColumns"), (snapshot) => {
+    state.kanbanColumns = mergeKanbanColumns(normalizeColumnDocuments(snapshot));
+    populateProjectAndColumnControls();
+    renderKanbanStructure();
+    if (isAdmin()) renderColumnsAdmin();
+    renderAll();
+  }, (error) => {
+    console.error("Falha ao carregar colunas.", error);
+    state.kanbanColumns = mergeKanbanColumns([]);
+    populateProjectAndColumnControls();
+    renderKanbanStructure();
+    renderAll();
+  });
+}
+
+async function reloadProjectConfiguration() {
+  const [projectSnapshot, columnSnapshot] = await Promise.all([
+    getDocs(collection(db, "requestProjects")),
+    getDocs(collection(db, "kanbanColumns"))
+  ]);
+  state.projects = mergeProjects(normalizeProjectDocuments(projectSnapshot));
+  state.kanbanColumns = mergeKanbanColumns(normalizeColumnDocuments(columnSnapshot));
+  refreshProjectConfigurationUi();
+}
+
+function audienceLabel(audience) {
+  if (audience === "admin") return "Somente administradores";
+  if (audience === "solicitante") return "Somente solicitantes";
+  return "Todos os perfis";
+}
+
+function projectStatusLabel(status) {
+  return status === "draft" ? "Rascunho" : status === "archived" ? "Arquivado" : "Publicado";
+}
+
+function renderProjectsAdmin() {
+  if (!isAdmin() || !els.projectsTableBody) return;
+  const projects = [...state.projects].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "pt-BR"));
+  els.projectsTableBody.innerHTML = projects.map((project) => {
+    const count = [...state.requests, ...state.archivedRequests].filter((item) => projectIdForRequest(item) === project.id).length;
+    const fieldCount = Object.values(project.standardFields || {}).filter((config) => config?.enabled).length
+      + project.customFields.filter((field) => field.active !== false).length;
+    const statusClass = project.status === "published" ? "active" : project.status === "draft" ? "pending" : "inactive";
+    return `<tr>
+      <td><div class="config-item-title"><strong>${escapeHtml(project.name)}</strong><small>${escapeHtml(project.description || (project.legacyType === "custom" ? "Formulário configurável" : "Projeto padrão do sistema"))}</small></div></td>
+      <td>${escapeHtml(audienceLabel(project.audience))}</td>
+      <td>${fieldCount} campo${fieldCount === 1 ? "" : "s"}</td>
+      <td><span class="user-status-badge ${statusClass}">● ${escapeHtml(projectStatusLabel(project.status))}</span></td>
+      <td>${count}</td>
+      <td><div class="config-actions"><button class="user-action-button primary" type="button" data-project-action="edit" data-project-id="${escapeHtml(project.id)}">Editar</button>${project.status !== "archived" ? `<button class="user-action-button danger" type="button" data-project-action="archive" data-project-id="${escapeHtml(project.id)}">Arquivar</button>` : `<button class="user-action-button success" type="button" data-project-action="publish" data-project-id="${escapeHtml(project.id)}">Reativar</button>`}</div></td>
+    </tr>`;
+  }).join("");
+  els.projectsEmptyState.hidden = projects.length > 0;
+}
+
+function projectFieldBuilderRow(field, index) {
+  return `<article class="project-field-builder-row" data-project-field-row="${escapeHtml(field.id)}">
+    <div class="project-field-number">${index + 1}</div>
+    <label class="field"><span>Nome do campo *</span><input type="text" maxlength="100" data-project-field-label value="${escapeHtml(field.label || "")}" placeholder="Ex.: Motivo da solicitação" required></label>
+    <label class="field form-span-2"><span>Texto de orientação (placeholder)</span><textarea rows="3" maxlength="1000" data-project-field-placeholder placeholder="Descreva o que o solicitante deve informar.">${escapeHtml(field.placeholder || "")}</textarea></label>
+    <label class="config-checkbox compact"><input type="checkbox" data-project-field-required ${field.required ? "checked" : ""}><span><strong>Obrigatório</strong><small>Impede o envio sem resposta.</small></span></label>
+    <div class="field-row-actions"><button class="button button-secondary compact-button" type="button" data-project-field-move="up" title="Mover para cima">↑</button><button class="button button-secondary compact-button" type="button" data-project-field-move="down" title="Mover para baixo">↓</button><button class="button button-danger compact-button" type="button" data-project-field-remove>Remover</button></div>
+  </article>`;
+}
+
+function readProjectFieldBuilder() {
+  return $$('[data-project-field-row]', els.projectFieldsBuilder).map((row, index) => normalizeProjectField({
+    id: row.dataset.projectFieldRow,
+    label: $('[data-project-field-label]', row)?.value || "",
+    placeholder: $('[data-project-field-placeholder]', row)?.value || "",
+    required: $('[data-project-field-required]', row)?.checked === true,
+    active: true,
+    type: "long_text",
+    maxLength: 1000,
+    order: (index + 1) * 10
+  }, index));
+}
+
+function renderProjectFieldsBuilder() {
+  els.projectFieldsBuilder.innerHTML = state.projectFormFields.length
+    ? state.projectFormFields.map(projectFieldBuilderRow).join("")
+    : `<div class="config-builder-empty">Nenhum campo personalizado. Use “Adicionar campo” para criar uma caixa de até 1.000 caracteres.</div>`;
+  updateProjectFormPreview();
+}
+
+function readStandardFieldConfiguration() {
+  const config = {};
+  Object.keys(STANDARD_FIELD_DEFINITIONS).forEach((key) => {
+    const enabled = $(`[data-project-standard-enabled="${CSS.escape(key)}"]`)?.checked === true;
+    const requiredInput = $(`[data-project-standard-required="${CSS.escape(key)}"]`);
+    const required = enabled && requiredInput?.checked === true;
+    config[key] = { enabled, required };
+  });
+  return config;
+}
+
+function syncStandardRequiredControls() {
+  Object.keys(STANDARD_FIELD_DEFINITIONS).forEach((key) => {
+    const enabled = $(`[data-project-standard-enabled="${CSS.escape(key)}"]`);
+    const required = $(`[data-project-standard-required="${CSS.escape(key)}"]`);
+    if (!enabled || !required) return;
+    required.disabled = !enabled.checked;
+    if (!enabled.checked) required.checked = false;
+  });
+  updateProjectFormPreview();
+}
+
+function updateProjectFormPreview() {
+  if (!els.projectFormPreview) return;
+  const standard = readStandardFieldConfiguration();
+  const customFields = readProjectFieldBuilder();
+  const standardHtml = Object.entries(STANDARD_FIELD_DEFINITIONS).map(([key, definition]) => {
+    const config = standard[key];
+    if (!config?.enabled) return "";
+    return `<label class="field"><span>${escapeHtml(definition.label)}${config.required ? " *" : ""}</span><input type="text" disabled placeholder="${escapeHtml(definition.label)}"></label>`;
+  }).join("");
+  const customHtml = customFields.map((field) => `<label class="field form-span-2"><span>${escapeHtml(field.label || "Campo sem nome")}${field.required ? " *" : ""}</span><textarea rows="3" disabled placeholder="${escapeHtml(field.placeholder || "Digite as informações solicitadas.")}"></textarea></label>`).join("");
+  els.projectFormPreview.innerHTML = standardHtml || customHtml
+    ? `<div class="form-grid nested-grid">${standardHtml}${customHtml}</div>`
+    : `<div class="config-builder-empty">Marque campos padrão ou adicione campos personalizados para visualizar o formulário.</div>`;
+}
+
+function openProjectDialog(projectId = "") {
+  if (!isAdmin()) return;
+  const existing = state.projects.find((project) => project.id === projectId);
+  els.projectForm.reset();
+  showFormError(els.projectFormError);
+  els.projectId.value = existing?.id || "";
+  els.projectDialogTitle.textContent = existing ? `Editar ${existing.name}` : "Novo projeto";
+  els.projectName.value = existing?.name || "";
+  els.projectDescription.value = existing?.description || "";
+  els.projectAudience.value = existing?.audience || "all";
+  els.projectStatus.value = existing?.status || "published";
+  els.projectOrder.value = String(existing?.order || Math.max(100, ...state.projects.map((project) => Number(project.order || 0) + 10)));
+  Object.keys(STANDARD_FIELD_DEFINITIONS).forEach((key) => {
+    const enabled = $(`[data-project-standard-enabled="${CSS.escape(key)}"]`);
+    const required = $(`[data-project-standard-required="${CSS.escape(key)}"]`);
+    if (enabled) enabled.checked = existing?.standardFields?.[key]?.enabled === true;
+    if (required) required.checked = existing?.standardFields?.[key]?.required === true;
+  });
+  state.projectFormFields = (existing?.customFields || []).filter((field) => field.active !== false).map((field, index) => normalizeProjectField(field, index));
+  const isLegacy = existing && existing.legacyType !== "custom";
+  $$('[data-project-standard-enabled], [data-project-standard-required]', els.projectDialog).forEach((input) => { input.disabled = Boolean(isLegacy); });
+  els.addProjectFieldButton.disabled = Boolean(isLegacy);
+  els.projectFieldsBuilder.dataset.locked = isLegacy ? "true" : "false";
+  renderProjectFieldsBuilder();
+  syncStandardRequiredControls();
+  if (!els.projectDialog.open) els.projectDialog.showModal();
+  window.setTimeout(() => els.projectName.focus(), 50);
+}
+
+function addProjectField() {
+  if (els.projectFieldsBuilder.dataset.locked === "true") return;
+  const id = `${slugifyIdentifier("campo", "field")}_${crypto.randomUUID().slice(0, 8)}`;
+  state.projectFormFields = [...readProjectFieldBuilder(), normalizeProjectField({ id, label: "", placeholder: "", required: false, order: (state.projectFormFields.length + 1) * 10 })];
+  renderProjectFieldsBuilder();
+  window.setTimeout(() => $$('[data-project-field-label]', els.projectFieldsBuilder).at(-1)?.focus(), 0);
+}
+
+function handleProjectFieldBuilderClick(event) {
+  const row = event.target.closest('[data-project-field-row]');
+  if (!row || els.projectFieldsBuilder.dataset.locked === "true") return;
+  const fields = readProjectFieldBuilder();
+  const index = fields.findIndex((field) => field.id === row.dataset.projectFieldRow);
+  if (index < 0) return;
+  if (event.target.closest('[data-project-field-remove]')) fields.splice(index, 1);
+  const direction = event.target.closest('[data-project-field-move]')?.dataset.projectFieldMove;
+  if (direction === "up" && index > 0) [fields[index - 1], fields[index]] = [fields[index], fields[index - 1]];
+  if (direction === "down" && index < fields.length - 1) [fields[index + 1], fields[index]] = [fields[index], fields[index + 1]];
+  state.projectFormFields = fields;
+  renderProjectFieldsBuilder();
+}
+
+async function saveProjectDefinition(event) {
+  event.preventDefault();
+  if (!isAdmin() || state.projectSaveInProgress) return;
+  showFormError(els.projectFormError);
+  const existing = state.projects.find((project) => project.id === els.projectId.value);
+  const baseId = existing?.id || slugifyIdentifier(els.projectName.value, "project");
+  const projectId = existing?.id || `${baseId}_${crypto.randomUUID().slice(0, 8)}`;
+  const legacyType = existing?.legacyType || "custom";
+  const definition = {
+    id: projectId,
+    name: sanitizeText(els.projectName.value),
+    description: sanitizeText(els.projectDescription.value),
+    audience: els.projectAudience.value,
+    status: els.projectStatus.value,
+    active: els.projectStatus.value !== "archived",
+    order: Number(els.projectOrder.value || 100),
+    legacyType,
+    standardFields: legacyType === "custom" ? readStandardFieldConfiguration() : existing?.standardFields || {},
+    customFields: legacyType === "custom" ? readProjectFieldBuilder() : existing?.customFields || [],
+    createdAt: existing?.createdAt || serverTimestamp(),
+    createdByUid: existing?.createdByUid || state.user.uid,
+    updatedAt: serverTimestamp(),
+    updatedByUid: state.user.uid
+  };
+  const validation = validateProjectDefinition(definition);
+  if (!validation.valid) {
+    showFormError(els.projectFormError, validation.errors[0]);
+    return;
+  }
+  state.projectSaveInProgress = true;
+  setButtonLoading(els.saveProjectButton, true, "Salvando...");
+  try {
+    const reference = doc(db, "requestProjects", projectId);
+    if (existing) await updateDoc(reference, definition); else await setDoc(reference, definition);
+    await logAccessEvent(existing ? "project_updated" : "project_created", `${definition.name} (${projectId}).`);
+    closeModal(els.projectDialog);
+    showToast(existing ? "Projeto atualizado com sucesso." : definition.status === "published" ? "Projeto criado e publicado com sucesso." : "Projeto salvo como rascunho.");
+  } catch (error) {
+    console.error(error);
+    showFormError(els.projectFormError, firebaseErrorMessage(error));
+  } finally {
+    state.projectSaveInProgress = false;
+    setButtonLoading(els.saveProjectButton, false);
+  }
+}
+
+async function setProjectStatus(projectId, status) {
+  if (!isAdmin()) return;
+  const project = state.projects.find((entry) => entry.id === projectId);
+  if (!project) return;
+  if (!window.confirm(`${status === "archived" ? "Arquivar" : "Reativar"} o projeto “${project.name}”?`)) return;
+  try {
+    await updateDoc(doc(db, "requestProjects", project.id), { status, active: status !== "archived", updatedAt: serverTimestamp(), updatedByUid: state.user.uid });
+    await logAccessEvent(status === "archived" ? "project_archived" : "project_published", project.name);
+    showToast(status === "archived" ? "Projeto arquivado. As solicitações antigas foram preservadas." : "Projeto reativado.");
+  } catch (error) { showToast(firebaseErrorMessage(error), "error"); }
+}
+
+function handleProjectsTableClick(event) {
+  const button = event.target.closest('[data-project-action]');
+  if (!button) return;
+  const action = button.dataset.projectAction;
+  const projectId = button.dataset.projectId;
+  if (action === "edit") openProjectDialog(projectId);
+  if (action === "archive") setProjectStatus(projectId, "archived");
+  if (action === "publish") setProjectStatus(projectId, "published");
+}
+
+function renderColumnsAdmin() {
+  if (!isAdmin() || !els.columnsAdminList) return;
+  const columns = mergeKanbanColumns(state.kanbanColumns);
+  const activeColumns = columns.filter((column) => column.active !== false);
+  els.columnsAdminList.innerHTML = columns.map((column) => {
+    const index = activeColumns.findIndex((entry) => entry.id === column.id);
+    const activeCount = state.requests.filter((item) => item.status === column.id).length;
+    const archivedCount = state.archivedRequests.filter((item) => item.status === column.id).length;
+    const count = activeCount + archivedCount;
+    const inactive = column.active === false;
+    return `<article class="column-admin-card${inactive ? " archived" : ""}" data-column-admin-id="${escapeHtml(column.id)}">
+      <div class="column-admin-order"><strong>${inactive ? "—" : index + 1}</strong><div>${inactive ? "" : `<button type="button" data-column-action="up" data-column-id="${escapeHtml(column.id)}" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-column-action="down" data-column-id="${escapeHtml(column.id)}" ${index === activeColumns.length - 1 ? "disabled" : ""}>↓</button>`}</div></div>
+      <span class="status-dot ${escapeHtml(column.color)}"></span>
+      <div class="column-admin-copy"><strong>${escapeHtml(column.name)}</strong><span>${count} solicitação${count === 1 ? "" : "ões"} · ${inactive ? "arquivada" : `posição ${column.order}`}</span><div class="column-admin-rules">${column.pausesTimer ? '<span>⏸ Pausa o tempo</span>' : '<span>◷ Conta o tempo</span>'}${column.completed ? '<span>✓ Conclusão</span>' : ''}${inactive ? '<span>◌ Fora do Kanban</span>' : ''}</div></div>
+      <div class="config-actions"><button class="user-action-button primary" type="button" data-column-action="edit" data-column-id="${escapeHtml(column.id)}">Editar</button>${inactive ? `<button class="user-action-button success" type="button" data-column-action="reactivate" data-column-id="${escapeHtml(column.id)}">Reativar</button>` : `<button class="user-action-button danger" type="button" data-column-action="archive" data-column-id="${escapeHtml(column.id)}" ${activeCount ? 'disabled title="Mova as solicitações ativas antes de arquivar"' : ''}>Arquivar</button>`}</div>
+    </article>`;
+  }).join("");
+}
+
+function openColumnDialog(columnId = "") {
+  if (!isAdmin()) return;
+  const existing = mergeKanbanColumns(state.kanbanColumns).find((column) => column.id === columnId);
+  els.columnForm.reset();
+  showFormError(els.columnFormError);
+  els.columnId.value = existing?.id || "";
+  els.columnDialogTitle.textContent = existing ? `Editar ${existing.name}` : "Nova coluna";
+  els.columnName.value = existing?.name || "";
+  els.columnOrder.value = String(existing?.order || (Math.max(0, ...activeKanbanColumns().map((column) => Number(column.order || 0))) + 10));
+  els.columnPausesTimer.checked = existing?.pausesTimer === true;
+  els.columnCompleted.checked = existing?.completed === true;
+  els.columnColor.value = existing?.color || "blue";
+  if (!els.columnDialog.open) els.columnDialog.showModal();
+  window.setTimeout(() => els.columnName.focus(), 50);
+}
+
+async function saveKanbanColumn(event) {
+  event.preventDefault();
+  if (!isAdmin() || state.columnSaveInProgress) return;
+  showFormError(els.columnFormError);
+  const existing = mergeKanbanColumns(state.kanbanColumns).find((column) => column.id === els.columnId.value);
+  const name = sanitizeText(els.columnName.value);
+  if (name.length < 2) return showFormError(els.columnFormError, "Informe um nome de coluna com pelo menos 2 caracteres.");
+  const otherOpenColumns = activeKanbanColumns().filter((column) => column.id !== existing?.id && !column.completed);
+  if (els.columnCompleted.checked && !otherOpenColumns.length) {
+    return showFormError(els.columnFormError, "Mantenha ao menos uma coluna ativa que não represente conclusão.");
+  }
+  const columnId = existing?.id || `${slugifyIdentifier(name, "column")}_${crypto.randomUUID().slice(0, 8)}`;
+  const column = {
+    id: columnId,
+    name,
+    order: Number(els.columnOrder.value || 100),
+    pausesTimer: els.columnPausesTimer.checked,
+    completed: els.columnCompleted.checked,
+    color: els.columnColor.value,
+    active: existing?.active !== false,
+    createdAt: existing?.createdAt || serverTimestamp(),
+    createdByUid: existing?.createdByUid || state.user.uid,
+    updatedAt: serverTimestamp(),
+    updatedByUid: state.user.uid
+  };
+  state.columnSaveInProgress = true;
+  setButtonLoading(els.saveColumnButton, true, "Salvando...");
+  try {
+    const reference = doc(db, "kanbanColumns", columnId);
+    if (existing) await updateDoc(reference, column); else await setDoc(reference, column);
+    await logAccessEvent(existing ? "kanban_column_updated" : "kanban_column_created", `${name} (${columnId}).`);
+    closeModal(els.columnDialog);
+    showToast(existing ? "Coluna atualizada." : "Nova coluna criada no Kanban.");
+  } catch (error) {
+    console.error(error);
+    showFormError(els.columnFormError, firebaseErrorMessage(error));
+  } finally {
+    state.columnSaveInProgress = false;
+    setButtonLoading(els.saveColumnButton, false);
+  }
+}
+
+async function reorderKanbanColumn(columnId, direction) {
+  const columns = activeKanbanColumns();
+  const index = columns.findIndex((column) => column.id === columnId);
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || targetIndex < 0 || targetIndex >= columns.length) return;
+  const current = columns[index];
+  const target = columns[targetIndex];
+  try {
+    const batch = writeBatch(db);
+    batch.update(doc(db, "kanbanColumns", current.id), { order: target.order, updatedAt: serverTimestamp(), updatedByUid: state.user.uid });
+    batch.update(doc(db, "kanbanColumns", target.id), { order: current.order, updatedAt: serverTimestamp(), updatedByUid: state.user.uid });
+    await batch.commit();
+    await logAccessEvent("kanban_columns_reordered", `${current.name} movida ${direction === "up" ? "para cima" : "para baixo"}.`);
+  } catch (error) { showToast(firebaseErrorMessage(error), "error"); }
+}
+
+async function setKanbanColumnActive(columnId, active) {
+  const column = mergeKanbanColumns(state.kanbanColumns).find((entry) => entry.id === columnId);
+  if (!column) return;
+  const activeCount = state.requests.filter((item) => item.status === column.id).length;
+  if (!active && activeCount) return showToast("Mova todas as solicitações ativas desta coluna antes de arquivá-la.", "warning");
+  if (!active && activeKanbanColumns().length <= 1) return showToast("O Kanban precisa manter ao menos uma coluna ativa.", "warning");
+  if (!active && !column.completed && activeKanbanColumns().filter((entry) => entry.id !== column.id && !entry.completed).length === 0) {
+    return showToast("O Kanban precisa manter ao menos uma coluna aberta para receber novas solicitações.", "warning");
+  }
+  if (!window.confirm(`${active ? "Reativar" : "Arquivar"} a coluna “${column.name}”?`)) return;
+  try {
+    await updateDoc(doc(db, "kanbanColumns", column.id), {
+      active,
+      archivedAt: active ? null : serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      updatedByUid: state.user.uid
+    });
+    await logAccessEvent(active ? "kanban_column_reactivated" : "kanban_column_archived", column.name);
+    showToast(active ? "Coluna reativada no Kanban." : "Coluna arquivada.");
+  } catch (error) { showToast(firebaseErrorMessage(error), "error"); }
+}
+
+function handleColumnsAdminClick(event) {
+  const button = event.target.closest('[data-column-action]');
+  if (!button || button.disabled) return;
+  const action = button.dataset.columnAction;
+  const columnId = button.dataset.columnId;
+  if (action === "edit") openColumnDialog(columnId);
+  if (action === "archive") setKanbanColumnActive(columnId, false);
+  if (action === "reactivate") setKanbanColumnActive(columnId, true);
+  if (["up", "down"].includes(action)) reorderKanbanColumn(columnId, action);
+}
+
 function subscribeRequests() {
   if (state.unsubscribeRequests) state.unsubscribeRequests();
   renderLoadingCards();
@@ -1567,7 +2197,7 @@ function cancellationItemsFromRequest(item) {
     });
   }
 
-  if (item.type === "cancelamento") {
+  if (projectLegacyType(projectForItem(item)) === "cancelamento") {
     const itemId = "legacy-0";
     const crmEntry = tracking[itemId] || {};
     return [{
@@ -1623,6 +2253,9 @@ function filteredRequests() {
       item.requesterEmail,
       item.assigneeName,
       SQUAD_LABELS[item.squad],
+      projectLabel(item),
+      requestSearchText(item, projectForItem(item)),
+      ...(item.customFieldValues ? Object.values(item.customFieldValues) : []),
       ...cancellationSearch
     ]
       .filter(Boolean)
@@ -1630,7 +2263,7 @@ function filteredRequests() {
       .toLocaleLowerCase("pt-BR");
 
     return (!term || haystack.includes(term))
-      && (state.filters.type === "all" || item.type === state.filters.type)
+      && (state.filters.type === "all" || projectIdForRequest(item) === state.filters.type)
       && (state.filters.priority === "all" || item.priority === state.filters.priority)
       && (state.filters.squad === "all"
         || (state.filters.squad === "none" ? !VALID_SQUADS.includes(item.squad) : item.squad === state.filters.squad))
@@ -1649,14 +2282,14 @@ function requestPausedDuration(item, endAt = null) {
 }
 
 function requestAge(item) {
-  const end = item.status === "concluida" ? item.completedAt : null;
+  const end = isCompletedStatus(item.status) ? item.completedAt : null;
   return Math.max(0, elapsedMs(item.createdAt, end) - requestPausedDuration(item, end));
 }
 
 function statusTransitionUpdate(item, newStatus) {
-  const oldStatus = item?.status || "nova";
-  const oldPaused = PAUSED_STATUSES.has(oldStatus);
-  const newPaused = PAUSED_STATUSES.has(newStatus);
+  const oldStatus = item?.status || initialStatusId();
+  const oldPaused = isPausedStatus(oldStatus);
+  const newPaused = isPausedStatus(newStatus);
   const update = { status: newStatus, lastStatusChangedAt: serverTimestamp() };
   if (!oldPaused && newPaused) { update.pauseStartedAt = serverTimestamp(); update.pauseAlert24SentAt = null; }
   if (oldPaused && !newPaused) {
@@ -1666,56 +2299,71 @@ function statusTransitionUpdate(item, newStatus) {
     update.pauseStartedAt = null;
   }
   if (oldPaused && newPaused) update.pauseStartedAt = item.pauseStartedAt || serverTimestamp();
-  if (newStatus === "concluida" && oldStatus !== "concluida") update.completedAt = serverTimestamp();
-  if (newStatus !== "concluida" && oldStatus === "concluida") update.completedAt = null;
+  if (isCompletedStatus(newStatus) && !isCompletedStatus(oldStatus)) update.completedAt = serverTimestamp();
+  if (!isCompletedStatus(newStatus) && isCompletedStatus(oldStatus)) update.completedAt = null;
   return update;
 }
 
 function requestCardTitle(item) {
-  if (item.type === "tef_elgin") return item.title || `TEF Elgin — ${item.tefCnpj || item.clientCode || "cliente"}`;
-  if (item.type !== "cancelamento") return item.title || "Sem título";
-  const entries = cancellationItemsFromRequest(item);
-  if (entries.length > 1) return `Cancelamentos — ${entries.length} clientes`;
-  const first = entries[0] || {};
-  return item.title || `Cancelamento — ${first.clientName || first.clientCnpj || "cliente"}`;
+  const project = projectForItem(item);
+  if (project.legacyType === "tef_elgin") return item.title || `TEF Elgin — ${item.tefCnpj || item.clientCode || "cliente"}`;
+  if (project.legacyType === "cancelamento") {
+    const entries = cancellationItemsFromRequest(item);
+    if (entries.length > 1) return `${project.name} — ${entries.length} clientes`;
+    const first = entries[0] || {};
+    return item.title || `${project.name} — ${first.clientName || first.clientCnpj || "cliente"}`;
+  }
+  if (project.legacyType === "programacao") return item.title || "Sem título";
+  return item.title || `${project.name} — ${item.companyName || item.document || "Solicitação"}`;
 }
 
 function requestCardClient(item) {
-  if (item.type === "tef_elgin") {
+  const project = projectForItem(item);
+  if (project.legacyType === "tef_elgin") {
     return {
       name: item.tefClientName || item.clientName || item.tefCnpj || item.clientCode || "Cliente não informado",
       code: item.tefCnpj || item.clientCode || "CNPJ não informado"
     };
   }
-  if (item.type !== "cancelamento") {
+  if (project.legacyType === "cancelamento") {
+    const entries = cancellationItemsFromRequest(item);
+    const first = entries[0] || {};
     return {
-      name: item.clientName || "Cliente não informado",
-      code: item.clientCode || ""
+      name: first.clientName || first.clientCnpj || "Cliente não informado",
+      code: entries.length > 1 ? `+${entries.length - 1} cliente${entries.length - 1 === 1 ? "" : "s"}` : first.clientName ? first.clientCnpj || "" : ""
     };
   }
-
-  const entries = cancellationItemsFromRequest(item);
-  const first = entries[0] || {};
+  if (project.legacyType === "custom") {
+    return {
+      name: item.companyName || item.clientName || project.name,
+      code: item.document || item.clientCode || ""
+    };
+  }
   return {
-    name: first.clientName || first.clientCnpj || "Cliente não informado",
-    code: entries.length > 1 ? `+${entries.length - 1} cliente${entries.length - 1 === 1 ? "" : "s"}` : first.clientName ? first.clientCnpj || "" : ""
+    name: item.clientName || "Cliente não informado",
+    code: item.clientCode || ""
   };
 }
 
 function requestCardDescription(item) {
-  if (item.type === "tef_elgin") {
-    return [item.tefOperatingSystem, item.tefRam, item.tefAcquirer].filter(Boolean).join(" · ");
+  const project = projectForItem(item);
+  if (project.legacyType === "tef_elgin") return [item.tefOperatingSystem, item.tefRam, item.tefAcquirer].filter(Boolean).join(" · ");
+  if (project.legacyType === "cancelamento") {
+    const entries = cancellationItemsFromRequest(item);
+    if (entries.length === 1) return entries[0]?.reason || "";
+    return entries.map((entry) => entry.clientName || entry.clientCnpj).filter(Boolean).join(" · ");
   }
-  if (item.type !== "cancelamento") return item.description || "";
-  const entries = cancellationItemsFromRequest(item);
-  if (entries.length === 1) return entries[0]?.reason || "";
-  return entries.map((entry) => entry.clientName || entry.clientCnpj).filter(Boolean).join(" · ");
+  if (project.legacyType === "custom") {
+    const firstValue = Object.values(item.customFieldValues || {}).find(Boolean);
+    return item.description || firstValue || project.description || "";
+  }
+  return item.description || "";
 }
 
 function cardHtml(item, isOldest) {
   const age = requestAge(item);
   const ageHours = age / 3600000;
-  const ageClass = item.status === "concluida"
+  const ageClass = isCompletedStatus(item.status)
     ? ""
     : ageHours >= 48
       ? "age-critical"
@@ -1731,17 +2379,19 @@ function cardHtml(item, isOldest) {
     : "";
   const attachmentCount = Array.isArray(item.attachments) ? item.attachments.length : 0;
   const commentCount = Number(item.commentCount || 0);
-  const cancellationEntries = item.type === "cancelamento" ? cancellationItemsFromRequest(item) : [];
+  const project = projectForItem(item);
+  const legacyType = project.legacyType;
+  const cancellationEntries = legacyType === "cancelamento" ? cancellationItemsFromRequest(item) : [];
   const cancellationDone = cancellationEntries.filter((entry) => entry.crmCancelled === true).length;
   const crmProgressTag = cancellationEntries.length
     ? `<span class="tag crm-progress ${cancellationDone === cancellationEntries.length ? "complete" : ""}">CRM ${cancellationDone}/${cancellationEntries.length}</span>`
     : "";
   const cardDescription = requestCardDescription(item);
-  const cardDescriptionHtml = item.type !== "programacao" && cardDescription
+  const cardDescriptionHtml = legacyType !== "programacao" && cardDescription
     ? `<p class="card-description">${escapeHtml(cardDescription)}</p>`
     : "";
 
-  const paused = PAUSED_STATUSES.has(item.status);
+  const paused = isPausedStatus(item.status);
   const bulkSelector = isAdmin() && state.bulkMode
     ? `<label class="bulk-card-check" title="Selecionar solicitação"><input type="checkbox" data-bulk-id="${escapeHtml(item.id)}" ${state.bulkSelected.has(item.id) ? "checked" : ""}><span>Selecionar</span></label>`
     : "";
@@ -1750,19 +2400,18 @@ function cardHtml(item, isOldest) {
       ${bulkSelector}
       <div class="card-top">
         <div class="card-tags">
-          <span class="tag ${item.type}">${TYPE_LABELS[item.type] || "Solicitação"}</span>
+          <span class="tag ${projectTagClass(project.id)}">${escapeHtml(project.name || "Solicitação")}</span>
           <span class="tag squad">${escapeHtml(SQUAD_LABELS[item.squad] || "Sem grupo")}</span>
-          ${item.type === "programacao" ? `<span class="tag ${item.priority}">${PRIORITY_LABELS[item.priority] || "Normal"}</span>` : ""}
+          ${legacyType === "programacao" ? `<span class="tag ${item.priority}">${PRIORITY_LABELS[item.priority] || "Normal"}</span>` : ""}
           ${attachmentCount ? `<span class="tag attachment">📎 ${attachmentCount}</span>` : ""}
           ${commentCount ? `<span class="tag comments">💬 ${commentCount}</span>` : ""}
-          ${item.status === "bloqueio" ? `<span class="tag blocked">BLOQUEIO</span>` : ""}
-          ${paused ? `<span class="tag paused">⏸ TEMPO PAUSADO</span>` : ""}
+          ${paused ? `<span class="tag paused">⏸ ${escapeHtml(statusLabel(item.status).toUpperCase())}</span>` : ""}
           ${crmProgressTag}
         </div>
-        <span class="card-time ${ageHours >= 48 && item.status !== "concluida" ? "critical" : ""}" data-created-at="${timestampToDate(item.createdAt)?.toISOString() || ""}" data-completed-at="${timestampToDate(item.completedAt)?.toISOString() || ""}" data-status="${item.status}" data-paused-ms="${Number(item.pausedDurationMs || 0)}" data-pause-started-at="${timestampToDate(item.pauseStartedAt)?.toISOString() || ""}">${paused ? "⏸" : "◷"} ${formatElapsed(age, true)}</span>
+        <span class="card-time ${ageHours >= 48 && !isCompletedStatus(item.status) ? "critical" : ""}" data-created-at="${timestampToDate(item.createdAt)?.toISOString() || ""}" data-completed-at="${timestampToDate(item.completedAt)?.toISOString() || ""}" data-status="${item.status}" data-paused-ms="${Number(item.pausedDurationMs || 0)}" data-pause-started-at="${timestampToDate(item.pauseStartedAt)?.toISOString() || ""}">${paused ? "⏸" : "◷"} ${formatElapsed(age, true)}</span>
       </div>
       <h3 class="card-title">${escapeHtml(title)}</h3>
-      ${item.type === "programacao"
+      ${legacyType === "programacao"
         ? `<div class="program-card-client">
             <p class="card-client"><strong>${escapeHtml(cardClient.name)}</strong></p>
             <p class="card-cnpj"><span>CNPJ:</span> ${escapeHtml(cardClient.code || "Não informado")}</p>
@@ -1775,7 +2424,7 @@ function cardHtml(item, isOldest) {
           <span>${escapeHtml(item.requesterName || item.requesterEmail || "Usuário")}</span>
         </div>
         <div class="card-actions">
-          ${videoLink && item.type === "programacao" ? `<a class="card-link" href="${escapeHtml(videoLink)}" target="_blank" rel="noopener noreferrer" >Ver vídeo ↗</a>` : ""}
+          ${videoLink && legacyType === "programacao" ? `<a class="card-link" href="${escapeHtml(videoLink)}" target="_blank" rel="noopener noreferrer" >Ver vídeo ↗</a>` : ""}
           ${copyButton}
         </div>
       </footer>
@@ -1790,16 +2439,19 @@ function renderAll() {
 
 function renderBoard() {
   const filtered = filteredRequests();
-  const openFiltered = filtered.filter((request) => request.status !== "concluida");
+  const openFiltered = filtered.filter((request) => !isCompletedStatus(request.status));
   const oldestId = [...openFiltered].sort((a, b) => requestAge(b) - requestAge(a))[0]?.id;
   let renderedCount = 0;
 
-  VALID_STATUSES.forEach((status) => {
-    const column = $(`[data-dropzone="${status}"]`);
+  activeKanbanColumns().forEach((columnConfig) => {
+    const status = columnConfig.id;
+    const column = $(`[data-dropzone="${CSS.escape(status)}"]`);
+    const count = $(`[data-count="${CSS.escape(status)}"]`);
+    if (!column || !count) return;
     const items = filtered
       .filter((request) => request.status === status)
       .sort((a, b) => {
-        if (status === "concluida") {
+        if (columnConfig.completed) {
           return (timestampToDate(b.completedAt)?.getTime() || 0)
             - (timestampToDate(a.completedAt)?.getTime() || 0);
         }
@@ -1807,7 +2459,7 @@ function renderBoard() {
       });
 
     renderedCount += items.length;
-    $(`[data-count="${status}"]`).textContent = items.length;
+    count.textContent = items.length;
     updateBulkColumnSelector(status, items);
     column.innerHTML = items.length
       ? items.map((item) => cardHtml(item, item.id === oldestId)).join("")
@@ -1820,32 +2472,32 @@ function renderBoard() {
 }
 
 function renderMetrics() {
-  const open = state.requests.filter((request) => request.status !== "concluida");
-  const done = state.requests.filter((request) => request.status === "concluida");
-  const programming = state.requests.filter((request) => request.type === "programacao" && request.status !== "concluida");
+  const open = state.requests.filter((request) => !isCompletedStatus(request.status));
+  const done = state.requests.filter((request) => isCompletedStatus(request.status));
+  const programming = new Set(state.requests.filter((request) => !isCompletedStatus(request.status)).map(projectIdForRequest)).size;
   const oldest = [...open].sort((a, b) => requestAge(b) - requestAge(a))[0];
 
   els.metricOpen.textContent = open.length;
   els.metricDone.textContent = done.length;
-  els.metricProgramming.textContent = programming.length;
+  els.metricProgramming.textContent = programming;
   els.metricOldest.textContent = oldest ? formatElapsed(requestAge(oldest), true) : "—";
 }
 
 function renderLoadingCards() {
-  VALID_STATUSES.forEach((status) => {
-    const column = $(`[data-dropzone="${status}"]`);
-    column.innerHTML = `<div class="loading-card"></div><div class="loading-card"></div>`;
+  activeKanbanColumns().forEach(({ id: status }) => {
+    const column = $(`[data-dropzone="${CSS.escape(status)}"]`);
+    if (column) column.innerHTML = `<div class="loading-card"></div><div class="loading-card"></div>`;
   });
 }
 
 function updateElapsedLabels(updateMetrics = true) {
   $$('[data-created-at]').forEach((element) => {
     if (!element.dataset.createdAt) return;
-    const end = element.dataset.status === "concluida" && element.dataset.completedAt ? new Date(element.dataset.completedAt) : null;
+    const end = isCompletedStatus(element.dataset.status) && element.dataset.completedAt ? new Date(element.dataset.completedAt) : null;
     let paused = Number(element.dataset.pausedMs || 0);
     if (element.dataset.pauseStartedAt) paused += Math.max(0, (end || new Date()).getTime() - new Date(element.dataset.pauseStartedAt).getTime());
     const activeElapsed = Math.max(0, elapsedMs(new Date(element.dataset.createdAt), end) - paused);
-    const isPaused = PAUSED_STATUSES.has(element.dataset.status);
+    const isPaused = isPausedStatus(element.dataset.status);
     element.textContent = `${isPaused ? "⏸" : "◷"} ${formatElapsed(activeElapsed, true)}`;
   });
   if (updateMetrics) renderMetrics();
@@ -1931,9 +2583,9 @@ function setupDropzones() {
           updatedByName: state.profile.name || state.user.email
         };
         await updateDoc(doc(db, "requests", id), update);
-        await recordHistory(item, "status", `Status alterado de ${STATUS_LABELS[item.status]} para ${STATUS_LABELS[newStatus]}.`, { from: item.status, to: newStatus });
+        await recordHistory(item, "status", `Status alterado de ${statusLabel(item.status)} para ${statusLabel(newStatus)}.`, { from: item.status, to: newStatus });
         await notifyStatusChange(item, newStatus);
-        showToast(`Solicitação movida para ${STATUS_LABELS[newStatus]}.`);
+        showToast(`Solicitação movida para ${statusLabel(newStatus)}.`);
       } catch (error) {
         console.error(error);
         showToast(firebaseErrorMessage(error), "error");
@@ -2156,7 +2808,7 @@ async function toggleCancellationCrmStatus(index, checked, checkbox) {
 
   const requestId = els.requestId.value;
   const requestItem = state.requests.find((item) => item.id === requestId);
-  if (!requestId || !requestItem || requestItem.type !== "cancelamento") {
+  if (!requestId || !requestItem || projectLegacyType(projectForItem(requestItem)) !== "cancelamento") {
     checkbox.checked = !checked;
     showToast("Salve a solicitação antes de controlar os cancelamentos no CRM.", "warning");
     return;
@@ -2291,39 +2943,148 @@ function setSectionInputsEnabled(section, enabled) {
 }
 
 function updateTefPixFields() {
-  const shouldShow = els.requestType.value === "tef_elgin" && els.tefUsesPix.checked;
+  const shouldShow = projectLegacyType(els.requestType.value) === "tef_elgin" && els.tefUsesPix.checked;
   els.tefAdditionalInfoField.hidden = !shouldShow;
   els.tefAdditionalInfo.disabled = !shouldShow || !state.modalEditable;
   els.tefAdditionalInfoCount.textContent = String(els.tefAdditionalInfo.value.length);
 }
 
-function updateRequestTypeFields() {
-  const type = els.requestType.value;
-  const isProgramming = type === "programacao";
-  const isCancellation = type === "cancelamento";
-  const isTef = type === "tef_elgin";
+function dynamicInputId(prefix, key) {
+  return `${prefix}-${String(key || "field").replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+function renderCustomProjectForm(project, item = null) {
+  const values = item || {};
+  const standardValues = {
+    document: values.document || values.clientCode || "",
+    companyName: values.companyName || values.clientName || "",
+    phone: values.phone || values.contactPhone || "",
+    email: values.email || values.contactEmail || ""
+  };
+  els.customProjectTitle.textContent = project.name;
+  els.customProjectDescription.textContent = project.description || "Preencha os campos configurados para este projeto.";
+
+  els.customStandardFields.innerHTML = Object.entries(STANDARD_FIELD_DEFINITIONS).map(([key, definition]) => {
+    const config = project.standardFields?.[key];
+    if (!config?.enabled) return "";
+    const required = config.required === true;
+    const id = dynamicInputId("custom-standard", key);
+    const inputType = definition.type === "email" ? "email" : definition.type === "phone" ? "tel" : "text";
+    const inputMode = ["document", "phone"].includes(definition.type) ? ' inputmode="numeric"' : "";
+    const className = definition.type === "document" ? "dynamic-document-input" : definition.type === "phone" ? "dynamic-phone-input" : "";
+    const placeholder = definition.type === "document" ? "CPF ou CNPJ" : definition.type === "phone" ? "(00) 00000-0000" : definition.type === "email" ? "nome@empresa.com.br" : "Razão social ou nome fantasia";
+    return `<label class="field"><span>${escapeHtml(definition.label)}${required ? " *" : ""}</span><input id="${escapeHtml(id)}" data-custom-standard="${escapeHtml(key)}" class="${className}" type="${inputType}"${inputMode} maxlength="${definition.maxLength}" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(standardValues[key] || "")}" ${required ? "required" : ""}></label>`;
+  }).join("");
+
+  const customValues = values.customFieldValues && typeof values.customFieldValues === "object" ? values.customFieldValues : {};
+  els.customFieldsContainer.innerHTML = project.customFields
+    .filter((field) => field.active !== false)
+    .sort((a, b) => a.order - b.order)
+    .map((field) => `<label class="field form-span-2"><span>${escapeHtml(field.label)}${field.required ? " *" : ""}</span><textarea data-custom-field="${escapeHtml(field.id)}" rows="5" maxlength="${field.maxLength || 1000}" placeholder="${escapeHtml(field.placeholder || "Digite as informações solicitadas.")}" ${field.required ? "required" : ""}>${escapeHtml(customValues[field.id] || "")}</textarea><small class="field-counter"><span data-custom-counter="${escapeHtml(field.id)}">${String(customValues[field.id] || "").length}</span>/${field.maxLength || 1000} caracteres</small></label>`).join("");
+
+  $$("[data-custom-field]", els.customFieldsContainer).forEach((textarea) => {
+    textarea.addEventListener("input", () => {
+      const counter = $(`[data-custom-counter="${CSS.escape(textarea.dataset.customField)}"]`, els.customFieldsContainer);
+      if (counter) counter.textContent = String(textarea.value.length);
+    });
+  });
+  $$(".dynamic-document-input", els.customStandardFields).forEach((input) => input.addEventListener("input", () => { input.value = formatCpfCnpj(input.value); }));
+  $$(".dynamic-phone-input", els.customStandardFields).forEach((input) => input.addEventListener("input", () => { input.value = formatPhone(input.value); }));
+  setSectionInputsEnabled(els.customProjectFields, state.modalEditable);
+}
+
+function collectDynamicProjectValues() {
+  const standard = {};
+  const custom = {};
+  $$('[data-custom-standard]', els.customStandardFields).forEach((input) => { standard[input.dataset.customStandard] = input.value; });
+  $$('[data-custom-field]', els.customFieldsContainer).forEach((input) => { custom[input.dataset.customField] = input.value; });
+  return { standard, custom };
+}
+
+function buildCustomProjectPayload(project) {
+  const result = validateDynamicRequest(project, collectDynamicProjectValues(), {
+    isValidDocument: isValidCpfCnpj,
+    isValidPhone,
+    isValidEmail: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ""))
+  });
+  if (!result.valid) return { error: result.errors[0] || "Revise os campos do projeto." };
+  const standard = result.values.standard;
+  const custom = result.values.custom;
+  const firstCustom = project.customFields.find((field) => field.active !== false && custom[field.id]);
+  const identifier = standard.companyName || standard.document || (firstCustom ? custom[firstCustom.id].slice(0, 80) : "Solicitação");
+  const descriptionLines = [
+    standard.document ? `CPF/CNPJ: ${formatCpfCnpj(standard.document)}` : "",
+    standard.companyName ? `Razão Social: ${standard.companyName}` : "",
+    standard.phone ? `Telefone: ${formatPhone(standard.phone)}` : "",
+    standard.email ? `E-mail: ${standard.email}` : "",
+    ...project.customFields
+      .filter((field) => field.active !== false && custom[field.id])
+      .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+      .map((field) => `${field.label}: ${custom[field.id]}`)
+  ].filter(Boolean);
+  return {
+    data: {
+      priority: "normal",
+      document: standard.document ? formatCpfCnpj(standard.document) : "",
+      companyName: standard.companyName || "",
+      phone: standard.phone ? formatPhone(standard.phone) : "",
+      email: standard.email || "",
+      clientName: standard.companyName || standard.document || project.name,
+      clientCode: standard.document ? formatCpfCnpj(standard.document) : "",
+      contactName: "",
+      contactRole: "",
+      contactEmail: standard.email || "",
+      contactPhone: standard.phone ? formatPhone(standard.phone) : "",
+      title: `${project.name} — ${identifier}`.slice(0, 140),
+      description: descriptionLines.join("\n").slice(0, 3000),
+      currentBehavior: "",
+      expectedBehavior: "",
+      justification: "",
+      videoLink: "",
+      externalLink: "",
+      cancellationItems: [],
+      customFieldValues: custom,
+      projectFormSnapshot: {
+        projectName: project.name,
+        standardFields: project.standardFields || {},
+        customFields: project.customFields.map((field) => ({ id: field.id, label: field.label, required: field.required, maxLength: field.maxLength, order: field.order }))
+      }
+    }
+  };
+}
+
+function updateRequestTypeFields(item = null) {
+  const projectId = els.requestType.value;
+  const project = item ? projectDefinitionForRequest(item) : projectById(projectId);
+  const legacyType = projectLegacyType(project);
+  const isProgramming = legacyType === "programacao";
+  const isCancellation = legacyType === "cancelamento";
+  const isTef = legacyType === "tef_elgin";
+  const isCustom = legacyType === "custom";
 
   els.requestDialog.classList.toggle("request-dialog-cancellation", isCancellation);
-
   els.programmingFields.hidden = !isProgramming;
   els.cancellationFields.hidden = !isCancellation;
   els.tefFields.hidden = !isTef;
+  els.customProjectFields.hidden = !isCustom;
   els.priorityField.hidden = !isProgramming;
 
   setSectionInputsEnabled(els.programmingFields, isProgramming && state.modalEditable);
   setSectionInputsEnabled(els.cancellationFields, isCancellation && state.modalEditable);
   setSectionInputsEnabled(els.tefFields, isTef && state.modalEditable);
+  setSectionInputsEnabled(els.customProjectFields, isCustom && state.modalEditable);
   els.requestPriority.disabled = !isProgramming || !state.modalEditable;
   els.requestSquad.disabled = !state.modalEditable || (!isAdmin() && isSolicitante());
 
   if (isProgramming) renderAttachmentList();
   if (isCancellation) renderCancellationItems(state.modalCancellationItems, state.modalEditable);
+  if (isCustom) renderCustomProjectForm(project, item || null);
   updateTefPixFields();
 
   const isExistingRequest = Boolean(els.requestId.value);
   els.requestType.disabled = !state.modalEditable || isExistingRequest;
   els.requestType.title = isExistingRequest
-    ? "O tipo da solicitação não pode ser alterado após o primeiro salvamento."
+    ? "O projeto da solicitação não pode ser alterado após o primeiro salvamento."
     : "";
   els.requestStatus.disabled = !isAdmin() || state.modalArchived;
   els.requestAssignee.disabled = !isAdmin() || state.modalArchived;
@@ -2350,10 +3111,11 @@ function resetRequestForm() {
   els.tefAdditionalInfo.value = "";
   state.modalEditable = true;
   els.requestId.value = "";
-  els.requestType.value = "programacao";
+  const defaultProject = creatableProjects()[0] || state.projects[0] || DEFAULT_PROJECTS[0];
+  els.requestType.value = defaultProject?.id || "programacao";
   els.requestSquad.value = isSolicitante() && VALID_SQUADS.includes(state.profile?.squad) ? state.profile.squad : "";
   els.requestPriority.value = "normal";
-  els.requestStatus.value = "nova";
+  els.requestStatus.value = initialStatusId();
   els.requestAssignee.value = "";
   els.requestModalTitle.textContent = "Nova solicitação";
   els.saveRequestButton.textContent = "Salvar solicitação";
@@ -2384,22 +3146,30 @@ function resetRequestForm() {
   updateRequestTypeFields();
 }
 
-function openNewRequestModal(type = "programacao") {
+function openNewRequestModal(projectId = "") {
   resetRequestForm();
-  els.requestType.value = VALID_TYPES.includes(type) ? type : "programacao";
+  const projects = creatableProjects();
+  const selected = projects.find((project) => project.id === projectId) || projects[0];
+  if (!selected) {
+    showToast("Nenhum projeto publicado está disponível para o seu perfil.", "warning");
+    return;
+  }
+  els.requestType.value = selected.id;
   updateRequestTypeFields();
   els.requestDialog.showModal();
   window.setTimeout(() => {
-    if (els.requestType.value === "programacao") els.requestClient.focus();
-    else if (els.requestType.value === "cancelamento") els.cancellationCnpjInput.focus();
-    else els.tefCnpj.focus();
+    const legacyType = projectLegacyType(selected);
+    if (legacyType === "programacao") els.requestClient.focus();
+    else if (legacyType === "cancelamento") els.cancellationCnpjInput.focus();
+    else if (legacyType === "tef_elgin") els.tefCnpj.focus();
+    else $("input, textarea", els.customProjectFields)?.focus();
   }, 50);
 }
 
 function canRequesterEdit(item) {
   return !isAdmin()
     && item.requesterUid === state.user.uid
-    && item.status === "nova";
+    && item.status === initialStatusId();
 }
 
 function openRequestModal(id, source = "active") {
@@ -2411,13 +3181,24 @@ function openRequestModal(id, source = "active") {
 
   resetRequestForm();
   state.modalArchived = archived;
-  const crmTrackingStarted = item.type === "cancelamento"
+  const itemProject = projectForItem(item);
+  const itemLegacyType = itemProject.legacyType;
+  const crmTrackingStarted = itemLegacyType === "cancelamento"
     && Object.keys(cancellationCrmTracking(item)).length > 0;
   const editable = !archived && (isAdmin() || (canRequesterEdit(item) && !crmTrackingStarted));
   state.modalEditable = editable;
 
   els.requestId.value = item.id;
-  els.requestType.value = item.type || "programacao";
+  if (!state.projects.some((project) => project.id === projectIdForRequest(item))) state.projects = mergeProjects([...state.projects, itemProject]);
+  populateProjectAndColumnControls();
+  const currentProjectId = projectIdForRequest(item);
+  if (![...els.requestType.options].some((option) => option.value === currentProjectId)) {
+    const option = document.createElement("option");
+    option.value = currentProjectId;
+    option.textContent = itemProject.name || item.projectName || "Projeto arquivado";
+    els.requestType.append(option);
+  }
+  els.requestType.value = currentProjectId;
   els.requestSquad.value = VALID_SQUADS.includes(item.squad) ? item.squad : "";
   els.requestPriority.value = item.priority || "normal";
   els.requestClient.value = item.clientName || "";
@@ -2427,13 +3208,13 @@ function openRequestModal(id, source = "active") {
   els.requestContactEmail.value = item.contactEmail || "";
   els.requestContactPhone.value = formatPhone(item.contactPhone || "");
   els.requestTitle.value = item.title || "";
-  els.requestDescription.value = item.type === "cancelamento" ? "" : item.description || "";
+  els.requestDescription.value = itemLegacyType === "cancelamento" ? "" : item.description || "";
   els.requestCurrentBehavior.value = item.currentBehavior || "";
   els.requestExpectedBehavior.value = item.expectedBehavior || "";
   els.requestJustification.value = item.justification || "";
   els.requestLink.value = item.videoLink || item.externalLink || "";
-  els.tefCnpj.value = formatCnpj(item.tefCnpj || (item.type === "tef_elgin" ? item.clientCode : ""));
-  const legacyTefClientName = item.type === "tef_elgin"
+  els.tefCnpj.value = formatCnpj(item.tefCnpj || (itemLegacyType === "tef_elgin" ? item.clientCode : ""));
+  const legacyTefClientName = itemLegacyType === "tef_elgin"
     && item.clientName
     && item.clientName !== item.tefCnpj
     && item.clientName !== item.clientCode
@@ -2457,14 +3238,14 @@ function openRequestModal(id, source = "active") {
 
   // Valores preenchidos por código não disparam eventos input/blur.
   // Recalcula a validade para evitar mensagens incorretas no primeiro salvamento.
-  if (item.type === "programacao") {
+  if (itemLegacyType === "programacao") {
     setSpecificDocumentValidity(els.requestClientCode, "cnpj", { required: true, showMessage: false });
     setPhoneValidity(els.requestContactPhone, { showMessage: false });
   } else {
     clearFieldValidation(els.requestClientCode);
     clearFieldValidation(els.requestContactPhone);
   }
-  if (item.type === "tef_elgin") {
+  if (itemLegacyType === "tef_elgin") {
     setSpecificDocumentValidity(els.tefCnpj, "cnpj", { required: true, showMessage: false });
     setSpecificDocumentValidity(els.tefOwnerCpf, "cpf", { required: true, showMessage: false });
     setPhoneValidity(els.tefContactPhone, { showMessage: false });
@@ -2480,10 +3261,10 @@ function openRequestModal(id, source = "active") {
   state.modalNewAttachments = [];
   state.modalRemovedAttachmentKeys = [];
   renderAttachmentList();
-  els.requestStatus.value = item.status || "nova";
+  els.requestStatus.value = validStatusIds().includes(item.status) ? item.status : initialStatusId();
   els.requestAssignee.value = item.assigneeUid || "";
   renderCancellationItems(
-    item.type === "cancelamento" ? cancellationItemsFromRequest(item) : [],
+    itemLegacyType === "cancelamento" ? cancellationItemsFromRequest(item) : [],
     editable
   );
 
@@ -2492,7 +3273,7 @@ function openRequestModal(id, source = "active") {
   els.saveRequestButton.hidden = !editable;
   els.copyRequestButton.hidden = !canCopyRequest(item);
   els.deleteRequestButton.hidden = !isAdmin() || archived;
-  els.archiveRequestButton.hidden = !isAdmin() || (!archived && item.status !== "concluida");
+  els.archiveRequestButton.hidden = !isAdmin() || (!archived && !isCompletedStatus(item.status));
   els.archiveRequestButton.textContent = archived ? "↶ Restaurar" : "▣ Arquivar";
   els.requestCommentsTab.disabled = false;
   els.requestHistoryTab.disabled = false;
@@ -2501,13 +3282,13 @@ function openRequestModal(id, source = "active") {
   els.requestAudit.innerHTML = `
     <strong>Grupo:</strong> ${escapeHtml(SQUAD_LABELS[item.squad] || "Sem grupo")}<br>
     <strong>Solicitado por:</strong> ${escapeHtml(item.requesterName || item.requesterEmail || "—")}<br>
-    <strong>Criado em:</strong> ${formatDateTime(item.createdAt)} · <strong>Tempo ativo:</strong> ${formatElapsed(requestAge(item))} · <strong>Tempo pausado:</strong> ${formatElapsed(requestPausedDuration(item, item.status === "concluida" ? item.completedAt : null))}<br>
+    <strong>Criado em:</strong> ${formatDateTime(item.createdAt)} · <strong>Tempo ativo:</strong> ${formatElapsed(requestAge(item))} · <strong>Tempo pausado:</strong> ${formatElapsed(requestPausedDuration(item, isCompletedStatus(item.status) ? item.completedAt : null))}<br>
     <strong>Última atualização:</strong> ${formatDateTime(item.updatedAt)}${item.updatedByName ? ` por ${escapeHtml(item.updatedByName)}` : ""}
     ${archived ? `<br><strong>Arquivado em:</strong> ${formatDateTime(item.archivedAt)}${item.archivedByName ? ` por ${escapeHtml(item.archivedByName)}` : ""}` : ""}
   `;
 
   populateCommentMentionOptions(item);
-  updateRequestTypeFields();
+  updateRequestTypeFields(item);
   subscribeRequestComments(item.id, archived);
   subscribeRequestHistory(item.id);
   els.requestDialog.showModal();
@@ -2721,17 +3502,20 @@ async function saveRequest(event) {
 
   const id = els.requestId.value;
   const existing = state.requests.find((request) => request.id === id);
-  const selectedType = VALID_TYPES.includes(els.requestType.value)
-    ? els.requestType.value
-    : "programacao";
-  const type = existing && VALID_TYPES.includes(existing.type)
-    ? existing.type
-    : selectedType;
+  const selectedProject = projectById(els.requestType.value);
+  const project = existing ? projectDefinitionForRequest(existing) : selectedProject;
+  if (!project?.id || !projectAllowsCreation(project, state.profile?.role || "solicitante") && !existing) {
+    showFormError(els.requestError, "O projeto selecionado não está publicado para o seu perfil.");
+    return;
+  }
+  const type = projectLegacyType(project);
   const typeResult = type === "programacao"
     ? buildProgrammingPayload()
     : type === "cancelamento"
       ? buildCancellationPayload()
-      : buildTefPayload();
+      : type === "tef_elgin"
+        ? buildTefPayload()
+        : buildCustomProjectPayload(project);
 
   if (typeResult.error) {
     showFormError(els.requestError, typeResult.error);
@@ -2768,6 +3552,8 @@ async function saveRequest(event) {
 
   const payload = {
     type,
+    projectId: project.id,
+    projectName: project.name,
     squad,
     priority: type === "programacao" && VALID_PRIORITIES.includes(els.requestPriority.value)
       ? els.requestPriority.value
@@ -2807,7 +3593,7 @@ async function saveRequest(event) {
     ];
 
     if (id && existing && isAdmin()) {
-      payload.status = VALID_STATUSES.includes(els.requestStatus.value) ? els.requestStatus.value : existing.status;
+      payload.status = validStatusIds().includes(els.requestStatus.value) ? els.requestStatus.value : existing.status;
       Object.assign(payload, statusTransitionUpdate(existing, payload.status));
       const assignee = state.users.find((user) => user.uid === els.requestAssignee.value);
       payload.assigneeUid = assignee?.uid || "";
@@ -2824,7 +3610,7 @@ async function saveRequest(event) {
       } else {
         batch.set(requestDocument, {
           ...payload,
-          status: "nova",
+          status: initialStatusId(),
           requesterUid: state.user.uid,
           requesterName: state.profile.name || state.user.email,
           requesterEmail: state.user.email,
@@ -2885,7 +3671,7 @@ async function saveRequest(event) {
         postSaveTasks.push(notifyStatusChange(savedItem, payload.status));
       }
     } else {
-      postSaveTasks.push(recordHistory(savedItem, "create", "Solicitação criada.", { type }));
+      postSaveTasks.push(recordHistory(savedItem, "create", "Solicitação criada.", { type, projectId: project.id, projectName: project.name }));
     }
 
     // Histórico e notificações são complementares. Eles não devem manter o
@@ -2897,9 +3683,7 @@ async function saveRequest(event) {
       ? "Solicitação atualizada com sucesso."
       : type === "cancelamento"
         ? "Lista de cancelamentos criada com sucesso."
-        : type === "tef_elgin"
-          ? "Solicitação TEF Elgin criada com sucesso."
-          : "Solicitação criada com sucesso.");
+        : `Solicitação do projeto ${project.name} criada com sucesso.`);
     els.requestDialog.close();
   } catch (error) {
     console.error(error);
@@ -3023,9 +3807,38 @@ UTILIZA PIX: ${item.tefUsesPix === true ? "SIM" : "NÃO"}
 INFORMAÇÕES ADICIONAIS DO PIX: ${item.tefUsesPix === true ? item.tefAdditionalInfo || "" : "Não se aplica"}`;
 }
 
+function customProjectCopyText(item) {
+  const project = projectDefinitionForRequest(item);
+  const snapshotFields = Array.isArray(item.projectFormSnapshot?.customFields)
+    ? item.projectFormSnapshot.customFields
+    : project.customFields || [];
+  const values = item.customFieldValues && typeof item.customFieldValues === "object"
+    ? item.customFieldValues
+    : {};
+  const standardLines = [
+    item.document || item.clientCode ? `CPF/CNPJ: ${item.document || item.clientCode}` : "",
+    item.companyName || item.clientName ? `Razão Social: ${item.companyName || item.clientName}` : "",
+    item.phone || item.contactPhone ? `Telefone: ${item.phone || item.contactPhone}` : "",
+    item.email || item.contactEmail ? `E-mail: ${item.email || item.contactEmail}` : ""
+  ].filter(Boolean);
+  const customLines = snapshotFields
+    .filter((field) => field?.active !== false && values[field.id])
+    .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+    .map((field) => `${field.label || "Campo"}: ${values[field.id]}`);
+  return [
+    `=== ${String(project.name || item.projectName || "PROJETO").toLocaleUpperCase("pt-BR")} ===`,
+    `Grupo de atendimento: ${SQUAD_LABELS[item.squad] || "Sem grupo"}`,
+    `Solicitante: ${item.requesterName || item.requesterEmail || ""}`,
+    ...standardLines,
+    ...customLines
+  ].filter(Boolean).join("\n");
+}
+
 function requestCopyText(item) {
-  if (item.type === "cancelamento") return cancellationCopyText(item);
-  if (item.type === "tef_elgin") return tefCopyText(item);
+  const legacyType = projectLegacyType(projectForItem(item));
+  if (legacyType === "cancelamento") return cancellationCopyText(item);
+  if (legacyType === "tef_elgin") return tefCopyText(item);
+  if (legacyType === "custom") return customProjectCopyText(item);
   return programmingCopyText(item);
 }
 
@@ -3303,10 +4116,10 @@ async function loadArchivedRequests(force = false) {
 function archivedFilteredRequests() {
   const term = state.archivedFilters.search.toLocaleLowerCase("pt-BR");
   return state.archivedRequests.filter((item) => {
-    const haystack = [item.title, item.clientName, item.clientCode, item.requesterName, item.requesterEmail, SQUAD_LABELS[item.squad]]
+    const haystack = [item.title, item.clientName, item.clientCode, item.requesterName, item.requesterEmail, SQUAD_LABELS[item.squad], projectLabel(item), requestSearchText(item, projectForItem(item))]
       .filter(Boolean).join(" ").toLocaleLowerCase("pt-BR");
     return (!term || haystack.includes(term))
-      && (state.archivedFilters.type === "all" || item.type === state.archivedFilters.type)
+      && (state.archivedFilters.type === "all" || projectIdForRequest(item) === state.archivedFilters.type)
       && (state.archivedFilters.squad === "all"
         || (state.archivedFilters.squad === "none" ? !VALID_SQUADS.includes(item.squad) : item.squad === state.archivedFilters.squad));
   }).sort((a, b) => (timestampToDate(b.archivedAt)?.getTime() || 0) - (timestampToDate(a.archivedAt)?.getTime() || 0));
@@ -3317,7 +4130,7 @@ function renderArchivedRequests() {
   els.archivedTableBody.innerHTML = items.map((item) => `
     <tr>
       <td><div class="archived-title"><strong>${escapeHtml(requestCardTitle(item))}</strong><span>${escapeHtml(item.clientName || item.clientCode || "—")}</span></div></td>
-      <td><span class="tag ${escapeHtml(item.type)}">${escapeHtml(TYPE_LABELS[item.type] || "Solicitação")}</span></td>
+      <td><span class="tag ${escapeHtml(projectTagClass(projectIdForRequest(item)))}">${escapeHtml(projectLabel(item) || "Solicitação")}</span></td>
       <td><span class="tag squad">${escapeHtml(SQUAD_LABELS[item.squad] || "Sem grupo")}</span></td>
       <td>${escapeHtml(item.requesterName || item.requesterEmail || "—")}</td>
       <td>${escapeHtml(formatDateTime(item.completedAt))}</td>
@@ -3330,7 +4143,7 @@ function renderArchivedRequests() {
 
 function requestDataWithoutId(item) {
   const { id, ...data } = item;
-  if (data.type === "tef_elgin") {
+  if (projectLegacyType(projectForItem(item)) === "tef_elgin") {
     data.tefClientName = data.tefClientName || data.clientName || data.tefCnpj || data.clientCode || "Cliente não informado";
     data.tefUsesPix = data.tefUsesPix === true;
     data.tefAdditionalInfo = data.tefUsesPix ? String(data.tefAdditionalInfo || "").slice(0, 1000) : "";
@@ -3344,14 +4157,14 @@ function openArchiveConfirmation(action, item) {
   const restoring = action === "restore";
   els.archiveConfirmTitle.textContent = restoring ? "Restaurar solicitação?" : "Arquivar solicitação?";
   els.archiveConfirmMessage.textContent = restoring
-    ? `A solicitação “${requestCardTitle(item)}” voltará para o Kanban na etapa Concluída.`
+    ? `A solicitação “${requestCardTitle(item)}” voltará para o Kanban na etapa ${statusLabel(completedStatusFallback())}.`
     : `A solicitação “${requestCardTitle(item)}” sairá do Kanban e ficará disponível no histórico.`;
   els.confirmArchiveButton.textContent = restoring ? "Restaurar solicitação" : "Arquivar solicitação";
   if (!els.archiveConfirmDialog.open) els.archiveConfirmDialog.showModal();
 }
 
 async function archiveRequestDocument(item) {
-  if (!isAdmin() || !item || item.status !== "concluida") throw { code: "permission-denied" };
+  if (!isAdmin() || !item || !isCompletedStatus(item.status)) throw { code: "permission-denied" };
   const batch = writeBatch(db);
   batch.set(doc(db, "archivedRequests", item.id), {
     ...requestDataWithoutId(item),
@@ -3374,7 +4187,9 @@ async function restoreArchivedRequest(item) {
   const batch = writeBatch(db);
   batch.set(doc(db, "requests", item.id), {
     ...data,
-    status: "concluida",
+    status: completedStatusFallback(),
+    columnId: completedStatusFallback(),
+    restoredFromArchiveAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     updatedByUid: state.user.uid,
     updatedByName: state.profile.name || state.user.email
@@ -3418,7 +4233,7 @@ async function confirmArchiveAction() {
 async function archiveOldCompletedRequests() {
   if (!isAdmin()) return;
   const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
-  const eligible = state.requests.filter((item) => item.status === "concluida"
+  const eligible = state.requests.filter((item) => isCompletedStatus(item.status)
     && (timestampToDate(item.completedAt)?.getTime() || 0) <= cutoff);
   if (!eligible.length) {
     showToast("Não há solicitações concluídas há mais de 30 dias.", "warning");
@@ -3459,7 +4274,7 @@ function indicatorSourceRequests() {
     return created
       && (!start || created >= start)
       && (!end || created <= end)
-      && (state.indicatorFilters.type === "all" || item.type === state.indicatorFilters.type)
+      && (state.indicatorFilters.type === "all" || projectIdForRequest(item) === state.indicatorFilters.type)
       && (state.indicatorFilters.squad === "all"
         || (state.indicatorFilters.squad === "none" ? !VALID_SQUADS.includes(item.squad) : item.squad === state.indicatorFilters.squad));
   });
@@ -3474,8 +4289,8 @@ function reportBarsHtml(entries, total) {
 function renderIndicators() {
   if (!isAdmin()) return;
   const items = indicatorSourceRequests();
-  const completed = items.filter((item) => item.status === "concluida" || Boolean(item.archivedAt));
-  const blocked = items.filter((item) => item.status === "bloqueio");
+  const completed = items.filter((item) => isCompletedStatus(item.status) || Boolean(item.archivedAt));
+  const blocked = items.filter((item) => isPausedStatus(item.status));
   const durations = completed.map(activeDurationForCompleted).filter((value) => value !== null);
   const average = durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : null;
 
@@ -3486,8 +4301,8 @@ function renderIndicators() {
   els.indicatorCompletionRate.textContent = `${items.length ? Math.round((completed.length / items.length) * 100) : 0}%`;
   els.indicatorArchived.textContent = items.filter((item) => Boolean(item.archivedAt)).length;
 
-  const statusEntries = VALID_STATUSES.map((status) => [STATUS_LABELS[status], items.filter((item) => item.status === status).length, status === "concluida" ? "green" : status === "bloqueio" ? "red" : status === "aguardando" ? "amber" : status === "analise" ? "purple" : "blue"]);
-  const typeEntries = VALID_TYPES.map((type) => [TYPE_LABELS[type], items.filter((item) => item.type === type).length, type === "cancelamento" ? "red" : type === "tef_elgin" ? "amber" : "blue"]);
+  const statusEntries = activeKanbanColumns().map((column) => [column.name, items.filter((item) => item.status === column.id).length, column.color]);
+  const typeEntries = state.projects.filter((project) => project.status !== "archived").map((project) => [project.name, items.filter((item) => projectIdForRequest(item) === project.id).length, project.legacyType === "cancelamento" ? "red" : project.legacyType === "tef_elgin" ? "amber" : project.legacyType === "custom" ? "purple" : "blue"]);
   els.indicatorStatusBars.innerHTML = reportBarsHtml(statusEntries, items.length);
   els.indicatorTypeBars.innerHTML = reportBarsHtml(typeEntries, items.length);
 
@@ -3497,9 +4312,9 @@ function renderIndicators() {
     if (!requesterMap.has(key)) requesterMap.set(key, { name: item.assigneeName || item.requesterName || item.requesterEmail || "Não identificado", total: 0, completed: 0, open: 0, blocked: 0, durations: [] });
     const entry = requesterMap.get(key);
     entry.total += 1;
-    if (item.status === "concluida" || item.archivedAt) { entry.completed += 1; const duration = activeDurationForCompleted(item); if (duration !== null) entry.durations.push(duration); }
+    if (isCompletedStatus(item.status) || item.archivedAt) { entry.completed += 1; const duration = activeDurationForCompleted(item); if (duration !== null) entry.durations.push(duration); }
     else entry.open += 1;
-    if (item.status === "bloqueio") entry.blocked += 1;
+    if (isPausedStatus(item.status)) entry.blocked += 1;
   });
   const requesterRows = [...requesterMap.values()].sort((a, b) => b.total - a.total);
   els.indicatorRequesterTable.innerHTML = requesterRows.length
@@ -4286,7 +5101,7 @@ async function removeMfa() {
 }
 
 async function switchAppView(view = "kanban") {
-  if (["users", "indicators", "archived", "security"].includes(view) && !isAdmin()) view = "kanban";
+  if (["users", "indicators", "archived", "security", "projects", "columns"].includes(view) && !isAdmin()) view = "kanban";
   state.currentView = view;
   if (view !== "kanban") setKanbanFocusMode(false);
   els.kanbanView.hidden = view !== "kanban";
@@ -4294,6 +5109,8 @@ async function switchAppView(view = "kanban") {
   els.indicatorsView.hidden = view !== "indicators";
   els.archivedView.hidden = view !== "archived";
   els.securityView.hidden = view !== "security";
+  els.projectsView.hidden = view !== "projects";
+  els.columnsView.hidden = view !== "columns";
   $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
 
   if (view === "users") await refreshUserManagement();
@@ -4307,6 +5124,8 @@ async function switchAppView(view = "kanban") {
       showToast(firebaseErrorMessage(error), "error");
     }
   }
+  if (view === "projects") { await loadArchivedRequests(); renderProjectsAdmin(); }
+  if (view === "columns") { await loadArchivedRequests(); renderColumnsAdmin(); }
   if (view === "security") await Promise.all([loadAccessLogs(), refreshMfaStatus()]);
   if (view === "archived") {
     try {
@@ -4576,7 +5395,7 @@ function subscribeCurrentProfile() {
     const preferenceChanged = isAdmin() && previousPreference !== state.profile.preferredSquadFilter;
     if (accessChanged || preferenceChanged) configureSquadFilter({ preserveSelection: !preferenceChanged });
     if (accessChanged) {
-      if (!isAdmin() && ["users", "indicators", "archived", "security"].includes(state.currentView)) switchAppView("kanban");
+      if (!isAdmin() && ["users", "indicators", "archived", "security", "projects", "columns"].includes(state.currentView)) switchAppView("kanban");
       await loadUsers();
       subscribeRequests();
     }
@@ -4592,7 +5411,7 @@ function historyEntryData(item, action, summary, details = {}) {
   return {
     requestId: item.id,
     requestTitle: requestCardTitle(item).slice(0, 140),
-    requestType: item.type || "programacao",
+    requestType: projectIdForRequest(item),
     action,
     summary: sanitizeText(summary).slice(0, 500),
     details,
@@ -4662,6 +5481,26 @@ function describeRequestChanges(existing, payload) {
       details[key] = { before: String(before).slice(0, 300), after: String(after).slice(0, 300) };
     }
   });
+
+  if ("customFieldValues" in payload) {
+    const beforeValues = existing?.customFieldValues || {};
+    const afterValues = payload.customFieldValues || {};
+    const schema = projectSnapshotForRequest(existing || payload);
+    const customFields = Array.isArray(schema?.customFields) ? schema.customFields : [];
+    const changedCustomFields = customFields.filter((field) => {
+      const before = String(beforeValues[field.id] ?? "");
+      const after = String(afterValues[field.id] ?? "");
+      return before !== after;
+    });
+    if (changedCustomFields.length) {
+      changes.push(`Campos do projeto (${changedCustomFields.map((field) => field.label).join(", ")})`);
+      details.customFieldValues = Object.fromEntries(changedCustomFields.map((field) => [field.id, {
+        label: field.label,
+        before: String(beforeValues[field.id] ?? "").slice(0, 300),
+        after: String(afterValues[field.id] ?? "").slice(0, 300)
+      }]));
+    }
+  }
   return {
     summary: changes.length ? `Solicitação atualizada: ${changes.join(", ")}.` : "Solicitação salva sem alteração relevante nos campos principais.",
     details
@@ -4695,11 +5534,12 @@ async function notifyAssignment(item, assigneeUid) {
 async function notifyStatusChange(item, newStatus) {
   if (!item) return;
   const targets = [...new Set([item.requesterUid, item.assigneeUid].filter(Boolean))];
-  const message = newStatus === "bloqueio"
-    ? "A solicitação foi movida para Bloqueio e precisa de atenção para continuar."
-    : `O status foi alterado para ${STATUS_LABELS[newStatus] || newStatus}.`;
+  const paused = isPausedStatus(newStatus);
+  const message = paused
+    ? `A solicitação foi movida para ${statusLabel(newStatus)} e a contagem de tempo foi pausada.`
+    : `A etapa foi alterada para ${statusLabel(newStatus) || newStatus}.`;
   for (const targetUid of targets) {
-    try { await createInternalNotification(targetUid, item, message, newStatus === "bloqueio" ? "blocked" : "status"); }
+    try { await createInternalNotification(targetUid, item, message, paused ? "paused" : "status"); }
     catch (error) { console.warn("Notificação de status não enviada.", error); }
   }
 }
@@ -4709,12 +5549,12 @@ async function checkAutomaticAlerts() {
   state.automaticAlertRunning = true;
   try {
     for (const item of state.requests) {
-      if (!PAUSED_STATUSES.has(item.status) || item.pauseAlert24SentAt || !item.pauseStartedAt) continue;
+      if (!isPausedStatus(item.status) || item.pauseAlert24SentAt || !item.pauseStartedAt) continue;
       const started = timestampToDate(item.pauseStartedAt);
       if (!started || Date.now() - started.getTime() < AUTO_PAUSE_ALERT_MS) continue;
       const targets = [...new Set([item.requesterUid, item.assigneeUid].filter(Boolean))];
       for (const targetUid of targets) {
-        try { await createInternalNotification(targetUid, item, `A solicitação está com o tempo pausado em ${STATUS_LABELS[item.status]} há mais de 24 horas.`, "paused_24h"); }
+        try { await createInternalNotification(targetUid, item, `A solicitação está com o tempo pausado em ${statusLabel(item.status)} há mais de 24 horas.`, "paused_24h"); }
         catch (error) { console.warn(error); }
       }
       await updateDoc(doc(db, "requests", item.id), { pauseAlert24SentAt: serverTimestamp() });
@@ -4848,7 +5688,7 @@ function updateBulkColumnSelector(status, items = null) {
 }
 
 function setBulkColumnSelection(status, selected) {
-  if (!isAdmin() || !state.bulkMode || !VALID_STATUSES.includes(status)) return;
+  if (!isAdmin() || !state.bulkMode || !validStatusIds().includes(status)) return;
   const visibleItems = filteredRequests().filter((item) => item.status === status);
   visibleItems.forEach((item) => {
     if (selected) state.bulkSelected.add(item.id);
@@ -4894,12 +5734,12 @@ function selectedBulkItems() { return state.requests.filter((item) => state.bulk
 async function applyBulkStatus() {
   const newStatus = els.bulkStatusSelect.value;
   const items = selectedBulkItems();
-  if (!VALID_STATUSES.includes(newStatus) || !items.length) return;
+  if (!validStatusIds().includes(newStatus) || !items.length) return;
   setButtonLoading(els.bulkStatusSelect, true, "Atualizando...");
   try {
     for (const item of items) {
       await updateDoc(doc(db, "requests", item.id), { ...statusTransitionUpdate(item, newStatus), updatedAt: serverTimestamp(), updatedByUid: state.user.uid, updatedByName: state.profile.name || state.user.email });
-      await recordHistory(item, "bulk", `Status alterado em massa para ${STATUS_LABELS[newStatus]}.`, { to: newStatus });
+      await recordHistory(item, "bulk", `Status alterado em massa para ${statusLabel(newStatus)}.`, { to: newStatus });
       await notifyStatusChange(item, newStatus);
     }
     showToast(`${items.length} solicitação(ões) atualizada(s).`);
@@ -4927,7 +5767,7 @@ async function applyBulkAssignee() {
 }
 
 async function bulkMarkCrm() {
-  const items = selectedBulkItems().filter((item) => item.type === "cancelamento");
+  const items = selectedBulkItems().filter((item) => projectLegacyType(projectForItem(item)) === "cancelamento");
   if (!items.length) return showToast("Selecione solicitações de cancelamento.", "warning");
   try {
     for (const item of items) {
@@ -4942,7 +5782,7 @@ async function bulkMarkCrm() {
 }
 
 async function bulkArchive() {
-  const items = selectedBulkItems().filter((item) => item.status === "concluida");
+  const items = selectedBulkItems().filter((item) => isCompletedStatus(item.status));
   if (!items.length) return showToast("Selecione solicitações concluídas.", "warning");
   try { for (const item of items) await archiveRequestDocument(item); showToast(`${items.length} solicitação(ões) arquivada(s).`); setBulkMode(false); }
   catch (error) { showToast(firebaseErrorMessage(error), "error"); }
@@ -4958,7 +5798,7 @@ function previousIndicatorItems() {
   return [...state.requests, ...state.archivedRequests].filter((item) => {
     const created = timestampToDate(item.createdAt);
     return created && created >= previousStart && created <= previousEnd
-      && (state.indicatorFilters.type === "all" || item.type === state.indicatorFilters.type)
+      && (state.indicatorFilters.type === "all" || projectIdForRequest(item) === state.indicatorFilters.type)
       && (state.indicatorFilters.squad === "all"
         || (state.indicatorFilters.squad === "none" ? !VALID_SQUADS.includes(item.squad) : item.squad === state.indicatorFilters.squad));
   });
@@ -4977,20 +5817,20 @@ function percentageChange(current, previous) {
 
 function renderExpandedIndicators(items, completed) {
   const previous = previousIndicatorItems();
-  const previousCompleted = previous.filter((item) => item.status === "concluida" || item.archivedAt);
+  const previousCompleted = previous.filter((item) => isCompletedStatus(item.status) || item.archivedAt);
   const change = percentageChange(items.length, previous.length);
   els.indicatorVolumeChange.textContent = `${change > 0 ? "+" : ""}${change}%`;
-  const totalPaused = items.reduce((sum, item) => sum + requestPausedDuration(item, item.status === "concluida" ? item.completedAt : null), 0);
+  const totalPaused = items.reduce((sum, item) => sum + requestPausedDuration(item, isCompletedStatus(item.status) ? item.completedAt : null), 0);
   els.indicatorPausedTime.textContent = formatElapsed(totalPaused, true);
   els.indicatorComparison.innerHTML = [
     ["Criadas", items.length, previous.length],
     ["Concluídas", completed.length, previousCompleted.length],
     ["Taxa de conclusão", items.length ? Math.round(completed.length / items.length * 100) : 0, previous.length ? Math.round(previousCompleted.length / previous.length * 100) : 0]
   ].map(([label, current, old]) => `<div class="comparison-row"><span>${label}</span><strong>${current}</strong><small>${percentageChange(current, old) >= 0 ? "+" : ""}${percentageChange(current, old)}% vs. período anterior</small></div>`).join("");
-  const typeTimes = VALID_TYPES.map((type) => {
-    const durations = completed.filter((item) => item.type === type).map(activeDurationForCompleted).filter((value) => value !== null);
+  const typeTimes = state.projects.filter((project) => project.status !== "archived").map((project) => {
+    const durations = completed.filter((item) => projectIdForRequest(item) === project.id).map(activeDurationForCompleted).filter((value) => value !== null);
     const avg = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
-    return [TYPE_LABELS[type], avg, type === "cancelamento" ? "red" : type === "tef_elgin" ? "amber" : "blue"];
+    return [project.name, avg, project.legacyType === "cancelamento" ? "red" : project.legacyType === "tef_elgin" ? "amber" : project.legacyType === "custom" ? "purple" : "blue"];
   });
   const maxTypeTime = Math.max(1, ...typeTimes.map(([, value]) => value));
   els.indicatorTypeTimeBars.innerHTML = typeTimes.map(([label, value, className]) => `<div class="report-bar-row"><div class="report-bar-label"><span>${escapeHtml(label)}</span><strong>${value ? formatElapsed(value, true) : "—"}</strong></div><div class="report-bar-track"><span class="${className}" style="width:${Math.round((value / maxTypeTime) * 100)}%"></span></div></div>`).join("");
@@ -5031,7 +5871,7 @@ async function downloadBackup(purpose) {
   setButtonLoading(els.confirmBackupButton, true, "Gerando...");
   try {
     await logAccessEvent("backup_requested", `Finalidade: ${purpose}`);
-    const names = ["requests", "archivedRequests", "requestComments", "requestHistory", "requestAttachments", "users", "userInvites", "notifications", "savedFilters", "commentTemplates", "accessLogs"];
+    const names = ["requests", "archivedRequests", "requestComments", "requestHistory", "requestAttachments", "requestProjects", "kanbanColumns", "users", "userInvites", "notifications", "savedFilters", "commentTemplates", "accessLogs"];
     const data = {};
     for (const name of names) {
       try {
@@ -5052,7 +5892,7 @@ async function downloadBackup(purpose) {
       metadata: {
         generatedAt: generatedAt.toISOString(),
         deleteAfter: deleteAfter.toISOString(),
-        version: "46",
+        version: "48",
         backend: "supabase",
         classification: "CONFIDENCIAL - DADOS DE CLIENTES",
         purpose,
@@ -5324,6 +6164,20 @@ function setupEvents() {
     if (state.passwordRecoveryMode) event.preventDefault();
   });
   els.newRequestButton.addEventListener("click", () => openNewRequestModal());
+  els.newProjectButton?.addEventListener("click", () => openProjectDialog());
+  els.refreshProjectsButton?.addEventListener("click", async () => { await reloadProjectConfiguration(); showToast("Projetos atualizados."); });
+  els.projectsTableBody?.addEventListener("click", handleProjectsTableClick);
+  els.projectForm?.addEventListener("submit", saveProjectDefinition);
+  els.addProjectFieldButton?.addEventListener("click", addProjectField);
+  els.projectFieldsBuilder?.addEventListener("click", handleProjectFieldBuilderClick);
+  els.projectFieldsBuilder?.addEventListener("input", updateProjectFormPreview);
+  $$('[data-project-standard-enabled], [data-project-standard-required]').forEach((input) => input.addEventListener("change", syncStandardRequiredControls));
+  $$(".close-project-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.projectDialog)));
+  els.newColumnButton?.addEventListener("click", () => openColumnDialog());
+  els.refreshColumnsButton?.addEventListener("click", async () => { await reloadProjectConfiguration(); showToast("Colunas atualizadas."); });
+  els.columnsAdminList?.addEventListener("click", handleColumnsAdminClick);
+  els.columnForm?.addEventListener("submit", saveKanbanColumn);
+  $$(".close-column-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.columnDialog)));
   els.helpButton.addEventListener("click", () => openHelpDialog());
   els.topHelpButton.addEventListener("click", () => openHelpDialog());
   els.termsButton.addEventListener("click", () => openLegalTermsDialog({ required: false, status: state.legalStatus }));
@@ -5437,7 +6291,7 @@ function setupEvents() {
         els.sidebar.classList.remove("open");
         return;
       }
-      if (["users", "indicators", "archived", "security"].includes(button.dataset.view)) {
+      if (["users", "indicators", "archived", "security", "projects", "columns"].includes(button.dataset.view)) {
         switchAppView(button.dataset.view);
         return;
       }
@@ -5586,7 +6440,7 @@ function setupEvents() {
     }
   });
 
-  [els.requestDialog, els.resetDialog, els.changePasswordDialog, els.helpDialog, els.userInviteDialog, els.editUserDialog, els.userStatusDialog, els.archiveConfirmDialog, els.savedFilterDialog, els.commentTemplateDialog, els.backupDialog].forEach((dialog) => {
+  [els.requestDialog, els.projectDialog, els.columnDialog, els.resetDialog, els.changePasswordDialog, els.helpDialog, els.userInviteDialog, els.editUserDialog, els.userStatusDialog, els.archiveConfirmDialog, els.savedFilterDialog, els.commentTemplateDialog, els.backupDialog].forEach((dialog) => {
     let pointerStartedOnBackdrop = false;
     let pointerStartX = 0;
     let pointerStartY = 0;
@@ -5665,6 +6519,8 @@ async function handleAuthenticated(user, { skipMfaCheck = false, skipLegalCheck 
     finishAuthBootstrap();
     showLoginCard();
     renderUser();
+    populateProjectAndColumnControls();
+    renderKanbanStructure();
     await switchAppView("kanban");
     await loadUsers();
     await Promise.all([loadSavedFilters(), loadCommentTemplates()]);
@@ -5673,6 +6529,7 @@ async function handleAuthenticated(user, { skipMfaCheck = false, skipLegalCheck 
       await logAccessEvent("login", "Entrada no painel.");
     } catch (logError) { console.warn(logError); }
     resetSessionInactivity();
+    subscribeProjectConfiguration();
     subscribeRequests();
     subscribeNotifications();
     subscribeCurrentProfile();
@@ -5686,7 +6543,9 @@ async function handleAuthenticated(user, { skipMfaCheck = false, skipLegalCheck 
       ? "Seu login existe, mas o perfil de acesso ainda não foi cadastrado. Solicite um convite ao administrador."
       : rawMessage.includes("get_current_legal_status") || rawMessage.includes("legal-document")
         ? "A política de uso ainda não foi ativada no Supabase. Execute o arquivo supabase/legal-terms-v47.sql."
-        : firebaseErrorMessage(error);
+        : rawMessage.includes("requestProjects") || rawMessage.includes("kanbanColumns")
+          ? "A estrutura de Projetos e Colunas ainda não foi ativada no Supabase. Execute supabase/projects-kanban-v48.sql."
+          : firebaseErrorMessage(error);
     state.forcedLogoutMessage = message;
     await secureSignOut({ log: false });
   }
@@ -5694,12 +6553,16 @@ async function handleAuthenticated(user, { skipMfaCheck = false, skipLegalCheck 
 
 function handleSignedOut() {
   if (state.unsubscribeRequests) state.unsubscribeRequests();
+  if (state.unsubscribeProjects) state.unsubscribeProjects();
+  if (state.unsubscribeKanbanColumns) state.unsubscribeKanbanColumns();
   if (state.unsubscribeProfile) state.unsubscribeProfile();
   if (state.unsubscribeNotifications) state.unsubscribeNotifications();
   if (state.unsubscribeComments) state.unsubscribeComments();
   if (state.unsubscribeHistory) state.unsubscribeHistory();
   if (state.elapsedTimer) clearInterval(state.elapsedTimer);
   state.unsubscribeRequests = null;
+  state.unsubscribeProjects = null;
+  state.unsubscribeKanbanColumns = null;
   state.unsubscribeProfile = null;
   state.unsubscribeNotifications = null;
   state.unsubscribeComments = null;
@@ -5707,6 +6570,8 @@ function handleSignedOut() {
   state.user = null;
   state.profile = null;
   state.requests = [];
+  state.projects = mergeProjects([]);
+  state.kanbanColumns = mergeKanbanColumns([]);
   state.archivedRequests = [];
   state.archivedLoaded = false;
   state.users = [];

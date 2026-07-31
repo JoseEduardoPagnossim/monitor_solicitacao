@@ -1,9 +1,10 @@
-const CACHE_NAME = "painel-solicitacoes-v47";
+const CACHE_NAME = "painel-solicitacoes-v48";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./project-system.js",
   "./supabase-compat.js",
   "./supabase-config.js",
   "./security-config.js",
