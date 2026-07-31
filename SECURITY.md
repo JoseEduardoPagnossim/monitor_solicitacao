@@ -37,3 +37,11 @@ Não abra uma issue pública com dados de clientes, credenciais ou uma prova de 
 - Anexos aceitos: JPEG, PNG e TXT, com validação do conteúdo real e limite de 700 KB no Storage.
 
 Consulte `SEGURANCA_COMPLEMENTAR_V46.md` antes de habilitar CAPTCHA ou MFA.
+
+## Controles da versão 47
+
+- aceite obrigatório e versionado da Política de Uso, Confidencialidade e Proteção de Dados;
+- bloqueio restritivo por RLS antes do aceite da versão vigente;
+- evidência de aceite com hash SHA-256, data do servidor, usuário, perfil, Squad, dispositivo e IP disponível;
+- documento disponível para consulta posterior no painel;
+- remoção do armazenamento separado do e-mail no `localStorage`.

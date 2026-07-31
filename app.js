@@ -14,6 +14,8 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   clearAuthSessionStorage,
+  getLegalAcceptanceStatus,
+  acceptLegalTerms,
   getMfaAssuranceLevel,
   listMfaFactors,
   enrollMfaTotp,
@@ -39,6 +41,7 @@ import {
 } from "./supabase-compat.js";
 import { supabaseConfig } from "./supabase-config.js";
 import { securityConfig } from "./security-config.js";
+import { legalPolicyConfig } from "./legal-config.js";
 import { commitWithRetry, withTimeout } from "./save-flow.js";
 
 const STATUS_LABELS = {
@@ -163,7 +166,12 @@ const state = {
   mfaEnrollmentFactorId: "",
   mfaVerifiedFactorId: "",
   mfaStatusLoaded: false,
-  mfaChallengeInProgress: false
+  mfaChallengeInProgress: false,
+  legalStatus: null,
+  legalRequiredMode: false,
+  legalDocumentVerified: false,
+  legalScrollReached: false,
+  legalAcceptanceInProgress: false
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -181,6 +189,22 @@ const els = {
   loginCaptcha: $("#login-captcha"),
   rememberEmail: $("#remember-email"),
   togglePassword: $("#toggle-password"),
+  termsButton: $("#terms-button"),
+  legalTermsDialog: $("#legal-terms-dialog"),
+  legalTermsTitle: $("#legal-terms-title"),
+  legalTermsVersion: $("#legal-terms-version"),
+  legalTermsFrame: $("#legal-terms-frame"),
+  legalTermsRequiredActions: $("#legal-terms-required-actions"),
+  legalTermsReviewActions: $("#legal-terms-review-actions"),
+  legalTermsScrollHint: $("#legal-terms-scroll-hint"),
+  legalTermsRead: $("#legal-terms-read"),
+  legalTermsConfidentiality: $("#legal-terms-confidentiality"),
+  legalTermsMonitoring: $("#legal-terms-monitoring"),
+  legalTermsError: $("#legal-terms-error"),
+  acceptLegalTermsButton: $("#accept-legal-terms"),
+  declineLegalTermsButton: $("#decline-legal-terms"),
+  closeLegalTerms: $("#close-legal-terms"),
+  closeLegalTermsReview: $("#close-legal-terms-review"),
   forgotPassword: $("#forgot-password"),
   inviteRegistrationForm: $("#invite-registration-form"),
   inviteLoading: $("#invite-loading"),
@@ -1366,7 +1390,10 @@ function firebaseErrorMessage(error) {
     "aborted": "A gravação foi interrompida. Tente novamente.",
     "operation-timeout": "O Supabase demorou além do esperado para confirmar o salvamento. Verifique sua conexão e tente novamente; o formulário foi mantido aberto.",
     "auth/email-not-confirmed": "Confirme o e-mail antes de entrar ou desative a confirmação de e-mail no Supabase para este painel interno.",
-    "auth/email-confirmation-required": "Desative a opção Confirm email no Supabase antes de usar os convites internos."
+    "auth/email-confirmation-required": "Desative a opção Confirm email no Supabase antes de usar os convites internos.",
+    "legal-document-not-configured": "A política de uso ainda não foi configurada no Supabase.",
+    "legal-document-outdated": "A política foi atualizada. Recarregue a página e leia a versão vigente.",
+    "mfa-required": "Conclua a autenticação em duas etapas antes de aceitar o termo."
   };
   return messages[error?.code]
     || messages[error?.message]
@@ -3562,7 +3589,7 @@ async function changeCurrentUserPassword(event) {
 
     if (recoveryMode) {
       els.loginEmail.value = recoveredEmail;
-      els.rememberEmail.checked = true;
+      els.rememberEmail.checked = false;
       await secureSignOut({ log: false });
       showToast("Senha redefinida com sucesso. Entre novamente usando a nova senha.");
     } else {
@@ -3646,6 +3673,142 @@ function openHelpDialog(targetId = "help-overview") {
     const content = $(".help-content", els.helpDialog);
     if (content) content.scrollTop = 0;
   });
+}
+
+function bytesToHex(buffer) {
+  return Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function verifyLegalDocumentIntegrity() {
+  const response = await fetch(`${legalPolicyConfig.contentUrl}?integrity=${encodeURIComponent(legalPolicyConfig.version)}`, {
+    cache: "no-store",
+    credentials: "same-origin"
+  });
+  if (!response.ok) throw new Error("legal-document-unavailable");
+  const content = await response.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", content);
+  const actualHash = bytesToHex(digest);
+  if (actualHash !== legalPolicyConfig.documentHash) {
+    const error = new Error("legal-document-integrity-failed");
+    error.code = "legal-document-integrity-failed";
+    throw error;
+  }
+  state.legalDocumentVerified = true;
+}
+
+function updateLegalAcceptButton() {
+  if (!els.acceptLegalTermsButton) return;
+  const allChecked = els.legalTermsRead.checked
+    && els.legalTermsConfidentiality.checked
+    && els.legalTermsMonitoring.checked;
+  els.acceptLegalTermsButton.disabled = !state.legalRequiredMode
+    || !state.legalDocumentVerified
+    || !state.legalScrollReached
+    || !allChecked
+    || state.legalAcceptanceInProgress;
+}
+
+function markLegalScrollReached() {
+  if (state.legalScrollReached) return;
+  state.legalScrollReached = true;
+  [els.legalTermsRead, els.legalTermsConfidentiality, els.legalTermsMonitoring].forEach((input) => {
+    input.disabled = false;
+  });
+  els.legalTermsScrollHint.textContent = "Leitura concluída. Confirme as declarações para aceitar.";
+  els.legalTermsScrollHint.classList.add("ready");
+  updateLegalAcceptButton();
+}
+
+function checkLegalDocumentScroll() {
+  if (!state.legalRequiredMode || state.legalScrollReached) return;
+  try {
+    const documentElement = els.legalTermsFrame.contentDocument?.scrollingElement
+      || els.legalTermsFrame.contentDocument?.documentElement;
+    if (!documentElement) return;
+    const remaining = documentElement.scrollHeight - documentElement.scrollTop - documentElement.clientHeight;
+    if (remaining <= 28 || documentElement.scrollHeight <= documentElement.clientHeight + 28) {
+      markLegalScrollReached();
+    }
+  } catch (error) {
+    console.warn("Não foi possível acompanhar a leitura do termo.", error);
+  }
+}
+
+async function prepareLegalTermsDialog({ required = false, status = null } = {}) {
+  state.legalRequiredMode = required;
+  state.legalStatus = status || state.legalStatus;
+  state.legalDocumentVerified = false;
+  state.legalScrollReached = !required;
+  state.legalAcceptanceInProgress = false;
+  els.legalTermsDialog.dataset.legalRequired = required ? "true" : "false";
+  els.legalTermsTitle.textContent = legalPolicyConfig.title;
+  els.legalTermsVersion.textContent = `Versão ${legalPolicyConfig.version} · vigência em ${new Intl.DateTimeFormat("pt-BR").format(new Date(`${legalPolicyConfig.effectiveDate}T12:00:00`))}`;
+  els.legalTermsRequiredActions.hidden = !required;
+  els.legalTermsReviewActions.hidden = required;
+  els.closeLegalTerms.hidden = required;
+  showFormError(els.legalTermsError);
+  [els.legalTermsRead, els.legalTermsConfidentiality, els.legalTermsMonitoring].forEach((input) => {
+    input.checked = false;
+    input.disabled = required;
+  });
+  els.legalTermsScrollHint.textContent = "Role o documento até o final para liberar o aceite.";
+  els.legalTermsScrollHint.classList.remove("ready");
+  updateLegalAcceptButton();
+
+  const currentStatus = state.legalStatus || {};
+  if (required && (
+    currentStatus.version !== legalPolicyConfig.version
+    || currentStatus.documentHash !== legalPolicyConfig.documentHash
+  )) {
+    const error = new Error("legal-document-outdated");
+    error.code = "legal-document-outdated";
+    throw error;
+  }
+
+  await verifyLegalDocumentIntegrity();
+  els.legalTermsFrame.src = `${legalPolicyConfig.contentUrl}?v=${encodeURIComponent(legalPolicyConfig.version)}`;
+}
+
+async function openLegalTermsDialog({ required = false, status = null } = {}) {
+  try {
+    await prepareLegalTermsDialog({ required, status });
+    if (!els.legalTermsDialog.open) els.legalTermsDialog.showModal();
+    updateLegalAcceptButton();
+  } catch (error) {
+    console.error(error);
+    if (required) throw error;
+    showToast("Não foi possível abrir a política de uso.", "error");
+  }
+}
+
+async function submitLegalAcceptance() {
+  if (!state.legalRequiredMode || els.acceptLegalTermsButton.disabled || state.legalAcceptanceInProgress) return;
+  state.legalAcceptanceInProgress = true;
+  setButtonLoading(els.acceptLegalTermsButton, true, "Registrando aceite...");
+  showFormError(els.legalTermsError);
+  try {
+    const result = await acceptLegalTerms(auth, {
+      version: legalPolicyConfig.version,
+      documentHash: legalPolicyConfig.documentHash,
+      userAgent: navigator.userAgent
+    });
+    state.legalStatus = result;
+    if (state.profile) {
+      state.profile.termsAcceptedVersion = result.version;
+      state.profile.termsAcceptedHash = result.documentHash;
+      state.profile.termsAcceptedAt = result.acceptedAt;
+    }
+    closeModal(els.legalTermsDialog);
+    showToast("Termo aceito e registrado com sucesso.");
+    await handleAuthenticated(state.user, { skipMfaCheck: true, skipLegalCheck: true });
+  } catch (error) {
+    console.error(error);
+    showFormError(els.legalTermsError, firebaseErrorMessage(error));
+  } finally {
+    state.legalAcceptanceInProgress = false;
+    setButtonLoading(els.acceptLegalTermsButton, false);
+    updateLegalAcceptButton();
+  }
 }
 
 
@@ -3838,6 +4001,7 @@ function userRowHtml(entry) {
         <td><span class="user-role-badge ${escapeHtml(entry.role)}">${escapeHtml(roleLabel(entry.role))}</span></td>
         <td><span class="tag squad">${escapeHtml(entry.role === "admin" ? "Todos" : (SQUAD_LABELS[entry.squad] || "Sem grupo"))}</span></td>
         <td><span class="user-status-badge pending">● Convite pendente</span></td>
+        <td><span class="user-status-badge pending">Aguardando cadastro</span></td>
         <td><div class="user-date">—</div></td>
         <td><div class="user-date">Criado em ${escapeHtml(formatDateTime(entry.createdAt))}<br>Expira em ${escapeHtml(formatDateTime(entry.expiresAt))}</div></td>
         <td><div class="user-actions"><button class="user-action-button primary" type="button" data-user-action="copy-invite" data-id="${escapeHtml(entry.id)}">⧉ Copiar convite</button><button class="user-action-button danger" type="button" data-user-action="cancel-invite" data-id="${escapeHtml(entry.id)}">Cancelar convite</button></div></td>
@@ -3848,12 +4012,17 @@ function userRowHtml(entry) {
   const isSelf = entry.uid === state.user?.uid;
   const statusText = !active ? "Inativo" : locked ? "Bloqueado" : "Ativo";
   const statusClass = !active ? "inactive" : locked ? "pending" : "active";
+  const acceptedCurrentTerms = entry.termsAcceptedVersion === legalPolicyConfig.version
+    && entry.termsAcceptedHash === legalPolicyConfig.documentHash;
+  const termsStatusText = acceptedCurrentTerms ? "Aceito" : "Pendente";
+  const termsStatusClass = acceptedCurrentTerms ? "active" : "pending";
   return `
     <tr>
       <td><div class="user-identity"><div class="user-list-avatar">${escapeHtml(initials(entry.name || entry.email))}</div><div><strong>${escapeHtml(entry.name || "Usuário")}${isSelf ? " (você)" : ""}</strong><span>${escapeHtml(entry.email || "")}</span></div></div></td>
       <td><span class="user-role-badge ${escapeHtml(entry.role)}">${escapeHtml(roleLabel(entry.role))}</span></td>
       <td><span class="tag squad">${escapeHtml(entry.role === "admin" ? "Todos" : (SQUAD_LABELS[entry.squad] || "Sem grupo"))}</span></td>
       <td><span class="user-status-badge ${statusClass}">● ${statusText}</span></td>
+      <td><span class="user-status-badge ${termsStatusClass}" title="${acceptedCurrentTerms ? `Aceito em ${escapeHtml(formatDateTime(entry.termsAcceptedAt))}` : `Versão exigida: ${escapeHtml(legalPolicyConfig.version)}`}">${termsStatusText}</span></td>
       <td><div class="user-date">${escapeHtml(formatDateTime(entry.lastLoginAt))}<br><small>${Number(entry.loginCount || 0)} acesso(s)</small></div></td>
       <td><div class="user-date">${escapeHtml(formatDateTime(entry.createdAt))}</div></td>
       <td><div class="user-actions">
@@ -5157,6 +5326,25 @@ function setupEvents() {
   els.newRequestButton.addEventListener("click", () => openNewRequestModal());
   els.helpButton.addEventListener("click", () => openHelpDialog());
   els.topHelpButton.addEventListener("click", () => openHelpDialog());
+  els.termsButton.addEventListener("click", () => openLegalTermsDialog({ required: false, status: state.legalStatus }));
+  els.legalTermsFrame.addEventListener("load", () => {
+    try {
+      els.legalTermsFrame.contentWindow?.addEventListener("scroll", checkLegalDocumentScroll, { passive: true });
+      requestAnimationFrame(checkLegalDocumentScroll);
+    } catch (error) {
+      console.warn("Não foi possível acompanhar a rolagem do termo.", error);
+    }
+  });
+  [els.legalTermsRead, els.legalTermsConfidentiality, els.legalTermsMonitoring].forEach((input) => {
+    input.addEventListener("change", updateLegalAcceptButton);
+  });
+  els.acceptLegalTermsButton.addEventListener("click", submitLegalAcceptance);
+  els.declineLegalTermsButton.addEventListener("click", () => secureSignOut({ log: false }));
+  els.closeLegalTerms.addEventListener("click", () => closeModal(els.legalTermsDialog));
+  els.closeLegalTermsReview.addEventListener("click", () => closeModal(els.legalTermsDialog));
+  els.legalTermsDialog.addEventListener("cancel", (event) => {
+    if (state.legalRequiredMode) event.preventDefault();
+  });
   els.notificationButton.addEventListener("click", (event) => {
     event.stopPropagation();
     toggleNotifications();
@@ -5438,7 +5626,7 @@ function finishAuthBootstrap() {
   if (els.authBootstrap) els.authBootstrap.hidden = true;
 }
 
-async function handleAuthenticated(user, { skipMfaCheck = false } = {}) {
+async function handleAuthenticated(user, { skipMfaCheck = false, skipLegalCheck = false } = {}) {
   if (state.inviteRegistrationInProgress) return;
   try {
     if (!skipMfaCheck && !await ensureMfaChallengeBeforeApp()) return;
@@ -5457,6 +5645,18 @@ async function handleAuthenticated(user, { skipMfaCheck = false } = {}) {
 
     state.user = user;
     state.profile = profile;
+
+    if (!skipLegalCheck) {
+      const legalStatus = await getLegalAcceptanceStatus(auth);
+      state.legalStatus = legalStatus;
+      if (!legalStatus?.accepted) {
+        els.loginView.hidden = true;
+        els.appView.hidden = true;
+        finishAuthBootstrap();
+        await openLegalTermsDialog({ required: true, status: legalStatus });
+        return;
+      }
+    }
     state.bulkMode = false;
     state.bulkSelected.clear();
     configureSquadFilter();
@@ -5481,9 +5681,12 @@ async function handleAuthenticated(user, { skipMfaCheck = false } = {}) {
     state.elapsedTimer = setInterval(updateElapsedLabels, 60000);
   } catch (error) {
     console.error(error);
+    const rawMessage = String(error?.message || "");
     const message = error.message === "profile-not-found"
       ? "Seu login existe, mas o perfil de acesso ainda não foi cadastrado. Solicite um convite ao administrador."
-      : firebaseErrorMessage(error);
+      : rawMessage.includes("get_current_legal_status") || rawMessage.includes("legal-document")
+        ? "A política de uso ainda não foi ativada no Supabase. Execute o arquivo supabase/legal-terms-v47.sql."
+        : firebaseErrorMessage(error);
     state.forcedLogoutMessage = message;
     await secureSignOut({ log: false });
   }
@@ -5519,8 +5722,13 @@ function handleSignedOut() {
   state.mfaEnrollmentFactorId = "";
   state.mfaVerifiedFactorId = "";
   state.mfaStatusLoaded = false;
+  state.legalStatus = null;
+  state.legalRequiredMode = false;
+  state.legalDocumentVerified = false;
+  state.legalScrollReached = false;
+  state.legalAcceptanceInProgress = false;
   closeSensitiveAuthorization(false);
-  [els.backupDialog, els.mfaEnrollmentDialog, els.mfaChallengeDialog].forEach((dialog) => { if (dialog?.open) closeModal(dialog); });
+  [els.backupDialog, els.mfaEnrollmentDialog, els.mfaChallengeDialog, els.legalTermsDialog].forEach((dialog) => { if (dialog?.open) closeModal(dialog); });
   configurePasswordDialog(false);
   updateBulkBar();
   clearSessionTimers();
@@ -5556,7 +5764,7 @@ async function loadAppVersion() {
     if (!response.ok) throw new Error("version-file-unavailable");
 
     const info = await response.json();
-    const release = String(info.release || "46").replace(/^v/i, "");
+    const release = String(info.release || "47").replace(/^v/i, "");
     const isLocal = !info.build || String(info.build).toLowerCase() === "local";
     const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
 
@@ -5591,7 +5799,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v46";
+    versionLabel.textContent = "v47";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }

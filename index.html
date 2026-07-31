@@ -5,21 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Kanban interno para solicitações de programação, cancelamento e TEF Elgin.">
   <meta name="referrer" content="same-origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://aszedsiqgtdycoasptrt.supabase.co wss://aszedsiqgtdycoasptrt.supabase.co https://cdn.jsdelivr.net https://challenges.cloudflare.com; manifest-src 'self'; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://aszedsiqgtdycoasptrt.supabase.co wss://aszedsiqgtdycoasptrt.supabase.co https://cdn.jsdelivr.net https://challenges.cloudflare.com; manifest-src 'self'; worker-src 'self' blob:; frame-src 'self' https://challenges.cloudflare.com; form-action 'self'">
   <title>Painel de Solicitações</title>
-  <link rel="icon" type="image/png" href="logo-soften.png?v=46.0.0">
+  <link rel="icon" type="image/png" href="logo-soften.png?v=47.0.0">
   <meta name="theme-color" content="#2563eb">
-  <link rel="manifest" href="manifest.webmanifest?v=46.0.0">
-  <link rel="apple-touch-icon" href="icon-192.png?v=46.0.0">
+  <link rel="manifest" href="manifest.webmanifest?v=47.0.0">
+  <link rel="apple-touch-icon" href="icon-192.png?v=47.0.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=46.0.0">
+  <link rel="stylesheet" href="styles.css?v=47.0.0">
 </head>
 <body class="auth-pending">
   <div id="app-bootstrap" class="app-bootstrap" role="status" aria-live="polite">
     <div class="app-bootstrap-card">
-      <img src="logo-soften.png?v=46.0.0" alt="Logo Soften">
+      <img src="logo-soften.png?v=47.0.0" alt="Logo Soften">
       <div class="app-bootstrap-spinner" aria-hidden="true"></div>
       <strong>Carregando o painel...</strong>
       <span>Validando sua sessão com segurança.</span>
@@ -30,7 +30,7 @@
 
   <section id="login-view" class="login-view">
     <div class="login-visual">
-      <div class="brand-mark"><img src="logo-soften.png?v=46.0.0" alt="Logo Soften"></div>
+      <div class="brand-mark"><img src="logo-soften.png?v=47.0.0" alt="Logo Soften"></div>
       <div>
         <span class="eyebrow">CONTROLE INTERNO</span>
         <h1>Solicitações organizadas, prioridades visíveis.</h1>
@@ -46,7 +46,7 @@
     <div class="login-panel">
       <form id="login-form" class="auth-card" autocomplete="on">
         <div class="auth-header">
-          <span class="mobile-logo"><img src="logo-soften.png?v=46.0.0" alt="Logo Soften"></span>
+          <span class="mobile-logo"><img src="logo-soften.png?v=47.0.0" alt="Logo Soften"></span>
           <h2>Entrar no painel</h2>
           <p>Use o e-mail e a senha cadastrados pelo administrador.</p>
         </div>
@@ -65,7 +65,7 @@
         </label>
 
         <div class="auth-options">
-          <label class="checkbox-label"><input id="remember-email" type="checkbox"> Manter conectado neste dispositivo </label>
+          <label class="checkbox-label"><input id="remember-email" type="checkbox"> Manter conectado neste dispositivo</label>
           <button id="forgot-password" class="link-button" type="button">Esqueci minha senha</button>
         </div>
 
@@ -78,7 +78,7 @@
 
       <form id="invite-registration-form" class="auth-card" autocomplete="on" hidden>
         <div class="auth-header">
-          <span class="mobile-logo"><img src="logo-soften.png?v=46.0.0" alt="Logo Soften"></span>
+          <span class="mobile-logo"><img src="logo-soften.png?v=47.0.0" alt="Logo Soften"></span>
           <span class="eyebrow">CONVITE DE ACESSO</span>
           <h2>Concluir cadastro</h2>
           <p>Confira seus dados e crie uma senha para acessar o painel.</p>
@@ -126,7 +126,7 @@
   <div id="app-view" class="app-view" hidden>
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <div class="brand-mark small"><img src="logo-soften.png?v=46.0.0" alt="Logo Soften"></div>
+        <div class="brand-mark small"><img src="logo-soften.png?v=47.0.0" alt="Logo Soften"></div>
         <div>
           <strong>Painel</strong>
           <span>Solicitações</span>
@@ -161,6 +161,9 @@
         <div class="nav-divider" aria-hidden="true"></div>
         <button id="help-button" class="nav-item" data-view="help" type="button">
           <span class="nav-icon">?</span> Ajuda
+        </button>
+        <button id="terms-button" class="nav-item" type="button">
+          <span class="nav-icon">▤</span> Termos e privacidade
         </button>
       </nav>
 
@@ -271,7 +274,7 @@
 
       <header id="kanban-focus-header" class="kanban-focus-header" hidden>
         <div class="kanban-focus-title">
-          <img src="logo-soften.png?v=46.0.0" alt="Logo Soften">
+          <img src="logo-soften.png?v=47.0.0" alt="Logo Soften">
           <div><strong>Kanban de solicitações</strong><span>Visualização ampliada das etapas</span></div>
         </div>
         <button id="exit-kanban-focus-button" class="kanban-focus-exit" type="button" title="Voltar ao painel" aria-label="Voltar ao painel">✕ Voltar ao painel</button>
@@ -349,7 +352,7 @@
         <section class="users-panel">
           <div class="users-table-wrap">
             <table class="users-table">
-              <thead><tr><th>Usuário</th><th>Perfil</th><th>Grupo</th><th>Situação</th><th>Último acesso</th><th>Cadastro</th><th>Ações</th></tr></thead>
+              <thead><tr><th>Usuário</th><th>Perfil</th><th>Grupo</th><th>Situação</th><th>Termo vigente</th><th>Último acesso</th><th>Cadastro</th><th>Ações</th></tr></thead>
               <tbody id="users-table-body"></tbody>
             </table>
           </div>
@@ -1205,6 +1208,26 @@
     </div>
   </dialog>
 
+  <dialog id="legal-terms-dialog" class="modal legal-terms-dialog" data-legal-required="false">
+    <div class="modal-content legal-terms-content">
+      <div class="modal-header legal-terms-header">
+        <div><span class="eyebrow">USO RESPONSÁVEL E CONFIDENCIALIDADE</span><h2 id="legal-terms-title">Política de Uso, Confidencialidade e Proteção de Dados</h2><p id="legal-terms-version" class="modal-help"></p></div>
+        <button id="close-legal-terms" class="icon-button" type="button" aria-label="Fechar" hidden>×</button>
+      </div>
+      <div class="legal-terms-alert"><strong>Dados de clientes são confidenciais.</strong><span>O acesso ao painel depende da leitura e do aceite da versão vigente.</span></div>
+      <iframe id="legal-terms-frame" class="legal-terms-frame" title="Política de Uso, Confidencialidade e Proteção de Dados" loading="eager"></iframe>
+      <div id="legal-terms-required-actions" class="legal-terms-actions">
+        <p id="legal-terms-scroll-hint" class="legal-terms-scroll-hint">Role o documento até o final para liberar o aceite.</p>
+        <label class="checkbox-label legal-check"><input id="legal-terms-read" type="checkbox" disabled> Li e compreendi a política e o termo de uso.</label>
+        <label class="checkbox-label legal-check"><input id="legal-terms-confidentiality" type="checkbox" disabled> Comprometo-me a não divulgar, copiar ou utilizar dados de clientes fora das atividades autorizadas.</label>
+        <label class="checkbox-label legal-check"><input id="legal-terms-monitoring" type="checkbox" disabled> Estou ciente dos registros de auditoria e das consequências aplicáveis em caso de descumprimento.</label>
+        <p id="legal-terms-error" class="form-error" hidden></p>
+        <div class="modal-actions legal-terms-buttons"><button id="decline-legal-terms" class="button button-secondary" type="button">Não aceitar e sair</button><button id="accept-legal-terms" class="button button-primary" type="button" disabled>Aceitar e acessar o painel</button></div>
+      </div>
+      <div id="legal-terms-review-actions" class="modal-actions modal-actions-end" hidden><button id="close-legal-terms-review" class="button button-primary" type="button">Fechar</button></div>
+    </div>
+  </dialog>
+
   <dialog id="reauth-dialog" class="modal modal-small" data-sensitive-dialog="true">
     <form id="reauth-form" method="dialog" class="modal-content">
       <div class="modal-header"><div><span class="eyebrow">CONFIRMAÇÃO DE IDENTIDADE</span><h2>Confirme sua senha</h2></div><button class="icon-button close-reauth-modal" type="button" aria-label="Fechar">×</button></div>
@@ -1302,6 +1325,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=46.0.0"></script>
+  <script type="module" src="app.js?v=47.0.0"></script>
 </body>
 </html>

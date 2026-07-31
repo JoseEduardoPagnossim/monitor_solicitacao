@@ -29,7 +29,7 @@ test("CAPTCHA é opcional, público e integrado aos fluxos de autenticação", a
   assert.match(app, /requireCaptchaToken\("invite"/);
   assert.match(app, /requireCaptchaToken\("reset"/);
   assert.match(compat, /captchaToken/);
-  assert.match(html, /frame-src https:\/\/challenges\.cloudflare\.com/);
+  assert.match(html, /frame-src[^;]*https:\/\/challenges\.cloudflare\.com/);
 });
 
 test("MFA TOTP possui cadastro, desafio no login e remoção protegida", async () => {

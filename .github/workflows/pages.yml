@@ -44,6 +44,7 @@ jobs:
             supabase-compat.js
             supabase-config.js
             security-config.js
+            legal-config.js
             save-flow.js
             service-worker.js
             manifest.webmanifest
@@ -57,6 +58,10 @@ jobs:
             test -f "$file"
             cp "$file" _site/
           done
+
+          test -f legal/termo-uso-confidencialidade-v1.html
+          mkdir -p _site/legal
+          cp legal/termo-uso-confidencialidade-v1.html _site/legal/
 
           RELEASE="$(tr -d '[:space:]' < VERSION)"
           SHORT_SHA="${GITHUB_SHA::7}"

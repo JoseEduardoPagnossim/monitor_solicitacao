@@ -1,4 +1,4 @@
-# Painel de Solicitações — versão 46
+# Painel de Solicitações — versão 47
 
 Aplicação web interna para centralizar solicitações de **Programação**, **Cancelamento** e **TEF Elgin** em um Kanban com autenticação, permissões por Squad, comentários, histórico, notificações, indicadores, arquivamento, backup e recursos administrativos.
 
@@ -138,7 +138,7 @@ Ao atualizar versões, preserve o seu `supabase-config.js` já preenchido.
 5. O deploy ocorre apenas se os testes passarem.
 6. Após a publicação, atualize com `Ctrl + Shift + R`.
 
-A versão 46 não exige refazer a migração. Como a v45 já foi aplicada, execute uma vez `supabase/security-hardening-v46.sql` no SQL Editor do Supabase. Não execute novamente o `schema.sql` completo.
+A versão 47 não exige refazer a migração. Depois de publicar os arquivos, execute uma vez `supabase/legal-terms-v47.sql` no SQL Editor do Supabase. Não execute novamente o `schema.sql` completo.
 
 ## Testes automatizados
 
@@ -154,7 +154,7 @@ Ou:
 TESTAR.bat
 ```
 
-A versão 46 possui testes para:
+A versão 47 possui testes para:
 
 - arquivos obrigatórios;
 - sintaxe JavaScript;
@@ -212,6 +212,26 @@ Durante a recuperação de senha, `Esc` não fecha a janela obrigatória.
 - Correções: `1.0.1`, `1.0.2`.
 - Melhorias menores: `1.1.0`, `1.2.0`.
 - Grandes evoluções: `2.0.0`, `3.0.0`.
+
+## Alteração da versão 47
+
+### Política e termo de uso obrigatório
+
+- apresenta a Política de Uso, Confidencialidade e Proteção de Dados no próximo acesso de cada usuário;
+- exige rolagem até o final e três confirmações antes de liberar o aceite;
+- impede o acesso aos dados operacionais e anexos por RLS enquanto a versão vigente não tiver sido aceita;
+- registra versão, hash SHA-256, data, usuário, perfil, Squad, dispositivo e IP disponível no Supabase;
+- permite ao administrador identificar na gestão de usuários quem aceitou o termo vigente;
+- mantém o documento disponível no menu **Termos e privacidade**;
+- remove o armazenamento separado do e-mail no `localStorage`, atendendo aos alertas do CodeQL.
+
+Depois de publicar, execute uma única vez:
+
+```text
+supabase/legal-terms-v47.sql
+```
+
+O texto integral está em `legal/termo-uso-confidencialidade-v1.html` e a versão editável em Markdown está em `POLITICA_E_TERMO_DE_USO.md`. Qualquer alteração no texto exige nova versão e novo hash.
 
 ## Alteração da versão 46
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "painel-solicitacoes-v46";
+const CACHE_NAME = "painel-solicitacoes-v47";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,6 +7,8 @@ const APP_SHELL = [
   "./supabase-compat.js",
   "./supabase-config.js",
   "./security-config.js",
+  "./legal-config.js",
+  "./legal/termo-uso-confidencialidade-v1.html",
   "./save-flow.js",
   "./version.json",
   "./logo-soften.png",

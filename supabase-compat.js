@@ -188,6 +188,22 @@ export async function sendPasswordResetEmail(auth, email, captchaToken = "") {
   throwIfError(error);
 }
 
+export async function getLegalAcceptanceStatus(auth) {
+  const { data, error } = await auth.client.rpc("get_current_legal_status");
+  if (error) throw normalizeDatabaseError(error);
+  return data || { accepted: false };
+}
+
+export async function acceptLegalTerms(auth, { version, documentHash, userAgent = "" } = {}) {
+  const { data, error } = await auth.client.rpc("accept_current_legal_terms", {
+    p_version: String(version || ""),
+    p_document_hash: String(documentHash || ""),
+    p_user_agent: String(userAgent || "").slice(0, 500)
+  });
+  if (error) throw normalizeDatabaseError(error);
+  return data || { accepted: true };
+}
+
 export function clearAuthSessionStorage() {
   localStorage.removeItem(AUTH_STORAGE_KEY);
   sessionStorage.removeItem(AUTH_STORAGE_KEY);

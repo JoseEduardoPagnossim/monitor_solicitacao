@@ -2324,3 +2324,69 @@ body.kanban-focus-mode #bulk-actions-bar {
   .captcha-slot { transform-origin: left top; }
   .security-card-actions .button { width: 100%; }
 }
+
+/* v47 - aceite obrigatorio da politica e termo de uso */
+.legal-terms-dialog {
+  width: min(980px, calc(100vw - 28px));
+  max-width: none;
+}
+.legal-terms-content {
+  width: min(940px, 100%);
+  max-height: min(92vh, 920px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px;
+}
+.legal-terms-header { flex: 0 0 auto; }
+.legal-terms-header h2 { margin-bottom: 5px; }
+.legal-terms-alert {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  padding: 11px 14px;
+  border: 1px solid rgba(217, 119, 6, .34);
+  border-radius: 12px;
+  background: rgba(245, 158, 11, .10);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.legal-terms-alert strong { color: #b45309; }
+.legal-terms-frame {
+  width: 100%;
+  min-height: 340px;
+  flex: 1 1 480px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.legal-terms-actions { display: grid; gap: 9px; flex: 0 0 auto; }
+.legal-terms-scroll-hint {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+.legal-terms-scroll-hint.ready { color: #15803d; background: rgba(22, 163, 74, .10); }
+.legal-check {
+  align-items: flex-start;
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.legal-check input { margin-top: 3px; flex: 0 0 auto; }
+.legal-terms-buttons { justify-content: space-between; margin-top: 3px; }
+.legal-terms-dialog[data-legal-required="true"]::backdrop { background: rgba(5, 12, 24, .82); }
+:root[data-theme="dark"] .legal-terms-alert strong { color: #fbbf24; }
+
+@media (max-width: 680px) {
+  .legal-terms-content { padding: 17px; max-height: 96vh; }
+  .legal-terms-frame { min-height: 300px; flex-basis: 390px; }
+  .legal-terms-buttons { flex-direction: column-reverse; }
+  .legal-terms-buttons .button { width: 100%; }
+}
