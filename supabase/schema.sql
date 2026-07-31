@@ -835,7 +835,7 @@ values (
   'request-attachments',
   'request-attachments',
   false,
-  734003,
+  716800,
   array['image/jpeg', 'image/png', 'text/plain']
 )
 on conflict (id) do update set
@@ -917,6 +917,49 @@ using (
     )
   )
 );
+
+-- MFA complementar: contas sem fator verificado usam AAL1; contas com MFA exigem AAL2.
+create or replace function public.current_user_mfa_satisfied()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select auth.uid() is not null
+    and (
+      not exists (
+        select 1
+        from auth.mfa_factors f
+        where f.user_id = auth.uid()
+          and f.status = 'verified'
+      )
+      or coalesce(auth.jwt()->>'aal', 'aal1') = 'aal2'
+    );
+$$;
+
+revoke all on function public.current_user_mfa_satisfied() from public;
+grant execute on function public.current_user_mfa_satisfied() to authenticated, service_role;
+
+drop policy if exists profiles_require_verified_mfa on public.profiles;
+create policy profiles_require_verified_mfa on public.profiles as restrictive for all to authenticated
+using (public.current_user_mfa_satisfied())
+with check (public.current_user_mfa_satisfied());
+
+drop policy if exists invites_require_verified_mfa on public.user_invites;
+create policy invites_require_verified_mfa on public.user_invites as restrictive for all to authenticated
+using (public.current_user_mfa_satisfied())
+with check (public.current_user_mfa_satisfied());
+
+drop policy if exists documents_require_verified_mfa on public.documents;
+create policy documents_require_verified_mfa on public.documents as restrictive for all to authenticated
+using (public.current_user_mfa_satisfied())
+with check (public.current_user_mfa_satisfied());
+
+drop policy if exists attachments_require_verified_mfa on storage.objects;
+create policy attachments_require_verified_mfa on storage.objects as restrictive for all to authenticated
+using (bucket_id <> 'request-attachments' or public.current_user_mfa_satisfied())
+with check (bucket_id <> 'request-attachments' or public.current_user_mfa_satisfied());
 
 -- Realtime usado pelas telas abertas do painel.
 do $$

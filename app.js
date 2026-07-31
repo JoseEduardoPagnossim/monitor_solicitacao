@@ -13,6 +13,13 @@ import {
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
+  clearAuthSessionStorage,
+  getMfaAssuranceLevel,
+  listMfaFactors,
+  enrollMfaTotp,
+  challengeMfaFactor,
+  verifyMfaFactor,
+  unenrollMfaFactor,
   getFirestore,
   collection,
   doc,
@@ -31,6 +38,7 @@ import {
   writeBatch
 } from "./supabase-compat.js";
 import { supabaseConfig } from "./supabase-config.js";
+import { securityConfig } from "./security-config.js";
 import { commitWithRetry, withTimeout } from "./save-flow.js";
 
 const STATUS_LABELS = {
@@ -78,6 +86,11 @@ const SESSION_INACTIVITY_MS = 3 * 60 * 60 * 1000;
 const SESSION_WARNING_MS = 5 * 60 * 1000;
 const AUTO_PAUSE_ALERT_MS = 24 * 60 * 60 * 1000;
 const REQUEST_SAVE_TIMEOUT_MS = 20000;
+const PASSWORD_POLICY = securityConfig.passwordPolicy || { minLength: 10 };
+const SENSITIVE_AUTHORIZATION_MS = Math.max(1, Number(securityConfig.sensitiveAuthorizationMinutes || 10)) * 60 * 1000;
+const BACKUP_RETENTION_DAYS = Math.max(1, Number(securityConfig.backupRetentionDays || 7));
+const TURNSTILE_SITE_KEY = String(securityConfig.turnstileSiteKey || "").trim();
+const CAPTCHA_ENABLED = Boolean(TURNSTILE_SITE_KEY);
 const DEFAULT_COMMENT_TEMPLATES = [
   { id: "default-video", title: "Aguardando vídeo", text: "Aguardando o envio do vídeo com o cenário completo para prosseguir com a análise." },
   { id: "default-document", title: "Documento pendente", text: "É necessário enviar o documento ou dado solicitado para que a demanda possa seguir." },
@@ -138,7 +151,19 @@ const state = {
   lastActivityAt: Date.now(),
   automaticAlertRunning: false,
   requestSaveInProgress: false,
-  pendingCreateRequestId: ""
+  pendingCreateRequestId: "",
+  backupInProgress: false,
+  sensitiveAuthorizationUntil: 0,
+  sensitiveAuthorizationResolve: null,
+  sensitiveAuthorizationReject: null,
+  captchaTokens: { login: "", invite: "", reset: "", reauth: "", changePassword: "" },
+  captchaWidgetIds: { login: null, invite: null, reset: null, reauth: null, changePassword: null },
+  turnstileLoadPromise: null,
+  mfaChallengeFactorId: "",
+  mfaEnrollmentFactorId: "",
+  mfaVerifiedFactorId: "",
+  mfaStatusLoaded: false,
+  mfaChallengeInProgress: false
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -153,6 +178,7 @@ const els = {
   loginPassword: $("#login-password"),
   loginButton: $("#login-button"),
   loginError: $("#login-error"),
+  loginCaptcha: $("#login-captcha"),
   rememberEmail: $("#remember-email"),
   togglePassword: $("#toggle-password"),
   forgotPassword: $("#forgot-password"),
@@ -168,9 +194,37 @@ const els = {
   inviteRegistrationConfirmPassword: $("#invite-registration-confirm-password"),
   inviteRegistrationButton: $("#invite-registration-button"),
   inviteRegistrationError: $("#invite-registration-error"),
+  inviteCaptcha: $("#invite-captcha"),
   backToLoginButton: $("#back-to-login-button"),
   logoutButton: $("#logout-button"),
   changePasswordButton: $("#change-password-button"),
+  reauthDialog: $("#reauth-dialog"),
+  reauthForm: $("#reauth-form"),
+  reauthReason: $("#reauth-reason"),
+  reauthPassword: $("#reauth-password"),
+  reauthCaptcha: $("#reauth-captcha"),
+  reauthError: $("#reauth-error"),
+  reauthConfirmButton: $("#reauth-confirm-button"),
+  backupDialog: $("#backup-dialog"),
+  backupForm: $("#backup-form"),
+  backupPurpose: $("#backup-purpose"),
+  backupAcknowledgement: $("#backup-acknowledgement"),
+  backupDialogRetentionDays: $("#backup-dialog-retention-days"),
+  backupError: $("#backup-error"),
+  confirmBackupButton: $("#confirm-backup-button"),
+  mfaEnrollmentDialog: $("#mfa-enrollment-dialog"),
+  mfaEnrollmentForm: $("#mfa-enrollment-form"),
+  mfaQrCode: $("#mfa-qr-code"),
+  mfaSecretCode: $("#mfa-secret-code"),
+  mfaEnrollmentCode: $("#mfa-enrollment-code"),
+  mfaEnrollmentError: $("#mfa-enrollment-error"),
+  verifyMfaEnrollmentButton: $("#verify-mfa-enrollment-button"),
+  mfaChallengeDialog: $("#mfa-challenge-dialog"),
+  mfaChallengeForm: $("#mfa-challenge-form"),
+  mfaChallengeCode: $("#mfa-challenge-code"),
+  mfaChallengeError: $("#mfa-challenge-error"),
+  verifyMfaChallengeButton: $("#verify-mfa-challenge-button"),
+  mfaChallengeLogout: $("#mfa-challenge-logout"),
   changePasswordDialog: $("#change-password-dialog"),
   changePasswordForm: $("#change-password-form"),
   changePasswordEyebrow: $("#change-password-eyebrow"),
@@ -183,6 +237,7 @@ const els = {
   newPassword: $("#new-password"),
   confirmNewPassword: $("#confirm-new-password"),
   showChangePasswords: $("#show-change-passwords"),
+  changePasswordCaptcha: $("#change-password-captcha"),
   changePasswordError: $("#change-password-error"),
   saveNewPasswordButton: $("#save-new-password-button"),
   userName: $("#user-name"),
@@ -205,6 +260,11 @@ const els = {
   downloadBackupButton: $("#download-backup-button"),
   refreshAccessLogsButton: $("#refresh-access-logs-button"),
   accessLogTable: $("#access-log-table"),
+  mfaStatusText: $("#mfa-status-text"),
+  configureMfaButton: $("#configure-mfa-button"),
+  removeMfaButton: $("#remove-mfa-button"),
+  backupRetentionDays: $("#backup-retention-days"),
+  captchaStatusLine: $("#captcha-status-line"),
   helpDialog: $("#help-dialog"),
   refreshButton: $("#refresh-button"),
   expandKanbanButton: $("#expand-kanban-button"),
@@ -412,6 +472,7 @@ const els = {
   deleteConfirmMessage: $("#delete-confirm-message"),
   confirmDeleteButton: $("#confirm-delete-button"),
   resetDialog: $("#reset-dialog"),
+  resetCaptcha: $("#reset-captcha"),
   resetForm: $("#reset-form"),
   resetEmail: $("#reset-email"),
   resetError: $("#reset-error"),
@@ -523,6 +584,100 @@ function setButtonLoading(button, loading, loadingText = "Salvando...") {
   button.disabled = false;
   button.innerHTML = button.dataset.originalText || button.innerHTML;
   delete button.dataset.originalText;
+}
+
+
+function passwordPolicyError(password = "") {
+  const value = String(password || "");
+  const minimum = Math.max(6, Number(PASSWORD_POLICY.minLength || 10));
+  const requirements = [];
+  if (value.length < minimum) requirements.push(`pelo menos ${minimum} caracteres`);
+  if (PASSWORD_POLICY.requireUppercase && !/[A-Z]/.test(value)) requirements.push("uma letra maiúscula");
+  if (PASSWORD_POLICY.requireLowercase && !/[a-z]/.test(value)) requirements.push("uma letra minúscula");
+  if (PASSWORD_POLICY.requireNumber && !/\d/.test(value)) requirements.push("um número");
+  if (PASSWORD_POLICY.requireSymbol && !/[^A-Za-z0-9\s]/.test(value)) requirements.push("um símbolo");
+  if (PASSWORD_POLICY.forbidWhitespace && /\s/.test(value)) requirements.push("nenhum espaço em branco");
+  return requirements.length ? `A senha deve conter ${requirements.join(", ")}.` : "";
+}
+
+function captchaElement(kind) {
+  return {
+    login: els.loginCaptcha,
+    invite: els.inviteCaptcha,
+    reset: els.resetCaptcha,
+    reauth: els.reauthCaptcha,
+    changePassword: els.changePasswordCaptcha
+  }[kind] || null;
+}
+
+function resetCaptcha(kind) {
+  state.captchaTokens[kind] = "";
+  const widgetId = state.captchaWidgetIds[kind];
+  if (CAPTCHA_ENABLED && widgetId !== null && window.turnstile?.reset) {
+    try { window.turnstile.reset(widgetId); } catch (error) { console.warn("Não foi possível reiniciar o CAPTCHA.", error); }
+  }
+}
+
+function loadTurnstileScript() {
+  if (!CAPTCHA_ENABLED) return Promise.resolve(null);
+  if (window.turnstile?.render) return Promise.resolve(window.turnstile);
+  if (state.turnstileLoadPromise) return state.turnstileLoadPromise;
+
+  state.turnstileLoadPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-painel-turnstile="true"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.turnstile), { once: true });
+      existing.addEventListener("error", () => reject(new Error("captcha-load-failed")), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.defer = true;
+    script.dataset.painelTurnstile = "true";
+    script.addEventListener("load", () => resolve(window.turnstile), { once: true });
+    script.addEventListener("error", () => reject(new Error("captcha-load-failed")), { once: true });
+    document.head.appendChild(script);
+  });
+  return state.turnstileLoadPromise;
+}
+
+async function ensureCaptchaWidget(kind) {
+  if (!CAPTCHA_ENABLED) return;
+  const element = captchaElement(kind);
+  if (!element || state.captchaWidgetIds[kind] !== null) return;
+  element.hidden = false;
+  try {
+    const turnstile = await loadTurnstileScript();
+    if (!turnstile?.render) throw new Error("captcha-load-failed");
+    state.captchaWidgetIds[kind] = turnstile.render(element, {
+      sitekey: TURNSTILE_SITE_KEY,
+      theme: document.documentElement.dataset.theme === "dark" ? "dark" : "light",
+      callback: (token) => { state.captchaTokens[kind] = token || ""; },
+      "expired-callback": () => { state.captchaTokens[kind] = ""; },
+      "error-callback": () => { state.captchaTokens[kind] = ""; }
+    });
+  } catch (error) {
+    console.error(error);
+    element.textContent = "Não foi possível carregar a verificação de segurança.";
+  }
+}
+
+function requireCaptchaToken(kind, errorElement) {
+  if (!CAPTCHA_ENABLED) return "";
+  const token = state.captchaTokens[kind] || "";
+  if (!token) showFormError(errorElement, "Conclua a verificação de segurança antes de continuar.");
+  return token;
+}
+
+function updateSecurityControlStatus() {
+  if (els.backupRetentionDays) els.backupRetentionDays.textContent = `${BACKUP_RETENTION_DAYS} dias`;
+  if (els.backupDialogRetentionDays) els.backupDialogRetentionDays.textContent = `${BACKUP_RETENTION_DAYS} dias`;
+  if (els.captchaStatusLine) {
+    els.captchaStatusLine.innerHTML = CAPTCHA_ENABLED
+      ? '<span class="security-control-ok">✓</span> CAPTCHA configurado para autenticação e confirmações de identidade.'
+      : '<span class="security-control-info">i</span> CAPTCHA opcional ainda não configurado.';
+  }
 }
 
 function runPostSaveTasks(tasks = []) {
@@ -947,7 +1102,12 @@ function loadImage(file) {
 }
 
 function replaceExtension(fileName, extension) {
-  const base = fileName.replace(/\.[^.]+$/, "") || "imagem";
+  const cleanName = String(fileName || "anexo")
+    .replace(/[\/]/g, "_")
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .trim()
+    .slice(0, 170);
+  const base = cleanName.replace(/\.[^.]+$/, "") || "anexo";
   return `${base}.${extension}`;
 }
 
@@ -975,7 +1135,7 @@ async function compressImageAttachment(file) {
     if (originalType === "image/png") {
       const pngBlob = await canvasToBlob(canvas, "image/png");
       if (pngBlob.size <= MAX_STORED_ATTACHMENT_SIZE) {
-        return { name: file.name, contentType: "image/png", size: pngBlob.size, blob: pngBlob, originalSize: file.size };
+        return { name: replaceExtension(file.name, "png"), contentType: "image/png", size: pngBlob.size, blob: pngBlob, originalSize: file.size };
       }
     }
 
@@ -992,7 +1152,7 @@ async function compressImageAttachment(file) {
       const jpegBlob = await canvasToBlob(jpegCanvas, "image/jpeg", quality);
       if (jpegBlob.size <= MAX_STORED_ATTACHMENT_SIZE) {
         return {
-          name: originalType === "image/png" ? replaceExtension(file.name, "jpg") : file.name,
+          name: replaceExtension(file.name, "jpg"),
           contentType: "image/jpeg",
           size: jpegBlob.size,
           blob: jpegBlob,
@@ -1007,11 +1167,31 @@ async function compressImageAttachment(file) {
   throw new Error("attachment-too-large");
 }
 
+async function detectedAttachmentContentType(file) {
+  const bytes = new Uint8Array(await file.slice(0, Math.min(file.size, MAX_STORED_ATTACHMENT_SIZE + 1)).arrayBuffer());
+  const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const isPng = bytes.length >= 8
+    && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+    && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a;
+  if (isJpeg) return "image/jpeg";
+  if (isPng) return "image/png";
+
+  if (bytes.includes(0)) return "";
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return "text/plain";
+  } catch {
+    return "";
+  }
+}
+
 async function prepareAttachment(file) {
-  const contentType = normalizedAttachmentType(file);
-  if (contentType === "text/plain") {
+  const declaredType = normalizedAttachmentType(file);
+  const detectedType = await detectedAttachmentContentType(file);
+  if (!detectedType || declaredType !== detectedType) throw new Error("attachment-invalid-content");
+  if (detectedType === "text/plain") {
     if (file.size > MAX_STORED_ATTACHMENT_SIZE) throw new Error("attachment-too-large");
-    return { name: file.name, contentType, size: file.size, blob: file, originalSize: file.size };
+    return { name: replaceExtension(file.name, "txt"), contentType: detectedType, size: file.size, blob: file, originalSize: file.size };
   }
   return compressImageAttachment(file);
 }
@@ -1053,7 +1233,9 @@ async function handleAttachmentSelection(event) {
         console.error(error);
         const message = error.message === "attachment-too-large"
           ? `O arquivo “${file.name}” não pôde ser reduzido para o limite de 700 KB.`
-          : `Não foi possível preparar o arquivo “${file.name}”.`;
+          : error.message === "attachment-invalid-content"
+            ? `O conteúdo de “${file.name}” não corresponde ao formato informado ou não é seguro.`
+            : `Não foi possível preparar o arquivo “${file.name}”.`;
         showFormError(els.requestError, message);
       }
     }
@@ -1171,7 +1353,7 @@ function firebaseErrorMessage(error) {
     "auth/network-request-failed": "Falha de conexão. Verifique sua internet.",
     "auth/user-not-found": "Usuário não encontrado.",
     "auth/email-already-in-use": "Este e-mail já possui uma conta no Supabase.",
-    "auth/weak-password": "A senha deve possuir pelo menos 6 caracteres.",
+    "auth/weak-password": "A senha não atende à política de segurança configurada.",
     "auth/wrong-password": "A senha atual está incorreta.",
     "auth/requires-recent-login": "Confirme novamente sua senha atual para continuar.",
     "invite-invalid": "Este convite não existe ou não está mais disponível.",
@@ -3308,6 +3490,7 @@ function configurePasswordDialog(recoveryMode = false) {
     : "Confirme sua senha atual e defina uma nova senha. A alteração é feita imediatamente, sem envio de e-mail.";
   els.currentPasswordField.hidden = state.passwordRecoveryMode;
   els.currentPassword.required = !state.passwordRecoveryMode;
+  if (els.changePasswordCaptcha) els.changePasswordCaptcha.hidden = state.passwordRecoveryMode || !CAPTCHA_ENABLED;
   els.changePasswordClose.hidden = state.passwordRecoveryMode;
   els.changePasswordCancel.hidden = state.passwordRecoveryMode;
   els.saveNewPasswordButton.textContent = state.passwordRecoveryMode ? "Salvar nova senha" : "Alterar senha";
@@ -3319,6 +3502,7 @@ function openPasswordDialog(recoveryMode = false) {
   [els.currentPassword, els.newPassword, els.confirmNewPassword].forEach((input) => { input.type = "password"; });
   configurePasswordDialog(recoveryMode);
   if (!els.changePasswordDialog.open) els.changePasswordDialog.showModal();
+  if (!recoveryMode) ensureCaptchaWidget("changePassword");
   window.setTimeout(() => (recoveryMode ? els.newPassword : els.currentPassword).focus(), 50);
 }
 
@@ -3335,8 +3519,9 @@ async function changeCurrentUserPassword(event) {
     showFormError(els.changePasswordError, "Preencha todos os campos.");
     return;
   }
-  if (newPassword.length < 6) {
-    showFormError(els.changePasswordError, "A nova senha deve possuir pelo menos 6 caracteres.");
+  const passwordError = passwordPolicyError(newPassword);
+  if (passwordError) {
+    showFormError(els.changePasswordError, passwordError);
     return;
   }
   if (newPassword !== confirmation) {
@@ -3352,11 +3537,14 @@ async function changeCurrentUserPassword(event) {
     return;
   }
 
+  const captchaToken = recoveryMode ? "" : requireCaptchaToken("changePassword", els.changePasswordError);
+  if (!recoveryMode && CAPTCHA_ENABLED && !captchaToken) return;
+
   setButtonLoading(els.saveNewPasswordButton, true, recoveryMode ? "Salvando..." : "Alterando...");
   try {
     if (!recoveryMode) {
       const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
-      await reauthenticateWithCredential(auth.currentUser, credential);
+      await reauthenticateWithCredential(auth.currentUser, credential, captchaToken);
     }
     const recoveredEmail = auth.currentUser.email;
     await updatePassword(auth.currentUser, newPassword);
@@ -3376,7 +3564,7 @@ async function changeCurrentUserPassword(event) {
       els.loginEmail.value = recoveredEmail;
       localStorage.setItem("painel-email", recoveredEmail);
       els.rememberEmail.checked = true;
-      await signOut(auth);
+      await secureSignOut({ log: false });
       showToast("Senha redefinida com sucesso. Entre novamente usando a nova senha.");
     } else {
       showToast("Senha alterada com sucesso.");
@@ -3388,6 +3576,7 @@ async function changeCurrentUserPassword(event) {
       : firebaseErrorMessage(error);
     showFormError(els.changePasswordError, message);
   } finally {
+    if (!recoveryMode) resetCaptcha("changePassword");
     setButtonLoading(els.saveNewPasswordButton, false);
     els.saveNewPasswordButton.textContent = state.passwordRecoveryMode ? "Salvar nova senha" : "Alterar senha";
   }
@@ -3496,11 +3685,13 @@ function removeInviteFromUrl() {
 function showLoginCard() {
   els.loginForm.hidden = false;
   els.inviteRegistrationForm.hidden = true;
+  ensureCaptchaWidget("login");
 }
 
 function showInviteCard() {
   els.loginForm.hidden = true;
   els.inviteRegistrationForm.hidden = false;
+  ensureCaptchaWidget("invite");
 }
 
 async function initializeInviteFlow() {
@@ -3526,6 +3717,7 @@ async function initializeInviteFlow() {
     if (els.inviteRegistrationSquad) els.inviteRegistrationSquad.textContent = SQUAD_LABELS[invite.squad] || "—";
     els.inviteLoading.hidden = true;
     els.inviteRegistrationFields.hidden = false;
+    await ensureCaptchaWidget("invite");
   } catch (error) {
     console.error(error);
     els.inviteLoading.hidden = true;
@@ -3544,8 +3736,9 @@ async function registerFromInvite(event) {
     showFormError(els.inviteRegistrationError, "Este convite não está mais disponível.");
     return;
   }
-  if (password.length < 6) {
-    showFormError(els.inviteRegistrationError, "A senha deve possuir pelo menos 6 caracteres.");
+  const passwordError = passwordPolicyError(password);
+  if (passwordError) {
+    showFormError(els.inviteRegistrationError, passwordError);
     return;
   }
   if (password !== confirmation) {
@@ -3553,12 +3746,15 @@ async function registerFromInvite(event) {
     return;
   }
 
+  const captchaToken = requireCaptchaToken("invite", els.inviteRegistrationError);
+  if (CAPTCHA_ENABLED && !captchaToken) return;
+
   setButtonLoading(els.inviteRegistrationButton, true, "Criando acesso...");
   state.inviteRegistrationInProgress = true;
   let createdUser = null;
   try {
     await setPersistence(auth, browserLocalPersistence);
-    const credential = await createUserWithEmailAndPassword(auth, invite.email, password);
+    const credential = await createUserWithEmailAndPassword(auth, invite.email, password, captchaToken);
     createdUser = credential.user;
     const batch = writeBatch(db);
     batch.set(doc(db, "users", createdUser.uid), {
@@ -3589,6 +3785,7 @@ async function registerFromInvite(event) {
     }
     state.inviteRegistrationInProgress = false;
     showFormError(els.inviteRegistrationError, firebaseErrorMessage(error));
+    resetCaptcha("invite");
   } finally {
     setButtonLoading(els.inviteRegistrationButton, false);
   }
@@ -3701,6 +3898,225 @@ function setKanbanFocusMode(active) {
   if (els.expandKanbanButton) els.expandKanbanButton.setAttribute("aria-pressed", String(enabled));
 }
 
+
+function closeSensitiveAuthorization(approved = false) {
+  const resolve = state.sensitiveAuthorizationResolve;
+  state.sensitiveAuthorizationResolve = null;
+  state.sensitiveAuthorizationReject = null;
+  els.reauthForm?.reset();
+  showFormError(els.reauthError);
+  if (els.reauthDialog?.open) closeModal(els.reauthDialog);
+  resetCaptcha("reauth");
+  if (resolve) resolve(Boolean(approved));
+}
+
+function ensureSensitiveAuthorization(reason = "Esta ação acessa informações sensíveis.") {
+  if (!isAdmin() || !auth.currentUser?.email) return Promise.resolve(false);
+  if (Date.now() < state.sensitiveAuthorizationUntil) return Promise.resolve(true);
+  if (state.sensitiveAuthorizationResolve) return Promise.resolve(false);
+
+  els.reauthReason.textContent = reason;
+  els.reauthPassword.value = "";
+  showFormError(els.reauthError);
+  if (!els.reauthDialog.open) els.reauthDialog.showModal();
+  ensureCaptchaWidget("reauth");
+  window.setTimeout(() => els.reauthPassword.focus(), 50);
+  return new Promise((resolve, reject) => {
+    state.sensitiveAuthorizationResolve = resolve;
+    state.sensitiveAuthorizationReject = reject;
+  });
+}
+
+async function submitSensitiveAuthorization(event) {
+  event.preventDefault();
+  showFormError(els.reauthError);
+  const password = els.reauthPassword.value;
+  if (!password) {
+    showFormError(els.reauthError, "Informe sua senha atual.");
+    return;
+  }
+  const captchaToken = requireCaptchaToken("reauth", els.reauthError);
+  if (CAPTCHA_ENABLED && !captchaToken) return;
+  setButtonLoading(els.reauthConfirmButton, true, "Confirmando...");
+  try {
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
+    await reauthenticateWithCredential(auth.currentUser, credential, captchaToken);
+    state.sensitiveAuthorizationUntil = Date.now() + SENSITIVE_AUTHORIZATION_MS;
+    await logAccessEvent("sensitive_reauthentication", "Identidade confirmada para uma ação administrativa sensível.");
+    closeSensitiveAuthorization(true);
+  } catch (error) {
+    console.error(error);
+    showFormError(els.reauthError, ["auth/invalid-credential", "auth/wrong-password"].includes(error?.code)
+      ? "A senha atual está incorreta."
+      : firebaseErrorMessage(error));
+  } finally {
+    resetCaptcha("reauth");
+    setButtonLoading(els.reauthConfirmButton, false);
+  }
+}
+
+function verifiedTotpFactor(factors) {
+  const candidates = factors?.totp?.length
+    ? factors.totp
+    : (factors?.all || []).filter((factor) => factor.factor_type === "totp" || factor.factorType === "totp");
+  return candidates.find((factor) => factor.status === "verified") || null;
+}
+
+async function refreshMfaStatus() {
+  if (!state.user || !isAdmin()) return;
+  try {
+    const [factors, aal] = await Promise.all([listMfaFactors(auth), getMfaAssuranceLevel(auth)]);
+    const verified = verifiedTotpFactor(factors);
+    state.mfaVerifiedFactorId = verified?.id || "";
+    state.mfaStatusLoaded = true;
+    if (verified) {
+      const currentLevel = aal?.currentLevel || aal?.current_level || "aal1";
+      els.mfaStatusText.textContent = currentLevel === "aal2"
+        ? "MFA ativo e validado nesta sessão."
+        : "MFA ativo. Um código será solicitado para concluir o acesso.";
+      els.configureMfaButton.hidden = true;
+      els.removeMfaButton.hidden = false;
+    } else {
+      els.mfaStatusText.textContent = "MFA ainda não foi configurado nesta conta administrativa.";
+      els.configureMfaButton.hidden = false;
+      els.removeMfaButton.hidden = true;
+    }
+  } catch (error) {
+    console.error(error);
+    els.mfaStatusText.textContent = "Não foi possível consultar o estado do MFA.";
+  }
+}
+
+async function ensureMfaChallengeBeforeApp() {
+  if (!auth.currentUser) return false;
+  try {
+    const [factors, aal] = await Promise.all([listMfaFactors(auth), getMfaAssuranceLevel(auth)]);
+    const verified = verifiedTotpFactor(factors);
+    state.mfaVerifiedFactorId = verified?.id || "";
+    const currentLevel = aal?.currentLevel || aal?.current_level || null;
+    const nextLevel = aal?.nextLevel || aal?.next_level || null;
+    if (!verified || currentLevel === "aal2" || nextLevel !== "aal2") return true;
+
+    state.mfaChallengeFactorId = verified.id;
+    finishAuthBootstrap();
+    els.appView.hidden = true;
+    els.loginView.hidden = false;
+    showFormError(els.mfaChallengeError);
+    els.mfaChallengeCode.value = "";
+    if (!els.mfaChallengeDialog.open) els.mfaChallengeDialog.showModal();
+    window.setTimeout(() => els.mfaChallengeCode.focus(), 50);
+    return false;
+  } catch (error) {
+    console.error(error);
+    state.forcedLogoutMessage = "Não foi possível validar o segundo fator de autenticação.";
+    await secureSignOut({ log: false });
+    return false;
+  }
+}
+
+async function submitMfaChallenge(event) {
+  event.preventDefault();
+  if (state.mfaChallengeInProgress) return;
+  const code = els.mfaChallengeCode.value.replace(/\D/g, "");
+  if (code.length !== 6 || !state.mfaChallengeFactorId) {
+    showFormError(els.mfaChallengeError, "Informe o código de seis dígitos do aplicativo autenticador.");
+    return;
+  }
+  state.mfaChallengeInProgress = true;
+  setButtonLoading(els.verifyMfaChallengeButton, true, "Verificando...");
+  try {
+    const challenge = await challengeMfaFactor(auth, state.mfaChallengeFactorId);
+    await verifyMfaFactor(auth, state.mfaChallengeFactorId, challenge.id, code);
+    closeModal(els.mfaChallengeDialog);
+    state.mfaChallengeFactorId = "";
+    await logAccessEvent("mfa_verified", "Segundo fator validado no acesso.");
+    await handleAuthenticated(auth.currentUser, { skipMfaCheck: true });
+  } catch (error) {
+    console.error(error);
+    showFormError(els.mfaChallengeError, "Código inválido ou expirado. Gere um novo código e tente novamente.");
+    els.mfaChallengeCode.select();
+  } finally {
+    state.mfaChallengeInProgress = false;
+    setButtonLoading(els.verifyMfaChallengeButton, false);
+  }
+}
+
+async function openMfaEnrollment() {
+  if (!isAdmin()) return;
+  const authorized = await ensureSensitiveAuthorization("Confirme sua senha para vincular um aplicativo autenticador à sua conta.");
+  if (!authorized) return;
+  showFormError(els.mfaEnrollmentError);
+  els.mfaEnrollmentForm.reset();
+  setButtonLoading(els.configureMfaButton, true, "Preparando...");
+  try {
+    const enrollment = await enrollMfaTotp(auth, securityConfig.mfaFriendlyName || "Painel de Solicitações");
+    state.mfaEnrollmentFactorId = enrollment.id;
+    const totp = enrollment.totp || {};
+    els.mfaQrCode.src = totp.qr_code || totp.qrCode || "";
+    els.mfaSecretCode.textContent = totp.secret || "";
+    if (!els.mfaEnrollmentDialog.open) els.mfaEnrollmentDialog.showModal();
+    window.setTimeout(() => els.mfaEnrollmentCode.focus(), 50);
+  } catch (error) {
+    console.error(error);
+    showToast(firebaseErrorMessage(error), "error");
+  } finally {
+    setButtonLoading(els.configureMfaButton, false);
+  }
+}
+
+async function cancelMfaEnrollment() {
+  const factorId = state.mfaEnrollmentFactorId;
+  state.mfaEnrollmentFactorId = "";
+  if (els.mfaEnrollmentDialog.open) closeModal(els.mfaEnrollmentDialog);
+  if (factorId) {
+    try { await unenrollMfaFactor(auth, factorId); } catch (error) { console.warn("Fator não confirmado não pôde ser removido.", error); }
+  }
+}
+
+async function submitMfaEnrollment(event) {
+  event.preventDefault();
+  const factorId = state.mfaEnrollmentFactorId;
+  const code = els.mfaEnrollmentCode.value.replace(/\D/g, "");
+  if (!factorId || code.length !== 6) {
+    showFormError(els.mfaEnrollmentError, "Informe o código de seis dígitos do aplicativo autenticador.");
+    return;
+  }
+  setButtonLoading(els.verifyMfaEnrollmentButton, true, "Ativando...");
+  try {
+    const challenge = await challengeMfaFactor(auth, factorId);
+    await verifyMfaFactor(auth, factorId, challenge.id, code);
+    state.mfaEnrollmentFactorId = "";
+    closeModal(els.mfaEnrollmentDialog);
+    await logAccessEvent("mfa_enabled", "Autenticação em duas etapas ativada.");
+    await refreshMfaStatus();
+    showToast("Autenticação em duas etapas ativada com sucesso.");
+  } catch (error) {
+    console.error(error);
+    showFormError(els.mfaEnrollmentError, "Código inválido ou expirado. Confira o aplicativo e tente novamente.");
+  } finally {
+    setButtonLoading(els.verifyMfaEnrollmentButton, false);
+  }
+}
+
+async function removeMfa() {
+  if (!isAdmin() || !state.mfaVerifiedFactorId) return;
+  const authorized = await ensureSensitiveAuthorization("Confirme sua senha para remover a autenticação em duas etapas.");
+  if (!authorized) return;
+  if (!window.confirm("Remover o segundo fator desta conta? A sessão será encerrada após a alteração.")) return;
+  setButtonLoading(els.removeMfaButton, true, "Removendo...");
+  try {
+    await unenrollMfaFactor(auth, state.mfaVerifiedFactorId);
+    await logAccessEvent("mfa_disabled", "Autenticação em duas etapas removida.");
+    state.forcedLogoutMessage = "MFA removido. Entre novamente para continuar.";
+    await secureSignOut({ log: false });
+  } catch (error) {
+    console.error(error);
+    showToast(firebaseErrorMessage(error), "error");
+  } finally {
+    setButtonLoading(els.removeMfaButton, false);
+  }
+}
+
 async function switchAppView(view = "kanban") {
   if (["users", "indicators", "archived", "security"].includes(view) && !isAdmin()) view = "kanban";
   state.currentView = view;
@@ -3723,7 +4139,7 @@ async function switchAppView(view = "kanban") {
       showToast(firebaseErrorMessage(error), "error");
     }
   }
-  if (view === "security") await loadAccessLogs();
+  if (view === "security") await Promise.all([loadAccessLogs(), refreshMfaStatus()]);
   if (view === "archived") {
     try {
       await loadArchivedRequests();
@@ -3774,6 +4190,9 @@ async function createUserInvite(event) {
     return;
   }
 
+  const authorized = await ensureSensitiveAuthorization("Confirme sua senha para criar um novo acesso ao painel.");
+  if (!authorized) return;
+
   setButtonLoading(els.createUserInviteButton, true, "Gerando...");
   try {
     const token = generateInviteToken();
@@ -3794,6 +4213,7 @@ async function createUserInvite(event) {
     els.userInviteExpiration.textContent = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(expirationDate);
     els.userInviteFormFields.hidden = true;
     els.userInviteResult.hidden = false;
+    await logAccessEvent("user_invite_created", `Convite criado para ${email} com perfil ${role}${squad ? ` e ${SQUAD_LABELS[squad]}` : ""}.`);
     await loadInvites();
   } catch (error) {
     console.error(error);
@@ -3838,6 +4258,9 @@ async function saveUserProfile(event) {
     return;
   }
 
+  const authorized = await ensureSensitiveAuthorization("Confirme sua senha para alterar o perfil ou o grupo deste usuário.");
+  if (!authorized) return;
+
   setButtonLoading(els.saveUserButton, true, "Salvando...");
   try {
     await updateDoc(doc(db, "users", uid), {
@@ -3848,6 +4271,7 @@ async function saveUserProfile(event) {
       updatedByUid: state.user.uid
     });
     closeModal(els.editUserDialog);
+    await logAccessEvent("user_profile_updated", `Perfil de ${user.email || uid} atualizado para ${role}${squad ? ` / ${SQUAD_LABELS[squad]}` : ""}.`);
     await loadUsers();
     showToast("Usuário atualizado com sucesso.");
   } catch (error) {
@@ -3884,6 +4308,8 @@ async function confirmUserStatusChange() {
   const user = state.users.find((entry) => entry.uid === uid);
   if (!user || uid === state.user.uid) return;
   const active = user.active === false;
+  const authorized = await ensureSensitiveAuthorization(`Confirme sua senha para ${active ? "reativar" : "desativar"} este usuário.`);
+  if (!authorized) return;
   setButtonLoading(els.confirmUserStatusButton, true, active ? "Reativando..." : "Desativando...");
   try {
     await updateDoc(doc(db, "users", uid), {
@@ -3892,6 +4318,7 @@ async function confirmUserStatusChange() {
       updatedByUid: state.user.uid
     });
     closeModal(els.userStatusDialog);
+    await logAccessEvent(active ? "user_reactivated" : "user_deactivated", `${user.email || uid} foi ${active ? "reativado" : "desativado"}.`);
     await loadUsers();
     showToast(active ? "Usuário reativado." : "Usuário desativado.");
   } catch (error) {
@@ -3905,9 +4332,20 @@ async function confirmUserStatusChange() {
 async function sendUserPasswordReset(uid) {
   const user = state.users.find((entry) => entry.uid === uid);
   if (!isAdmin() || !user?.email) return;
+  const authorized = await ensureSensitiveAuthorization("Confirme sua senha para iniciar a redefinição de senha deste usuário.");
+  if (!authorized) return;
+  if (CAPTCHA_ENABLED) {
+    els.resetEmail.value = user.email;
+    showFormError(els.resetError);
+    els.resetDialog.showModal();
+    await ensureCaptchaWidget("reset");
+    showToast("Conclua a verificação de segurança para enviar o link.");
+    return;
+  }
   try {
     auth.languageCode = "pt-BR";
     await sendPasswordResetEmail(auth, user.email);
+    await logAccessEvent("password_reset_sent", `Redefinição enviada para ${user.email}.`);
     showToast(`Link de redefinição enviado para ${user.email}.`);
   } catch (error) {
     console.error(error);
@@ -3918,12 +4356,15 @@ async function sendUserPasswordReset(uid) {
 async function cancelInvite(id) {
   const invite = state.invites.find((entry) => entry.id === id);
   if (!isAdmin() || !invite) return;
+  const authorized = await ensureSensitiveAuthorization("Confirme sua senha para cancelar este convite de acesso.");
+  if (!authorized) return;
   try {
     await updateDoc(doc(db, "userInvites", id), {
       status: "cancelled",
       cancelledAt: serverTimestamp(),
       cancelledByUid: state.user.uid
     });
+    await logAccessEvent("user_invite_cancelled", `Convite cancelado para ${invite.email || id}.`);
     await loadInvites();
     showToast("Convite cancelado.");
   } catch (error) {
@@ -3950,7 +4391,7 @@ function subscribeCurrentProfile() {
   state.unsubscribeProfile = onSnapshot(doc(db, "users", state.user.uid), async (snapshot) => {
     if (!snapshot.exists() || snapshot.data().active !== true || snapshot.data().accessLocked === true) {
       state.forcedLogoutMessage = snapshot.data()?.accessLocked === true ? "Seu acesso foi temporariamente bloqueado por um administrador." : "Seu acesso foi desativado por um administrador.";
-      signOut(auth);
+      secureSignOut({ log: false });
       return;
     }
     const previousRole = state.profile?.role;
@@ -3959,7 +4400,7 @@ function subscribeCurrentProfile() {
     state.profile = { uid: snapshot.id, ...snapshot.data() };
     if (!userHasValidSquad(state.profile)) {
       state.forcedLogoutMessage = "Seu grupo de atendimento ainda não foi atribuído. Procure um administrador.";
-      signOut(auth);
+      secureSignOut({ log: false });
       return;
     }
     renderUser();
@@ -3974,7 +4415,7 @@ function subscribeCurrentProfile() {
   }, (error) => {
     console.error(error);
     state.forcedLogoutMessage = "Seu acesso não está mais disponível.";
-    signOut(auth);
+    secureSignOut({ log: false });
   });
 }
 
@@ -4402,10 +4843,26 @@ function serializeBackupValue(value) {
   return value;
 }
 
-async function downloadBackup() {
+function openBackupDialog() {
   if (!isAdmin()) return;
-  setButtonLoading(els.downloadBackupButton, true, "Gerando...");
+  els.backupForm.reset();
+  showFormError(els.backupError);
+  if (!els.backupDialog.open) els.backupDialog.showModal();
+  window.setTimeout(() => els.backupPurpose.focus(), 50);
+}
+
+async function sha256Hex(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function downloadBackup(purpose) {
+  if (!isAdmin() || state.backupInProgress) return;
+  state.backupInProgress = true;
+  setButtonLoading(els.confirmBackupButton, true, "Gerando...");
   try {
+    await logAccessEvent("backup_requested", `Finalidade: ${purpose}`);
     const names = ["requests", "archivedRequests", "requestComments", "requestHistory", "requestAttachments", "users", "userInvites", "notifications", "savedFilters", "commentTemplates", "accessLogs"];
     const data = {};
     for (const name of names) {
@@ -4420,19 +4877,69 @@ async function downloadBackup() {
         throw wrappedError;
       }
     }
-    const backup = { generatedAt: new Date().toISOString(), version: "45", backend: "supabase", projectUrl: supabaseConfig.url, data };
+
+    const generatedAt = new Date();
+    const deleteAfter = new Date(generatedAt.getTime() + BACKUP_RETENTION_DAYS * 86400000);
+    const baseBackup = {
+      metadata: {
+        generatedAt: generatedAt.toISOString(),
+        deleteAfter: deleteAfter.toISOString(),
+        version: "46",
+        backend: "supabase",
+        classification: "CONFIDENCIAL - DADOS DE CLIENTES",
+        purpose,
+        requestedBy: {
+          uid: state.user.uid,
+          name: state.profile?.name || state.user.email,
+          email: state.user.email
+        },
+        projectUrl: supabaseConfig.url
+      },
+      data
+    };
+    const canonical = JSON.stringify(baseBackup);
+    const hash = await sha256Hex(canonical);
+    const backup = { ...baseBackup, integrity: { algorithm: "SHA-256", sha256: hash, scope: "metadata+data" } };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a"); link.href = url; link.download = `painel-solicitacoes-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(url);
-    await logAccessEvent("backup", "Backup administrativo gerado.");
-    showToast("Backup gerado com sucesso.");
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `painel-solicitacoes-backup-${generatedAt.toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    await logAccessEvent("backup_generated", `Backup gerado. Finalidade: ${purpose}. SHA-256: ${hash.slice(0, 12)}… Apagar até ${deleteAfter.toLocaleDateString("pt-BR")}.`);
+    closeModal(els.backupDialog);
+    showToast(`Backup gerado. Apague a cópia local até ${deleteAfter.toLocaleDateString("pt-BR")}.`);
   } catch (error) {
+    console.error(error);
+    await logAccessEvent("backup_failed", `Falha ao gerar backup. Finalidade: ${purpose}.`);
     const message = error?.message?.startsWith("Nao foi possivel ler a colecao")
       ? `${error.message} Confira as políticas RLS do Supabase.`
       : firebaseErrorMessage(error);
-    showToast(message, "error");
+    showFormError(els.backupError, message);
+  } finally {
+    state.backupInProgress = false;
+    setButtonLoading(els.confirmBackupButton, false);
   }
-  finally { setButtonLoading(els.downloadBackupButton, false); }
+}
+
+async function submitBackupRequest(event) {
+  event.preventDefault();
+  showFormError(els.backupError);
+  const purpose = sanitizeText(els.backupPurpose.value).slice(0, 300);
+  if (purpose.length < 10) {
+    showFormError(els.backupError, "Descreva a finalidade do backup com pelo menos 10 caracteres.");
+    return;
+  }
+  if (!els.backupAcknowledgement.checked) {
+    showFormError(els.backupError, "Confirme que está ciente dos cuidados com o arquivo.");
+    return;
+  }
+  const authorized = await ensureSensitiveAuthorization("Confirme sua senha para exportar a base completa de dados do painel.");
+  if (!authorized) return;
+  await downloadBackup(purpose);
 }
 
 async function logAccessEvent(eventType, description = "") {
@@ -4462,11 +4969,30 @@ async function toggleUserAccessLock(uid) {
   const user = state.users.find((entry) => entry.uid === uid);
   if (!isAdmin() || !user || uid === state.user.uid) return;
   const locked = user.accessLocked === true;
+  const authorized = await ensureSensitiveAuthorization(`Confirme sua senha para ${locked ? "desbloquear" : "bloquear"} este acesso.`);
+  if (!authorized) return;
   try {
     await updateDoc(doc(db, "users", uid), { accessLocked: !locked, lockedAt: locked ? null : serverTimestamp(), lockedByUid: locked ? "" : state.user.uid, updatedAt: serverTimestamp(), updatedByUid: state.user.uid });
+    await logAccessEvent(locked ? "user_unlocked" : "user_locked", `${user.email || uid} foi ${locked ? "desbloqueado" : "bloqueado"}.`);
     await loadUsers();
     showToast(locked ? "Acesso desbloqueado." : "Acesso bloqueado temporariamente.");
   } catch (error) { showToast(firebaseErrorMessage(error), "error"); }
+}
+
+
+async function secureSignOut({ eventType = "", description = "", log = true } = {}) {
+  try {
+    if (log && eventType) await logAccessEvent(eventType, description);
+  } catch (error) {
+    console.warn("Não foi possível registrar a saída.", error);
+  }
+  try {
+    await signOut(auth);
+  } finally {
+    clearAuthSessionStorage();
+    state.sensitiveAuthorizationUntil = 0;
+    navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" });
+  }
 }
 
 function clearSessionTimers() {
@@ -4495,8 +5021,7 @@ function resetSessionInactivity() {
   }, SESSION_INACTIVITY_MS - SESSION_WARNING_MS);
   state.sessionExpireTimer = setTimeout(async () => {
     state.forcedLogoutMessage = "Sua sessão expirou após 3 horas sem atividade.";
-    await logAccessEvent("session_expired", "Sessão encerrada por inatividade.");
-    await signOut(auth);
+    await secureSignOut({ eventType: "session_expired", description: "Sessão encerrada por inatividade." });
   }, SESSION_INACTIVITY_MS);
 }
 
@@ -4570,6 +5095,9 @@ function setupEvents() {
       return;
     }
 
+    const captchaToken = requireCaptchaToken("login", els.loginError);
+    if (CAPTCHA_ENABLED && !captchaToken) return;
+
     setButtonLoading(els.loginButton, true, "Entrando...");
     try {
       await setPersistence(
@@ -4579,7 +5107,8 @@ function setupEvents() {
       await signInWithEmailAndPassword(
         auth,
         els.loginEmail.value.trim(),
-        els.loginPassword.value
+        els.loginPassword.value,
+        captchaToken
       );
       if (els.rememberEmail.checked) {
         localStorage.setItem("painel-email", els.loginEmail.value.trim());
@@ -4589,6 +5118,7 @@ function setupEvents() {
     } catch (error) {
       console.error(error);
       showFormError(els.loginError, firebaseErrorMessage(error));
+      resetCaptcha("login");
     } finally {
       setButtonLoading(els.loginButton, false);
     }
@@ -4598,6 +5128,7 @@ function setupEvents() {
   els.backToLoginButton.addEventListener("click", () => {
     removeInviteFromUrl();
     showLoginCard();
+    resetCaptcha("invite");
     showFormError(els.inviteRegistrationError);
   });
   $(".toggle-invite-password").addEventListener("click", (event) => {
@@ -4614,7 +5145,7 @@ function setupEvents() {
     els.togglePassword.setAttribute("aria-label", hidden ? "Ocultar senha" : "Mostrar senha");
   });
 
-  els.logoutButton.addEventListener("click", async () => { await logAccessEvent("logout", "Saída manual do painel."); await signOut(auth); });
+  els.logoutButton.addEventListener("click", () => secureSignOut({ eventType: "logout", description: "Saída manual do painel." }));
   els.changePasswordButton.addEventListener("click", () => openPasswordDialog(false));
   els.changePasswordForm.addEventListener("submit", changeCurrentUserPassword);
   els.showChangePasswords.addEventListener("change", () => {
@@ -4624,6 +5155,7 @@ function setupEvents() {
   $$(".close-change-password-modal").forEach((button) => button.addEventListener("click", () => {
     if (state.passwordRecoveryMode) return;
     closeModal(els.changePasswordDialog);
+    resetCaptcha("changePassword");
   }));
   els.changePasswordDialog.addEventListener("cancel", (event) => {
     if (state.passwordRecoveryMode) event.preventDefault();
@@ -4828,10 +5360,22 @@ function setupEvents() {
   });
 
   els.themeToggleButton.addEventListener("click", toggleTheme);
-  els.downloadBackupButton.addEventListener("click", downloadBackup);
+  els.downloadBackupButton.addEventListener("click", openBackupDialog);
+  els.backupForm.addEventListener("submit", submitBackupRequest);
+  $$(".close-backup-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.backupDialog)));
+  els.reauthForm.addEventListener("submit", submitSensitiveAuthorization);
+  $$(".close-reauth-modal").forEach((button) => button.addEventListener("click", () => closeSensitiveAuthorization(false)));
+  els.reauthDialog.addEventListener("cancel", (event) => { event.preventDefault(); closeSensitiveAuthorization(false); });
+  els.configureMfaButton.addEventListener("click", openMfaEnrollment);
+  els.removeMfaButton.addEventListener("click", removeMfa);
+  els.mfaEnrollmentForm.addEventListener("submit", submitMfaEnrollment);
+  $$(".close-mfa-enrollment").forEach((button) => button.addEventListener("click", cancelMfaEnrollment));
+  els.mfaChallengeForm.addEventListener("submit", submitMfaChallenge);
+  els.mfaChallengeLogout.addEventListener("click", () => secureSignOut({ eventType: "mfa_cancelled", description: "Usuário saiu durante a verificação do segundo fator." }));
+  els.mfaChallengeDialog.addEventListener("cancel", (event) => event.preventDefault());
   els.refreshAccessLogsButton.addEventListener("click", loadAccessLogs);
   els.continueSessionButton.addEventListener("click", resetSessionInactivity);
-  els.logoutSessionButton.addEventListener("click", async () => { await logAccessEvent("logout", "Saída pela tela de expiração."); await signOut(auth); });
+  els.logoutSessionButton.addEventListener("click", () => secureSignOut({ eventType: "logout", description: "Saída pela tela de expiração." }));
   document.addEventListener("keydown", handleKeyboardShortcuts);
   ["pointerdown", "mousemove", "keydown", "scroll", "touchstart"].forEach((eventName) => document.addEventListener(eventName, () => { if (state.user && Date.now() - state.lastActivityAt > 30000) resetSessionInactivity(); }, { passive: true }));
 
@@ -4839,23 +5383,28 @@ function setupEvents() {
     els.resetEmail.value = els.loginEmail.value.trim();
     showFormError(els.resetError);
     els.resetDialog.showModal();
+    ensureCaptchaWidget("reset");
   });
-  $$(".close-reset-modal").forEach((button) => button.addEventListener("click", () => closeModal(els.resetDialog)));
+  $$(".close-reset-modal").forEach((button) => button.addEventListener("click", () => { closeModal(els.resetDialog); resetCaptcha("reset"); }));
   els.resetForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     showFormError(els.resetError);
+    const captchaToken = requireCaptchaToken("reset", els.resetError);
+    if (CAPTCHA_ENABLED && !captchaToken) return;
     try {
       auth.languageCode = "pt-BR";
-      await sendPasswordResetEmail(auth, els.resetEmail.value.trim());
+      await sendPasswordResetEmail(auth, els.resetEmail.value.trim(), captchaToken);
       els.resetDialog.close();
       showToast("Link de redefinição enviado para o e-mail informado.");
     } catch (error) {
       console.error(error);
       showFormError(els.resetError, firebaseErrorMessage(error));
+    } finally {
+      resetCaptcha("reset");
     }
   });
 
-  [els.requestDialog, els.resetDialog, els.changePasswordDialog, els.helpDialog, els.userInviteDialog, els.editUserDialog, els.userStatusDialog, els.archiveConfirmDialog, els.savedFilterDialog, els.commentTemplateDialog].forEach((dialog) => {
+  [els.requestDialog, els.resetDialog, els.changePasswordDialog, els.helpDialog, els.userInviteDialog, els.editUserDialog, els.userStatusDialog, els.archiveConfirmDialog, els.savedFilterDialog, els.commentTemplateDialog, els.backupDialog].forEach((dialog) => {
     let pointerStartedOnBackdrop = false;
     let pointerStartX = 0;
     let pointerStartY = 0;
@@ -4895,19 +5444,20 @@ function finishAuthBootstrap() {
   if (els.authBootstrap) els.authBootstrap.hidden = true;
 }
 
-async function handleAuthenticated(user) {
+async function handleAuthenticated(user, { skipMfaCheck = false } = {}) {
   if (state.inviteRegistrationInProgress) return;
   try {
+    if (!skipMfaCheck && !await ensureMfaChallengeBeforeApp()) return;
     const profile = await loadProfile(user);
     if (profile.active !== true || profile.accessLocked === true) {
       state.forcedLogoutMessage = profile.accessLocked === true ? "Seu acesso está temporariamente bloqueado. Procure o administrador." : "Seu acesso está desativado. Procure o administrador.";
-      await signOut(auth);
+      await secureSignOut({ log: false });
       return;
     }
 
     if (!userHasValidSquad(profile)) {
       state.forcedLogoutMessage = "Seu grupo de atendimento ainda não foi atribuído. Procure um administrador.";
-      await signOut(auth);
+      await secureSignOut({ log: false });
       return;
     }
 
@@ -4941,7 +5491,7 @@ async function handleAuthenticated(user) {
       ? "Seu login existe, mas o perfil de acesso ainda não foi cadastrado. Solicite um convite ao administrador."
       : firebaseErrorMessage(error);
     state.forcedLogoutMessage = message;
-    await signOut(auth);
+    await secureSignOut({ log: false });
   }
 }
 
@@ -4970,6 +5520,13 @@ function handleSignedOut() {
   state.bulkMode = false;
   state.bulkSelected.clear();
   state.passwordRecoveryMode = false;
+  state.sensitiveAuthorizationUntil = 0;
+  state.mfaChallengeFactorId = "";
+  state.mfaEnrollmentFactorId = "";
+  state.mfaVerifiedFactorId = "";
+  state.mfaStatusLoaded = false;
+  closeSensitiveAuthorization(false);
+  [els.backupDialog, els.mfaEnrollmentDialog, els.mfaChallengeDialog].forEach((dialog) => { if (dialog?.open) closeModal(dialog); });
   configurePasswordDialog(false);
   updateBulkBar();
   clearSessionTimers();
@@ -5005,7 +5562,7 @@ async function loadAppVersion() {
     if (!response.ok) throw new Error("version-file-unavailable");
 
     const info = await response.json();
-    const release = String(info.release || "45").replace(/^v/i, "");
+    const release = String(info.release || "46").replace(/^v/i, "");
     const isLocal = !info.build || String(info.build).toLowerCase() === "local";
     const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
 
@@ -5040,7 +5597,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v45";
+    versionLabel.textContent = "v46";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }
@@ -5050,6 +5607,8 @@ applyTheme(localStorage.getItem("painel-theme") || (window.matchMedia?.("(prefer
 setupPwa();
 loadAppVersion();
 setupEvents();
+updateSecurityControlStatus();
+ensureCaptchaWidget("login");
 const rememberedEmail = localStorage.getItem("painel-email");
 if (rememberedEmail) {
   els.loginEmail.value = rememberedEmail;
@@ -5071,7 +5630,7 @@ onAuthStateChanged(auth, async (user, authEvent) => {
     return;
   }
   if (state.inviteToken && user && !state.inviteRegistrationInProgress) {
-    await signOut(auth);
+    await secureSignOut({ log: false });
     return;
   }
   if (user) await handleAuthenticated(user);

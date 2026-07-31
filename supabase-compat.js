@@ -138,15 +138,19 @@ export async function setPersistence(auth, mode) {
   auth.storage.setMode(mode);
 }
 
-export async function signInWithEmailAndPassword(auth, email, password) {
-  const { data, error } = await auth.client.auth.signInWithPassword({ email, password });
+export async function signInWithEmailAndPassword(auth, email, password, captchaToken = "") {
+  const credentials = { email, password };
+  if (captchaToken) credentials.options = { captchaToken };
+  const { data, error } = await auth.client.auth.signInWithPassword(credentials);
   throwIfError(error);
   auth.currentUser = mapUser(data.user);
   return { user: auth.currentUser };
 }
 
-export async function createUserWithEmailAndPassword(auth, email, password) {
-  const { data, error } = await auth.client.auth.signUp({ email, password });
+export async function createUserWithEmailAndPassword(auth, email, password, captchaToken = "") {
+  const credentials = { email, password };
+  if (captchaToken) credentials.options = { captchaToken };
+  const { data, error } = await auth.client.auth.signUp(credentials);
   throwIfError(error);
   if (!data.user) {
     const missing = new Error("Não foi possível criar o usuário.");
@@ -176,10 +180,60 @@ export async function signOut(auth) {
   auth.currentUser = null;
 }
 
-export async function sendPasswordResetEmail(auth, email) {
+export async function sendPasswordResetEmail(auth, email, captchaToken = "") {
   const redirectTo = `${window.location.origin}${window.location.pathname}`;
-  const { error } = await auth.client.auth.resetPasswordForEmail(email, { redirectTo });
+  const options = { redirectTo };
+  if (captchaToken) options.captchaToken = captchaToken;
+  const { error } = await auth.client.auth.resetPasswordForEmail(email, options);
   throwIfError(error);
+}
+
+export function clearAuthSessionStorage() {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  sessionStorage.removeItem(AUTH_STORAGE_KEY);
+}
+
+export async function getMfaAssuranceLevel(auth) {
+  const { data, error } = await auth.client.auth.mfa.getAuthenticatorAssuranceLevel();
+  throwIfError(error);
+  return data || { currentLevel: null, nextLevel: null };
+}
+
+export async function listMfaFactors(auth) {
+  const { data, error } = await auth.client.auth.mfa.listFactors();
+  throwIfError(error);
+  return data || { all: [], totp: [], phone: [] };
+}
+
+export async function enrollMfaTotp(auth, friendlyName = "Painel de Solicitações") {
+  const { data, error } = await auth.client.auth.mfa.enroll({
+    factorType: "totp",
+    friendlyName
+  });
+  throwIfError(error);
+  return data;
+}
+
+export async function challengeMfaFactor(auth, factorId) {
+  const { data, error } = await auth.client.auth.mfa.challenge({ factorId });
+  throwIfError(error);
+  return data;
+}
+
+export async function verifyMfaFactor(auth, factorId, challengeId, code) {
+  const { data, error } = await auth.client.auth.mfa.verify({
+    factorId,
+    challengeId,
+    code: String(code || "").replace(/\D/g, "")
+  });
+  throwIfError(error);
+  return data;
+}
+
+export async function unenrollMfaFactor(auth, factorId) {
+  const { data, error } = await auth.client.auth.mfa.unenroll({ factorId });
+  throwIfError(error);
+  return data;
 }
 
 export const EmailAuthProvider = {
@@ -188,17 +242,27 @@ export const EmailAuthProvider = {
   }
 };
 
-export async function reauthenticateWithCredential(user, credential) {
+export async function reauthenticateWithCredential(user, credential, captchaToken = "") {
   if (!user?.email || !credential?.password) {
     const error = new Error("Credencial inválida.");
     error.code = "auth/invalid-credential";
     throw error;
   }
   const context = findContextByUser(user);
-  const { error } = await context.client.auth.signInWithPassword({
+  const temporaryClient = createClient(context.config.url, context.config.anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false
+    }
+  });
+  const credentials = {
     email: credential.email || user.email,
     password: credential.password
-  });
+  };
+  if (captchaToken) credentials.options = { captchaToken };
+  const { error } = await temporaryClient.auth.signInWithPassword(credentials);
+  try { await temporaryClient.auth.signOut({ scope: "local" }); } catch {}
   throwIfError(error);
   return { user };
 }
@@ -536,13 +600,20 @@ async function uploadAttachment(reference, encodedData) {
   const bytesValue = encodedData.data;
   if (!bytesValue?.__type || bytesValue.__type !== "bytes") return encodedData;
   const bytes = base64ToUint8(bytesValue.value);
-  const safeName = String(encodedData.name || "anexo").replace(/[^a-zA-Z0-9._-]+/g, "-");
   const owner = String(encodedData.ownerUid || "sem-usuario");
   const requestId = String(encodedData.requestId || "sem-solicitacao");
-  const storagePath = `${owner}/${requestId}/${reference.id}-${safeName}`;
+  const extensionByType = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "text/plain": "txt"
+  };
+  const extension = extensionByType[encodedData.contentType] || "bin";
+  const randomName = `${crypto.randomUUID()}.${extension}`;
+  const storagePath = `${owner}/${requestId}/${randomName}`;
   const { error } = await reference.db.client.storage.from(ATTACHMENT_BUCKET).upload(storagePath, bytes, {
     contentType: encodedData.contentType || "application/octet-stream",
-    upsert: true
+    cacheControl: "0",
+    upsert: false
   });
   if (error) throw normalizeDatabaseError(error);
   const copy = { ...encodedData, storagePath };

@@ -27,3 +27,13 @@ Não abra uma issue pública com dados de clientes, credenciais ou uma prova de 
 3. Preservar logs do Supabase, GitHub e Brevo.
 4. Identificar dados e usuários potencialmente afetados.
 5. Registrar as ações tomadas e acionar o processo interno de LGPD quando aplicável.
+
+## Controles da versão 46
+
+- Contas administrativas podem ativar MFA TOTP em **Segurança**.
+- Ações de usuários e backup exigem confirmação recente da senha.
+- Backups devem ter finalidade registrada e ser apagados no prazo informado.
+- O CAPTCHA é opcional; a Secret Key fica somente no Supabase e a Site Key pública em `security-config.js`.
+- Anexos aceitos: JPEG, PNG e TXT, com validação do conteúdo real e limite de 700 KB no Storage.
+
+Consulte `SEGURANCA_COMPLEMENTAR_V46.md` antes de habilitar CAPTCHA ou MFA.

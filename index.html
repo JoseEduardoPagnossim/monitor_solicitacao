@@ -5,21 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Kanban interno para solicitações de programação, cancelamento e TEF Elgin.">
   <meta name="referrer" content="same-origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://aszedsiqgtdycoasptrt.supabase.co wss://aszedsiqgtdycoasptrt.supabase.co https://cdn.jsdelivr.net; manifest-src 'self'; worker-src 'self' blob:; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://aszedsiqgtdycoasptrt.supabase.co wss://aszedsiqgtdycoasptrt.supabase.co https://cdn.jsdelivr.net https://challenges.cloudflare.com; manifest-src 'self'; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com; form-action 'self'">
   <title>Painel de Solicitações</title>
-  <link rel="icon" type="image/png" href="logo-soften.png?v=45.0.0">
+  <link rel="icon" type="image/png" href="logo-soften.png?v=46.0.0">
   <meta name="theme-color" content="#2563eb">
-  <link rel="manifest" href="manifest.webmanifest?v=45.0.0">
-  <link rel="apple-touch-icon" href="icon-192.png?v=45.0.0">
+  <link rel="manifest" href="manifest.webmanifest?v=46.0.0">
+  <link rel="apple-touch-icon" href="icon-192.png?v=46.0.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=45.0.0">
+  <link rel="stylesheet" href="styles.css?v=46.0.0">
 </head>
 <body class="auth-pending">
   <div id="app-bootstrap" class="app-bootstrap" role="status" aria-live="polite">
     <div class="app-bootstrap-card">
-      <img src="logo-soften.png?v=45.0.0" alt="Logo Soften">
+      <img src="logo-soften.png?v=46.0.0" alt="Logo Soften">
       <div class="app-bootstrap-spinner" aria-hidden="true"></div>
       <strong>Carregando o painel...</strong>
       <span>Validando sua sessão com segurança.</span>
@@ -30,7 +30,7 @@
 
   <section id="login-view" class="login-view">
     <div class="login-visual">
-      <div class="brand-mark"><img src="logo-soften.png?v=45.0.0" alt="Logo Soften"></div>
+      <div class="brand-mark"><img src="logo-soften.png?v=46.0.0" alt="Logo Soften"></div>
       <div>
         <span class="eyebrow">CONTROLE INTERNO</span>
         <h1>Solicitações organizadas, prioridades visíveis.</h1>
@@ -46,7 +46,7 @@
     <div class="login-panel">
       <form id="login-form" class="auth-card" autocomplete="on">
         <div class="auth-header">
-          <span class="mobile-logo"><img src="logo-soften.png?v=45.0.0" alt="Logo Soften"></span>
+          <span class="mobile-logo"><img src="logo-soften.png?v=46.0.0" alt="Logo Soften"></span>
           <h2>Entrar no painel</h2>
           <p>Use o e-mail e a senha cadastrados pelo administrador.</p>
         </div>
@@ -69,6 +69,7 @@
           <button id="forgot-password" class="link-button" type="button">Esqueci minha senha</button>
         </div>
 
+        <div id="login-captcha" class="captcha-slot" hidden aria-label="Verificação de segurança"></div>
         <button id="login-button" class="button button-primary button-full" type="submit">
           <span>Entrar</span>
         </button>
@@ -77,7 +78,7 @@
 
       <form id="invite-registration-form" class="auth-card" autocomplete="on" hidden>
         <div class="auth-header">
-          <span class="mobile-logo"><img src="logo-soften.png?v=45.0.0" alt="Logo Soften"></span>
+          <span class="mobile-logo"><img src="logo-soften.png?v=46.0.0" alt="Logo Soften"></span>
           <span class="eyebrow">CONVITE DE ACESSO</span>
           <h2>Concluir cadastro</h2>
           <p>Confira seus dados e crie uma senha para acessar o painel.</p>
@@ -104,14 +105,16 @@
           <label class="field">
             <span>Crie uma senha</span>
             <div class="password-wrap">
-              <input id="invite-registration-password" type="password" minlength="6" autocomplete="new-password" placeholder="Mínimo de 6 caracteres" required>
+              <input id="invite-registration-password" type="password" minlength="10" autocomplete="new-password" placeholder="Mínimo de 10 caracteres" required>
               <button class="icon-button inside-input toggle-invite-password" type="button" aria-label="Mostrar senha">👁</button>
             </div>
+            <small class="password-policy-hint">Use maiúscula, minúscula, número e símbolo, sem espaços.</small>
           </label>
           <label class="field">
             <span>Confirme a senha</span>
-            <input id="invite-registration-confirm-password" type="password" minlength="6" autocomplete="new-password" placeholder="Digite novamente" required>
+            <input id="invite-registration-confirm-password" type="password" minlength="10" autocomplete="new-password" placeholder="Digite novamente" required>
           </label>
+          <div id="invite-captcha" class="captcha-slot" hidden aria-label="Verificação de segurança"></div>
           <button id="invite-registration-button" class="button button-primary button-full" type="submit">Criar acesso</button>
         </div>
         <p id="invite-registration-error" class="form-error" hidden></p>
@@ -123,7 +126,7 @@
   <div id="app-view" class="app-view" hidden>
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <div class="brand-mark small"><img src="logo-soften.png?v=45.0.0" alt="Logo Soften"></div>
+        <div class="brand-mark small"><img src="logo-soften.png?v=46.0.0" alt="Logo Soften"></div>
         <div>
           <strong>Painel</strong>
           <span>Solicitações</span>
@@ -268,7 +271,7 @@
 
       <header id="kanban-focus-header" class="kanban-focus-header" hidden>
         <div class="kanban-focus-title">
-          <img src="logo-soften.png?v=45.0.0" alt="Logo Soften">
+          <img src="logo-soften.png?v=46.0.0" alt="Logo Soften">
           <div><strong>Kanban de solicitações</strong><span>Visualização ampliada das etapas</span></div>
         </div>
         <button id="exit-kanban-focus-button" class="kanban-focus-exit" type="button" title="Voltar ao painel" aria-label="Voltar ao painel">✕ Voltar ao painel</button>
@@ -470,8 +473,10 @@
           <div class="topbar-actions"><button id="download-backup-button" class="button button-primary" type="button">↓ Baixar backup JSON</button><button id="refresh-access-logs-button" class="button button-secondary" type="button">↻ Atualizar</button></div>
         </header>
         <section class="security-grid">
-          <article class="report-card"><header><div><span class="eyebrow">SESSÃO</span><h2>Política de segurança</h2></div></header><div class="security-copy"><p><strong>Expiração por inatividade:</strong> 3 horas.</p><p>O painel avisa nos últimos 5 minutos e encerra a sessão se não houver atividade.</p><p>Administradores podem bloquear e desbloquear temporariamente usuários na tela Usuários.</p></div></article>
-          <article class="report-card"><header><div><span class="eyebrow">BACKUP</span><h2>Cópia dos dados</h2></div></header><div class="security-copy"><p>O backup inclui solicitações ativas e arquivadas, comentários, histórico, usuários, filtros, modelos e anexos.</p><p>Guarde o arquivo em local seguro. Ele pode conter informações de clientes.</p></div></article>
+          <article class="report-card"><header><div><span class="eyebrow">SESSÃO</span><h2>Política de segurança</h2></div></header><div class="security-copy"><p><strong>Expiração por inatividade:</strong> 3 horas.</p><p>O painel avisa nos últimos 5 minutos e encerra a sessão, limpa dados em memória e remove caches privados.</p><p>Ações administrativas sensíveis exigem uma nova confirmação de senha.</p></div></article>
+          <article class="report-card"><header><div><span class="eyebrow">MFA</span><h2>Autenticação em duas etapas</h2></div></header><div class="security-copy"><p id="mfa-status-text">Verificando o segundo fator desta conta...</p><div class="security-card-actions"><button id="configure-mfa-button" class="button button-primary" type="button">Configurar MFA</button><button id="remove-mfa-button" class="button button-secondary" type="button" hidden>Remover MFA</button></div><small>Ao ativar, o código do aplicativo autenticador será exigido nos próximos acessos.</small></div></article>
+          <article class="report-card"><header><div><span class="eyebrow">BACKUP</span><h2>Cópia protegida dos dados</h2></div></header><div class="security-copy"><p>O backup exige justificativa, confirmação de identidade e registra a ação no log.</p><p>O arquivo contém dados confidenciais de clientes e deve ser apagado após o uso, preferencialmente em até <strong id="backup-retention-days">7 dias</strong>.</p></div></article>
+          <article class="report-card"><header><div><span class="eyebrow">PROTEÇÃO AUTOMÁTICA</span><h2>Controles ativos</h2></div></header><div class="security-copy security-control-list"><p><span class="security-control-ok">✓</span> Bucket privado e arquivos validados pelo conteúdo.</p><p><span class="security-control-ok">✓</span> Imagens reprocessadas sem metadados originais.</p><p><span class="security-control-ok">✓</span> Política de senha forte no painel.</p><p id="captcha-status-line"><span class="security-control-info">i</span> CAPTCHA opcional ainda não configurado.</p></div></article>
           <article class="report-card report-card-wide"><header><div><span class="eyebrow">ACESSOS</span><h2>Log de acesso</h2></div></header><div class="report-table-wrap"><table class="report-table"><thead><tr><th>Data</th><th>Usuário</th><th>Evento</th><th>Dispositivo</th></tr></thead><tbody id="access-log-table"></tbody></table></div></article>
         </section>
       </section>
@@ -1200,6 +1205,50 @@
     </div>
   </dialog>
 
+  <dialog id="reauth-dialog" class="modal modal-small" data-sensitive-dialog="true">
+    <form id="reauth-form" method="dialog" class="modal-content">
+      <div class="modal-header"><div><span class="eyebrow">CONFIRMAÇÃO DE IDENTIDADE</span><h2>Confirme sua senha</h2></div><button class="icon-button close-reauth-modal" type="button" aria-label="Fechar">×</button></div>
+      <p id="reauth-reason" class="modal-help">Esta ação altera ou exporta informações sensíveis do painel.</p>
+      <label class="field"><span>Senha atual *</span><input id="reauth-password" type="password" autocomplete="current-password" required></label>
+      <div id="reauth-captcha" class="captcha-slot" hidden aria-label="Verificação de segurança"></div>
+      <p id="reauth-error" class="form-error" hidden></p>
+      <div class="modal-actions modal-actions-end"><button class="button button-secondary close-reauth-modal" type="button">Cancelar</button><button id="reauth-confirm-button" class="button button-primary" type="submit">Confirmar identidade</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="backup-dialog" class="modal modal-small">
+    <form id="backup-form" method="dialog" class="modal-content">
+      <div class="modal-header"><div><span class="eyebrow">DADOS CONFIDENCIAIS</span><h2>Gerar backup administrativo</h2></div><button class="icon-button close-backup-modal" type="button" aria-label="Fechar">×</button></div>
+      <p class="modal-help">Informe por que esta cópia é necessária. A justificativa e o usuário ficarão registrados no log de segurança.</p>
+      <label class="field"><span>Finalidade do backup *</span><textarea id="backup-purpose" rows="4" minlength="10" maxlength="300" placeholder="Ex.: cópia preventiva antes de uma atualização do painel" required></textarea><small>Não inclua senhas ou dados desnecessários na justificativa.</small></label>
+      <label class="check-row security-confirm-row"><input id="backup-acknowledgement" type="checkbox" required><span>Estou ciente de que o arquivo contém dados de clientes e deve ser guardado em local seguro e apagado após o uso.</span></label>
+      <div class="confirm-dialog-warning"><strong>Prazo recomendado: <span id="backup-dialog-retention-days">7 dias</span>.</strong><span>O arquivo não deve ser enviado por canais públicos ou mantido em computadores compartilhados.</span></div>
+      <p id="backup-error" class="form-error" hidden></p>
+      <div class="modal-actions modal-actions-end"><button class="button button-secondary close-backup-modal" type="button">Cancelar</button><button id="confirm-backup-button" class="button button-primary" type="submit">Confirmar e baixar</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="mfa-enrollment-dialog" class="modal modal-small">
+    <form id="mfa-enrollment-form" method="dialog" class="modal-content">
+      <div class="modal-header"><div><span class="eyebrow">SEGUNDO FATOR</span><h2>Configurar aplicativo autenticador</h2></div><button class="icon-button close-mfa-enrollment" type="button" aria-label="Fechar">×</button></div>
+      <p class="modal-help">Escaneie o QR Code no Google Authenticator, Microsoft Authenticator ou aplicativo compatível. Depois informe o código de seis dígitos.</p>
+      <div class="mfa-qr-wrap"><img id="mfa-qr-code" alt="QR Code para configurar autenticação em duas etapas"><code id="mfa-secret-code"></code></div>
+      <label class="field"><span>Código do aplicativo *</span><input id="mfa-enrollment-code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required></label>
+      <p id="mfa-enrollment-error" class="form-error" hidden></p>
+      <div class="modal-actions modal-actions-end"><button class="button button-secondary close-mfa-enrollment" type="button">Cancelar</button><button id="verify-mfa-enrollment-button" class="button button-primary" type="submit">Ativar MFA</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="mfa-challenge-dialog" class="modal modal-small" data-mfa-required="true">
+    <form id="mfa-challenge-form" method="dialog" class="modal-content">
+      <div class="modal-header"><div><span class="eyebrow">VERIFICAÇÃO EM DUAS ETAPAS</span><h2>Informe o código de segurança</h2></div></div>
+      <p class="modal-help">Abra o aplicativo autenticador vinculado a esta conta e digite o código atual.</p>
+      <label class="field"><span>Código de seis dígitos *</span><input id="mfa-challenge-code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required></label>
+      <p id="mfa-challenge-error" class="form-error" hidden></p>
+      <div class="modal-actions modal-actions-end"><button id="mfa-challenge-logout" class="button button-secondary" type="button">Sair</button><button id="verify-mfa-challenge-button" class="button button-primary" type="submit">Verificar</button></div>
+    </form>
+  </dialog>
+
   <dialog id="change-password-dialog" class="modal modal-small">
     <form id="change-password-form" method="dialog" class="modal-content">
       <div class="modal-header">
@@ -1213,11 +1262,13 @@
       </label>
       <label class="field">
         <span>Nova senha *</span>
-        <input id="new-password" type="password" minlength="6" autocomplete="new-password" required>
+        <input id="new-password" type="password" minlength="10" autocomplete="new-password" required>
+        <small class="password-policy-hint">Mínimo de 10 caracteres, com maiúscula, minúscula, número e símbolo.</small>
       </label>
+      <div id="change-password-captcha" class="captcha-slot" hidden aria-label="Verificação de segurança"></div>
       <label class="field">
         <span>Confirmar nova senha *</span>
-        <input id="confirm-new-password" type="password" minlength="6" autocomplete="new-password" required>
+        <input id="confirm-new-password" type="password" minlength="10" autocomplete="new-password" required>
       </label>
       <label class="check-row password-show-row">
         <input id="show-change-passwords" type="checkbox">
@@ -1242,6 +1293,7 @@
         <span>E-mail</span>
         <input id="reset-email" type="email" required>
       </label>
+      <div id="reset-captcha" class="captcha-slot" hidden aria-label="Verificação de segurança"></div>
       <p id="reset-error" class="form-error" hidden></p>
       <div class="modal-actions modal-actions-end">
         <button class="button button-secondary close-reset-modal" type="button">Cancelar</button>
@@ -1250,6 +1302,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=45.0.0"></script>
+  <script type="module" src="app.js?v=46.0.0"></script>
 </body>
 </html>

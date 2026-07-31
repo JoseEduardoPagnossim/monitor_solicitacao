@@ -1,6 +1,7 @@
 {
-  "release": "45",
+  "release": "46",
   "build": "local",
   "commit": "local",
-  "builtAt": null
+  "builtAt": null,
+  "version": "0.46.0"
 }

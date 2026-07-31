@@ -43,6 +43,7 @@ jobs:
             app.js
             supabase-compat.js
             supabase-config.js
+            security-config.js
             save-flow.js
             service-worker.js
             manifest.webmanifest

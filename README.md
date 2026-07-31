@@ -1,4 +1,4 @@
-# Painel de Solicitações — versão 45
+# Painel de Solicitações — versão 46
 
 Aplicação web interna para centralizar solicitações de **Programação**, **Cancelamento** e **TEF Elgin** em um Kanban com autenticação, permissões por Squad, comentários, histórico, notificações, indicadores, arquivamento, backup e recursos administrativos.
 
@@ -138,7 +138,7 @@ Ao atualizar versões, preserve o seu `supabase-config.js` já preenchido.
 5. O deploy ocorre apenas se os testes passarem.
 6. Após a publicação, atualize com `Ctrl + Shift + R`.
 
-A versão 45 não exige refazer a migração. Execute uma vez `supabase/security-hardening-v45.sql` no SQL Editor do Supabase. O patch v44 deve permanecer aplicado; não execute novamente o `schema.sql` completo.
+A versão 46 não exige refazer a migração. Como a v45 já foi aplicada, execute uma vez `supabase/security-hardening-v46.sql` no SQL Editor do Supabase. Não execute novamente o `schema.sql` completo.
 
 ## Testes automatizados
 
@@ -154,7 +154,7 @@ Ou:
 TESTAR.bat
 ```
 
-A versão 45 possui testes para:
+A versão 46 possui testes para:
 
 - arquivos obrigatórios;
 - sintaxe JavaScript;
@@ -171,6 +171,12 @@ A versão 45 possui testes para:
 - RPCs de histórico e notificações;
 - RLS reforçado para anexos, auditoria e notificações;
 - configuração do CodeQL e Dependabot.
+- autenticação em duas etapas e exigência de AAL2 para contas com MFA;
+- política forte de senha e integração opcional com Turnstile;
+- confirmação recente de identidade para ações administrativas;
+- integridade e retenção do backup;
+- validação da assinatura real dos anexos;
+- cache restrito aos arquivos públicos do aplicativo;
 
 Os testes automatizados não substituem a validação real do e-mail, do link de recuperação e das credenciais do projeto Supabase.
 
@@ -206,6 +212,28 @@ Durante a recuperação de senha, `Esc` não fecha a janela obrigatória.
 - Correções: `1.0.1`, `1.0.2`.
 - Melhorias menores: `1.1.0`, `1.2.0`.
 - Grandes evoluções: `2.0.0`, `3.0.0`.
+
+## Alteração da versão 46
+
+### Segurança complementar
+
+- adiciona política forte de senha para convites e redefinições;
+- oferece CAPTCHA Turnstile opcional;
+- permite MFA TOTP para administradores;
+- exige AAL2 no banco para contas que ativaram MFA;
+- exige confirmação recente de senha para backup e gestão de usuários;
+- classifica o backup, registra sua finalidade e inclui hash SHA-256;
+- valida o conteúdo real dos anexos e utiliza nomes internos aleatórios;
+- limita o service worker aos arquivos estáticos públicos;
+- limpa a sessão local durante o logout.
+
+Depois de publicar, execute uma única vez:
+
+```text
+supabase/security-hardening-v46.sql
+```
+
+As configurações e os testes manuais estão em `SEGURANCA_COMPLEMENTAR_V46.md`.
 
 ## Alteração da versão 45
 
