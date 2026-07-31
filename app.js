@@ -3562,7 +3562,6 @@ async function changeCurrentUserPassword(event) {
 
     if (recoveryMode) {
       els.loginEmail.value = recoveredEmail;
-      localStorage.setItem("painel-email", recoveredEmail);
       els.rememberEmail.checked = true;
       await secureSignOut({ log: false });
       showToast("Senha redefinida com sucesso. Entre novamente usando a nova senha.");
@@ -5110,11 +5109,6 @@ function setupEvents() {
         els.loginPassword.value,
         captchaToken
       );
-      if (els.rememberEmail.checked) {
-        localStorage.setItem("painel-email", els.loginEmail.value.trim());
-      } else {
-        localStorage.removeItem("painel-email");
-      }
     } catch (error) {
       console.error(error);
       showFormError(els.loginError, firebaseErrorMessage(error));
@@ -5609,11 +5603,6 @@ loadAppVersion();
 setupEvents();
 updateSecurityControlStatus();
 ensureCaptchaWidget("login");
-const rememberedEmail = localStorage.getItem("painel-email");
-if (rememberedEmail) {
-  els.loginEmail.value = rememberedEmail;
-  els.rememberEmail.checked = true;
-}
 if (!isConfigReady()) {
   showFormError(els.loginError, "Configure o arquivo supabase-config.js para conectar o painel ao Supabase.");
 }
