@@ -3,7 +3,7 @@
 export const securityConfig = {
   // Preencha somente depois de habilitar Cloudflare Turnstile no Supabase Auth.
   // Enquanto permanecer vazio, o CAPTCHA fica desativado e o painel funciona normalmente.
-  turnstileSiteKey: "",
+  turnstileSiteKey: "0x4AAAAAAEDDIpjnyfdUWFqQ",
 
   // Política aplicada pelo frontend. Configure os mesmos requisitos em
   // Supabase > Authentication > Password Security para impedir bypass pela API.
