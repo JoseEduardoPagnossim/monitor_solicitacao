@@ -198,6 +198,21 @@ as $$
   end;
 $$;
 
+create or replace function public.can_create_request_payload(p_data jsonb)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_user_active()
+    and public.safe_uuid(p_data->>'requesterUid') = auth.uid()
+    and coalesce(p_data->>'squad', '') = public.current_user_squad()
+    and coalesce(p_data->>'type', '') in ('programacao', 'cancelamento', 'tef_elgin')
+    and coalesce(p_data->>'status', '') = 'nova'
+    and coalesce(p_data->>'assigneeUid', '') = '';
+$$;
+
 create or replace function public.can_view_request(p_request_id text)
 returns boolean
 language sql
@@ -477,13 +492,12 @@ WITH CHECK (
     public.current_user_is_admin()
     OR (
       collection_name = 'requests'
-      AND requester_uid = auth.uid()
-      AND squad = public.current_user_squad()
-      AND document_type IN ('programacao', 'cancelamento', 'tef_elgin')
-      AND status = 'nova'
-      AND assignee_uid IS NULL
+      AND public.can_create_request_payload(data)
     )
-    OR (collection_name = 'requestAttachments' AND owner_uid = auth.uid())
+    OR (
+      collection_name = 'requestAttachments'
+      AND public.safe_uuid(data->>'ownerUid') = auth.uid()
+    )
     OR (collection_name IN ('requestComments', 'requestHistory') AND public.can_edit_request(request_id))
     OR (collection_name = 'notifications' AND created_by_uid = auth.uid())
     OR (collection_name = 'savedFilters' AND owner_uid = auth.uid())

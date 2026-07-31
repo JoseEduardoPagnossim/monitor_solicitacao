@@ -550,31 +550,71 @@ async function uploadAttachment(reference, encodedData) {
   return copy;
 }
 
-async function setDocument(reference, data, { merge = false } = {}) {
+function isDuplicateKeyError(error) {
+  return String(error?.code || "") === "23505"
+    || String(error?.message || "").toLowerCase().includes("duplicate key");
+}
+
+async function insertOrUpdateRow(client, table, payload, match, operation = "set") {
+  if (operation === "update") {
+    let request = client.from(table).update(payload);
+    Object.entries(match).forEach(([column, value]) => { request = request.eq(column, value); });
+    const { error } = await request;
+    if (error) throw normalizeDatabaseError(error);
+    return;
+  }
+
+  const { error: insertError } = await client.from(table).insert(payload);
+  if (!insertError) return;
+  if (!isDuplicateKeyError(insertError)) throw normalizeDatabaseError(insertError);
+
+  let request = client.from(table).update(payload);
+  Object.entries(match).forEach(([column, value]) => { request = request.eq(column, value); });
+  const { error: updateError } = await request;
+  if (updateError) throw normalizeDatabaseError(updateError);
+}
+
+async function setDocument(reference, data, { merge = false, operation = "set" } = {}) {
   const previous = merge ? await currentDocumentData(reference) : {};
   let encoded = encodeValue(data, previous);
   if (merge) encoded = { ...encodeValue(previous), ...encoded };
 
   if (reference.collection === "users") {
-    const { error } = await reference.db.client.from(TABLE_PROFILES).upsert(profilePayload(reference.id, encoded));
-    if (error) throw normalizeDatabaseError(error);
+    await insertOrUpdateRow(
+      reference.db.client,
+      TABLE_PROFILES,
+      profilePayload(reference.id, encoded),
+      { id: reference.id },
+      operation
+    );
     return;
   }
 
   if (reference.collection === "userInvites") {
-    const { error } = await reference.db.client.from(TABLE_INVITES).upsert(invitePayload(reference.id, encoded));
-    if (error) throw normalizeDatabaseError(error);
+    await insertOrUpdateRow(
+      reference.db.client,
+      TABLE_INVITES,
+      invitePayload(reference.id, encoded),
+      { token: reference.id },
+      operation
+    );
     return;
   }
 
   if (reference.collection === "requestAttachments") encoded = await uploadAttachment(reference, encoded);
-  const { error } = await reference.db.client.from(TABLE_DOCUMENTS).upsert({
+  const payload = {
     collection_name: reference.collection,
     id: reference.id,
     data: encoded,
     updated_at: new Date().toISOString()
-  });
-  if (error) throw normalizeDatabaseError(error);
+  };
+  await insertOrUpdateRow(
+    reference.db.client,
+    TABLE_DOCUMENTS,
+    payload,
+    { collection_name: reference.collection, id: reference.id },
+    operation
+  );
 }
 
 export async function setDoc(reference, data, options = {}) {
@@ -589,7 +629,7 @@ export async function updateDoc(reference, updates) {
     throw error;
   }
   const encodedUpdates = encodeValue(updates, previous);
-  return setDocument(reference, { ...previous, ...encodedUpdates });
+  return setDocument(reference, { ...previous, ...encodedUpdates }, { operation: "update" });
 }
 
 export async function deleteDoc(reference) {

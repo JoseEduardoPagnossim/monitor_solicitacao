@@ -1,4 +1,4 @@
-# Painel de Solicitações — versão 43
+# Painel de Solicitações — versão 44
 
 Aplicação web interna para centralizar solicitações de **Programação**, **Cancelamento** e **TEF Elgin** em um Kanban com autenticação, permissões por Squad, comentários, histórico, notificações, indicadores, arquivamento, backup e recursos administrativos.
 
@@ -138,7 +138,7 @@ Ao atualizar versões, preserve o seu `supabase-config.js` já preenchido.
 5. O deploy ocorre apenas se os testes passarem.
 6. Após a publicação, atualize com `Ctrl + Shift + R`.
 
-A versão 43 não exige executar novamente `schema.sql`, refazer a migração ou alterar políticas RLS.
+A versão 44 não exige refazer a migração. Para corrigir a permissão de gravação dos solicitantes, execute uma vez `supabase/fix-request-save-v44.sql` no SQL Editor do Supabase.
 
 ## Testes automatizados
 
@@ -154,7 +154,7 @@ Ou:
 TESTAR.bat
 ```
 
-A versão 43 possui testes para:
+A versão 44 possui testes para:
 
 - arquivos obrigatórios;
 - sintaxe JavaScript;
@@ -202,7 +202,20 @@ Durante a recuperação de senha, `Esc` não fecha a janela obrigatória.
 - Melhorias menores: `1.1.0`, `1.2.0`.
 - Grandes evoluções: `2.0.0`, `3.0.0`.
 
-## Alteração da versão 43
+## Alteração da versão 44
+
+### Correção de gravação dos solicitantes
+
+A versão 44 corrige a criação e a edição de solicitações por perfis `solicitante` migrados do Firebase. A camada de compatibilidade deixou de usar `upsert` genérico para todas as gravações e passou a separar explicitamente inclusões e atualizações. Isso evita que uma inclusão nova seja avaliada como atualização pelas políticas RLS.
+
+Depois de publicar os arquivos, execute uma única vez no SQL Editor do Supabase:
+
+```text
+supabase/fix-request-save-v44.sql
+```
+
+O patch mantém as regras por Squad e valida diretamente no conteúdo enviado que o solicitante está criando a demanda com o próprio usuário e o próprio grupo.
+
 
 - Corrige o redirecionamento do link de recuperação.
 - Reconhece o evento oficial `PASSWORD_RECOVERY` do Supabase.

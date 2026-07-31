@@ -1,21 +1,15 @@
-PAINEL DE SOLICITAÇÕES — VERSÃO 43
+PAINEL DE SOLICITAÇÕES — VERSÃO 44
 
-CORREÇÃO DA RECUPERAÇÃO DE SENHA NO SUPABASE
-
-- o link recebido por e-mail agora abre diretamente a tela Criar nova senha;
-- a recuperação não solicita a senha anterior;
-- o usuário informa somente a nova senha e a confirmação;
-- após salvar, a sessão temporária de recuperação é encerrada;
-- o usuário volta ao login e entra com a nova senha;
-- a janela obrigatória não fecha pelo fundo, pelo Esc ou pelo botão cancelar.
+CORREÇÃO PRINCIPAL
+- Solicitantes migrados do Firebase voltam a criar e editar solicitações.
+- Inclusões e atualizações agora usam operações separadas no Supabase.
+- A política RLS de inclusão valida diretamente o usuário e o Squad enviados.
 
 ATUALIZAÇÃO
+1. Preserve o seu arquivo supabase-config.js já preenchido.
+2. Substitua os demais arquivos do projeto pelos arquivos desta versão.
+3. No Supabase, abra SQL Editor > New query.
+4. Cole todo o conteúdo de supabase/fix-request-save-v44.sql e clique em Run.
+5. Aguarde o GitHub Actions concluir e atualize com Ctrl + Shift + R.
 
-1. Preserve o seu supabase-config.js já preenchido.
-2. Substitua os demais arquivos do projeto pelos arquivos da versão 43.
-3. Não é necessário executar novamente schema.sql nem refazer a migração.
-4. Aguarde o GitHub Actions concluir.
-5. Atualize com Ctrl + Shift + R.
-6. Teste o fluxo Esqueci minha senha em uma janela anônima.
-
-Nenhuma alteração de banco, RLS ou Storage foi necessária.
+Não refaça a migração e não execute novamente o schema completo.

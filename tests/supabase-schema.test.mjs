@@ -56,8 +56,9 @@ test("convite não permite escolher perfil ou Squad diferente do autorizado", ()
 });
 
 test("solicitante cria pedido somente como nova solicitação do próprio Squad", () => {
-  assert.match(sql, /requester_uid = auth\.uid\(\)/i);
-  assert.match(sql, /squad = public\.current_user_squad\(\)/i);
-  assert.match(sql, /status = 'nova'/i);
-  assert.match(sql, /assignee_uid IS NULL/i);
+  assert.match(sql, /function public\.can_create_request_payload/i);
+  assert.match(sql, /safe_uuid\(p_data->>'requesterUid'\) = auth\.uid\(\)/i);
+  assert.match(sql, /p_data->>'squad'.*public\.current_user_squad\(\)/is);
+  assert.match(sql, /p_data->>'status'.*'nova'/is);
+  assert.match(sql, /p_data->>'assigneeUid'.*= ''/is);
 });

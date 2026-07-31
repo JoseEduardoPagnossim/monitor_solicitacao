@@ -34,12 +34,12 @@ test("versão está sincronizada nos arquivos principais", async () => {
     read("VERSION"), read("index.html"), read("service-worker.js"), read("version.json"), read("package.json")
   ]);
   const release = version.trim();
-  assert.equal(release, "43");
+  assert.equal(release, "44");
   assert.match(html, new RegExp(`app\\.js\\?v=${release}\\.0\\.0`));
   assert.match(html, new RegExp(`styles\\.css\\?v=${release}\\.0\\.0`));
   assert.match(serviceWorker, new RegExp(`painel-solicitacoes-v${release}`));
   assert.equal(JSON.parse(versionJson).release, release);
-  assert.equal(JSON.parse(packageJson).version, "0.43.0");
+  assert.equal(JSON.parse(packageJson).version, "0.44.0");
 });
 
 test("frontend usa Supabase e não carrega SDK do Firebase", async () => {
@@ -102,4 +102,20 @@ test("migração pode criar usuários ausentes sem expor senha temporária", asy
   assert.doesNotMatch(common, /console\.log\([^\n]*temporaryPassword/);
   assert.match(packageJson.scripts["migrate:firebase:create-users"], /--create-missing-users/);
   assert.match(packageJson.scripts["import:backup:create-users"], /--create-missing-users/);
+});
+
+test("gravações separam inclusão e atualização para funcionar com RLS", async () => {
+  const compat = await read("supabase-compat.js");
+  assert.match(compat, /insertOrUpdateRow/);
+  assert.match(compat, /\.from\(table\)\.insert\(payload\)/);
+  assert.match(compat, /operation === "update"/);
+  assert.doesNotMatch(compat, /from\(TABLE_DOCUMENTS\)\.upsert/);
+});
+
+test("patch v44 libera inclusão segura para o próprio solicitante e squad", async () => {
+  const patch = await read("supabase/fix-request-save-v44.sql");
+  assert.match(patch, /can_create_request_payload/);
+  assert.match(patch, /safe_uuid\(p_data->>'requesterUid'\) = auth\.uid\(\)/);
+  assert.match(patch, /p_data->>'squad'.*current_user_squad/s);
+  assert.match(patch, /drop policy if exists documents_insert/);
 });

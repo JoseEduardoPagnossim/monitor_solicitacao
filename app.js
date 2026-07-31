@@ -4413,7 +4413,7 @@ async function downloadBackup() {
         throw wrappedError;
       }
     }
-    const backup = { generatedAt: new Date().toISOString(), version: "43", backend: "supabase", projectUrl: supabaseConfig.url, data };
+    const backup = { generatedAt: new Date().toISOString(), version: "44", backend: "supabase", projectUrl: supabaseConfig.url, data };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a"); link.href = url; link.download = `painel-solicitacoes-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(url);
@@ -4998,7 +4998,7 @@ async function loadAppVersion() {
     if (!response.ok) throw new Error("version-file-unavailable");
 
     const info = await response.json();
-    const release = String(info.release || "43").replace(/^v/i, "");
+    const release = String(info.release || "44").replace(/^v/i, "");
     const isLocal = !info.build || String(info.build).toLowerCase() === "local";
     const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
 
@@ -5033,7 +5033,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v43";
+    versionLabel.textContent = "v44";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }
