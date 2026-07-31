@@ -579,6 +579,33 @@ async function setDocument(reference, data, { merge = false, operation = "set" }
   let encoded = encodeValue(data, previous);
   if (merge) encoded = { ...encodeValue(previous), ...encoded };
 
+  if (reference.collection === "requestHistory" && operation !== "update") {
+    const { error } = await reference.db.client.rpc("create_request_history", {
+      p_id: reference.id,
+      p_request_id: String(encoded.requestId || ""),
+      p_request_title: String(encoded.requestTitle || ""),
+      p_request_type: String(encoded.requestType || "programacao"),
+      p_action: String(encoded.action || "update"),
+      p_summary: String(encoded.summary || ""),
+      p_details: encoded.details && typeof encoded.details === "object" ? encoded.details : {}
+    });
+    if (error) throw normalizeDatabaseError(error);
+    return;
+  }
+
+  if (reference.collection === "notifications" && operation !== "update") {
+    const { error } = await reference.db.client.rpc("create_request_notification", {
+      p_id: reference.id,
+      p_request_id: String(encoded.requestId || ""),
+      p_target_uid: encoded.targetUid || null,
+      p_request_title: String(encoded.requestTitle || ""),
+      p_message: String(encoded.message || ""),
+      p_type: String(encoded.type || "system")
+    });
+    if (error) throw normalizeDatabaseError(error);
+    return;
+  }
+
   if (reference.collection === "users") {
     await insertOrUpdateRow(
       reference.db.client,

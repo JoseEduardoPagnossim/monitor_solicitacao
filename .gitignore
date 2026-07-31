@@ -1,8 +1,33 @@
+# Dependências e artefatos locais
 node_modules/
 _site/
-migration-report.json
-firebase-service-account*.json
-*serviceAccount*.json
+coverage/
+*.log
+
+# Credenciais e variáveis privadas
 .env
 .env.*
 !.env.example
+firebase-service-account*.json
+*firebase*service*account*.json
+*serviceAccount*.json
+*.pem
+*.p12
+*.pfx
+*.key
+
+# Relatórios e backups com dados pessoais
+migration-report*.json
+painel-solicitacoes-backup-*.json
+backup-*.json
+*.backup.json
+
+# Pacotes e arquivos temporários
+*.zip
+*.7z
+*.rar
+.DS_Store
+Thumbs.db
+
+# supabase-config.js é público por projeto: somente URL e sb_publishable_.
+# Nunca inclua sb_secret_, service_role, senha SMTP ou senha do banco.

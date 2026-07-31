@@ -13,7 +13,7 @@ test("arquivos obrigatórios da publicação e migração existem", async () => 
   const files = [
     "index.html", "styles.css", "app.js", "supabase-compat.js", "supabase-config.js",
     "save-flow.js", "service-worker.js", "manifest.webmanifest", "VERSION", "version.json",
-    "README.md", "MIGRACAO_SUPABASE.md", "supabase/schema.sql", "supabase/bootstrap-admin.sql",
+    "README.md", "MIGRACAO_SUPABASE.md", "SECURITY.md", "SEGURANCA_URGENTE.md", "supabase/schema.sql", "supabase/bootstrap-admin.sql", "supabase/security-hardening-v45.sql",
     "scripts/migrate-firestore-to-supabase.mjs", "scripts/import-backup-to-supabase.mjs"
   ];
   await Promise.all(files.map((file) => access(path.join(root, file), fsConstants.R_OK)));
@@ -30,16 +30,18 @@ test("JavaScript publicado e scripts de migração possuem sintaxe válida", () 
 });
 
 test("versão está sincronizada nos arquivos principais", async () => {
-  const [version, html, serviceWorker, versionJson, packageJson] = await Promise.all([
-    read("VERSION"), read("index.html"), read("service-worker.js"), read("version.json"), read("package.json")
+  const [version, html, serviceWorker, versionJson, packageJson, packageLock] = await Promise.all([
+    read("VERSION"), read("index.html"), read("service-worker.js"), read("version.json"), read("package.json"), read("package-lock.json")
   ]);
   const release = version.trim();
-  assert.equal(release, "44");
+  assert.equal(release, "45");
   assert.match(html, new RegExp(`app\\.js\\?v=${release}\\.0\\.0`));
   assert.match(html, new RegExp(`styles\\.css\\?v=${release}\\.0\\.0`));
   assert.match(serviceWorker, new RegExp(`painel-solicitacoes-v${release}`));
   assert.equal(JSON.parse(versionJson).release, release);
-  assert.equal(JSON.parse(packageJson).version, "0.44.0");
+  assert.equal(JSON.parse(packageJson).version, "0.45.0");
+  assert.equal(JSON.parse(packageLock).version, "0.45.0");
+  assert.equal(JSON.parse(packageLock).packages[""].version, "0.45.0");
 });
 
 test("frontend usa Supabase e não carrega SDK do Firebase", async () => {
@@ -88,9 +90,10 @@ test("workflow testa antes do deploy e não publica arquivos administrativos", a
   assert.match(workflow, /actions\/setup-node@v6/);
   assert.match(workflow, /run: npm test/);
   assert.match(workflow, /needs: build/);
-  assert.match(workflow, /--exclude='scripts'/);
-  assert.match(workflow, /--exclude='supabase'/);
-  assert.match(workflow, /--exclude='firestore\.rules'/);
+  assert.match(workflow, /PUBLIC_FILES=\(/);
+  assert.match(workflow, /supabase-config\.js/);
+  assert.doesNotMatch(workflow, /cp[^\n]*(migration-report|firebase-service-account|node_modules)/i);
+  assert.doesNotMatch(workflow, /rsync -av/);
 });
 
 
@@ -118,4 +121,31 @@ test("patch v44 libera inclusão segura para o próprio solicitante e squad", as
   assert.match(patch, /safe_uuid\(p_data->>'requesterUid'\) = auth\.uid\(\)/);
   assert.match(patch, /p_data->>'squad'.*current_user_squad/s);
   assert.match(patch, /drop policy if exists documents_insert/);
+});
+
+
+test("patch v45 endurece auditoria, notificações e anexos", async () => {
+  const [patch, compat] = await Promise.all([
+    read("supabase/security-hardening-v45.sql"),
+    read("supabase-compat.js")
+  ]);
+  assert.match(patch, /can_notify_request_target/i);
+  assert.match(patch, /secure_document_insert_fields/i);
+  assert.match(patch, /create_request_history/i);
+  assert.match(patch, /create_request_notification/i);
+  assert.match(patch, /can_edit_request\(request_id\)/i);
+  assert.match(patch, /split_part\(name, '\/', 2\)/i);
+  assert.match(compat, /rpc\("create_request_history"/);
+  assert.match(compat, /rpc\("create_request_notification"/);
+});
+
+test("GitHub possui análise CodeQL e atualização de dependências", async () => {
+  const [codeql, dependabot] = await Promise.all([
+    read(".github/workflows/codeql.yml"),
+    read(".github/dependabot.yml")
+  ]);
+  assert.match(codeql, /github\/codeql-action\/init@v3/);
+  assert.match(codeql, /github\/codeql-action\/analyze@v3/);
+  assert.match(dependabot, /package-ecosystem: npm/);
+  assert.match(dependabot, /package-ecosystem: github-actions/);
 });

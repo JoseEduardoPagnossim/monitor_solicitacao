@@ -62,3 +62,17 @@ test("solicitante cria pedido somente como nova solicitação do próprio Squad"
   assert.match(sql, /p_data->>'status'.*'nova'/is);
   assert.match(sql, /p_data->>'assigneeUid'.*= ''/is);
 });
+
+test("v45 protege autoria e destinos de notificação no banco", () => {
+  assert.match(sql, /function public\.secure_document_insert_fields/i);
+  assert.match(sql, /'actorUid', v_uid::text/i);
+  assert.match(sql, /'authorUid', v_uid::text/i);
+  assert.match(sql, /function public\.can_notify_request_target/i);
+  assert.match(sql, /p_target_uid in \(d\.requester_uid, d\.assignee_uid\)/i);
+  assert.match(sql, /function public\.protect_document_updates/i);
+});
+
+test("v45 vincula metadados e caminhos de anexos a solicitações editáveis", () => {
+  assert.match(sql, /collection_name = 'requestAttachments'[\s\S]*can_edit_request\(request_id\)/i);
+  assert.match(sql, /split_part\(name, '\/', 2\)[\s\S]*can_edit_request/i);
+});

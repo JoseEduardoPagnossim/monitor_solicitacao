@@ -34,22 +34,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          rm -rf _site
           mkdir -p _site
-          rsync -av \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='_site' \
-            --exclude='tests' \
-            --exclude='scripts' \
-            --exclude='supabase' \
-            --exclude='firestore.rules' \
-            --exclude='package.json' \
-            --exclude='package-lock.json' \
-            --exclude='TESTAR.bat' \
-            --exclude='TESTAR.sh' \
-            --exclude='ATUALIZAR.txt' \
-            --exclude='MIGRACAO_SUPABASE.md' \
-            ./ _site/
+
+          PUBLIC_FILES=(
+            index.html
+            styles.css
+            app.js
+            supabase-compat.js
+            supabase-config.js
+            save-flow.js
+            service-worker.js
+            manifest.webmanifest
+            logo-soften.png
+            favicon.png
+            icon-192.png
+            icon-512.png
+          )
+
+          for file in "${PUBLIC_FILES[@]}"; do
+            test -f "$file"
+            cp "$file" _site/
+          done
 
           RELEASE="$(tr -d '[:space:]' < VERSION)"
           SHORT_SHA="${GITHUB_SHA::7}"

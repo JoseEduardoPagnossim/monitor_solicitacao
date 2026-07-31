@@ -840,8 +840,6 @@ async function openStoredAttachment(attachment, button = null) {
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = objectUrl;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
     link.download = stored.name || attachment.name || "anexo";
     document.body.appendChild(link);
     link.click();
@@ -871,10 +869,11 @@ function renderAttachmentList() {
   }
 
   const existingHtml = retainedExisting.map((attachment, index) => {
+    const safeExternalUrl = normalizeUrl(attachment.url);
     const openControl = attachment.storage === "firestore" && attachment.id
       ? `<button class="attachment-open-link" type="button" data-attachment-id="${escapeHtml(attachment.id)}">${escapeHtml(attachment.name)}</button>`
-      : attachment.url
-        ? `<a href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(attachment.name)}</a>`
+      : safeExternalUrl
+        ? `<a href="${escapeHtml(safeExternalUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(attachment.name)}</a>`
         : `<strong>${escapeHtml(attachment.name)}</strong>`;
     return `
       <div class="attachment-item">
@@ -1563,11 +1562,11 @@ function cardHtml(item, isOldest) {
       ${cardDescriptionHtml}
       <footer class="card-footer">
         <div class="card-person" title="Solicitado por ${escapeHtml(item.requesterName || item.requesterEmail || "")}">
-          <span class="mini-avatar">${initials(item.requesterName || item.requesterEmail)}</span>
+          <span class="mini-avatar">${escapeHtml(initials(item.requesterName || item.requesterEmail))}</span>
           <span>${escapeHtml(item.requesterName || item.requesterEmail || "Usuário")}</span>
         </div>
         <div class="card-actions">
-          ${videoLink && item.type === "programacao" ? `<a class="card-link" href="${escapeHtml(videoLink)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Ver vídeo ↗</a>` : ""}
+          ${videoLink && item.type === "programacao" ? `<a class="card-link" href="${escapeHtml(videoLink)}" target="_blank" rel="noopener noreferrer" >Ver vídeo ↗</a>` : ""}
           ${copyButton}
         </div>
       </footer>
@@ -1679,6 +1678,11 @@ function bindCardEvents() {
         state.draggedId = null;
       });
     }
+  });
+
+  $$(".card-link").forEach((link) => {
+    link.addEventListener("click", (event) => event.stopPropagation());
+    link.addEventListener("keydown", (event) => event.stopPropagation());
   });
 
   $$(".card-copy-button").forEach((button) => {
@@ -2603,12 +2607,9 @@ async function saveRequest(event) {
 
     const commitRequestChanges = async () => {
       const batch = writeBatch(db);
-      pendingAttachmentWrites.forEach((write) => batch.set(write.reference, write.data));
-      attachmentsToRemove.forEach((attachment) => {
-        const reference = firestoreAttachmentReference(attachment);
-        if (reference) batch.delete(reference);
-      });
 
+      // A solicitação precisa existir antes do upload. As políticas do Storage
+      // validam o requestId do caminho e recusam anexos órfãos.
       if (id && existing) {
         batch.update(requestDocument, payload);
       } else {
@@ -2627,6 +2628,12 @@ async function saveRequest(event) {
           lastStatusChangedAt: serverTimestamp()
         });
       }
+
+      pendingAttachmentWrites.forEach((write) => batch.set(write.reference, write.data));
+      attachmentsToRemove.forEach((attachment) => {
+        const reference = firestoreAttachmentReference(attachment);
+        if (reference) batch.delete(reference);
+      });
 
       return batch.commit();
     };
@@ -4413,7 +4420,7 @@ async function downloadBackup() {
         throw wrappedError;
       }
     }
-    const backup = { generatedAt: new Date().toISOString(), version: "44", backend: "supabase", projectUrl: supabaseConfig.url, data };
+    const backup = { generatedAt: new Date().toISOString(), version: "45", backend: "supabase", projectUrl: supabaseConfig.url, data };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a"); link.href = url; link.download = `painel-solicitacoes-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(url);
@@ -4998,7 +5005,7 @@ async function loadAppVersion() {
     if (!response.ok) throw new Error("version-file-unavailable");
 
     const info = await response.json();
-    const release = String(info.release || "44").replace(/^v/i, "");
+    const release = String(info.release || "45").replace(/^v/i, "");
     const isLocal = !info.build || String(info.build).toLowerCase() === "local";
     const commit = info.commit && info.commit !== "local" ? String(info.commit).slice(0, 7) : "";
 
@@ -5033,7 +5040,7 @@ async function loadAppVersion() {
     ].filter(Boolean).join("\n");
   } catch (error) {
     console.warn("Não foi possível carregar os dados da versão.", error);
-    versionLabel.textContent = "v44";
+    versionLabel.textContent = "v45";
     detailsLabel.textContent = "Versão local";
     card.title = "Informações da versão indisponíveis";
   }

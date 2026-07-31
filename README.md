@@ -1,4 +1,4 @@
-# Painel de Solicitações — versão 44
+# Painel de Solicitações — versão 45
 
 Aplicação web interna para centralizar solicitações de **Programação**, **Cancelamento** e **TEF Elgin** em um Kanban com autenticação, permissões por Squad, comentários, histórico, notificações, indicadores, arquivamento, backup e recursos administrativos.
 
@@ -138,7 +138,7 @@ Ao atualizar versões, preserve o seu `supabase-config.js` já preenchido.
 5. O deploy ocorre apenas se os testes passarem.
 6. Após a publicação, atualize com `Ctrl + Shift + R`.
 
-A versão 44 não exige refazer a migração. Para corrigir a permissão de gravação dos solicitantes, execute uma vez `supabase/fix-request-save-v44.sql` no SQL Editor do Supabase.
+A versão 45 não exige refazer a migração. Execute uma vez `supabase/security-hardening-v45.sql` no SQL Editor do Supabase. O patch v44 deve permanecer aplicado; não execute novamente o `schema.sql` completo.
 
 ## Testes automatizados
 
@@ -154,7 +154,7 @@ Ou:
 TESTAR.bat
 ```
 
-A versão 44 possui testes para:
+A versão 45 possui testes para:
 
 - arquivos obrigatórios;
 - sintaxe JavaScript;
@@ -165,7 +165,12 @@ A versão 44 possui testes para:
 - evento `PASSWORD_RECOVERY`;
 - abertura da tela específica de nova senha;
 - atualização sem exigir senha anterior;
-- bloqueio do fechamento acidental da recuperação.
+- bloqueio do fechamento acidental da recuperação;
+- Content Security Policy e ausência de eventos inline;
+- ausência de credenciais e arquivos privados;
+- RPCs de histórico e notificações;
+- RLS reforçado para anexos, auditoria e notificações;
+- configuração do CodeQL e Dependabot.
 
 Os testes automatizados não substituem a validação real do e-mail, do link de recuperação e das credenciais do projeto Supabase.
 
@@ -202,24 +207,27 @@ Durante a recuperação de senha, `Esc` não fecha a janela obrigatória.
 - Melhorias menores: `1.1.0`, `1.2.0`.
 - Grandes evoluções: `2.0.0`, `3.0.0`.
 
-## Alteração da versão 44
+## Alteração da versão 45
 
-### Correção de gravação dos solicitantes
+### Endurecimento urgente de segurança
 
-A versão 44 corrige a criação e a edição de solicitações por perfis `solicitante` migrados do Firebase. A camada de compatibilidade deixou de usar `upsert` genérico para todas as gravações e passou a separar explicitamente inclusões e atualizações. Isso evita que uma inclusão nova seja avaliada como atualização pelas políticas RLS.
+- valida a solicitação associada ao metadado e ao caminho de cada anexo;
+- define autores de auditoria no banco usando o usuário autenticado;
+- cria histórico e notificações por RPCs controladas;
+- restringe notificações aos participantes da demanda;
+- impede alteração do conteúdo de notificações pelo destinatário;
+- adiciona CSP e remove eventos JavaScript inline;
+- adiciona CodeQL, Dependabot e testes de vazamento de segredos;
+- amplia o `.gitignore` para relatórios, backups e credenciais.
 
-Depois de publicar os arquivos, execute uma única vez no SQL Editor do Supabase:
+Depois de publicar, execute uma única vez:
 
 ```text
-supabase/fix-request-save-v44.sql
+supabase/security-hardening-v45.sql
 ```
 
-O patch mantém as regras por Squad e valida diretamente no conteúdo enviado que o solicitante está criando a demanda com o próprio usuário e o próprio grupo.
+Não refaça a migração e não execute novamente o `schema.sql` completo. A auditoria detalhada está em `SEGURANCA_URGENTE.md`.
 
+## Correção mantida da versão 44
 
-- Corrige o redirecionamento do link de recuperação.
-- Reconhece o evento oficial `PASSWORD_RECOVERY` do Supabase.
-- Abre a tela **Criar nova senha** sem solicitar a senha anterior.
-- Encerra a sessão temporária após a atualização.
-- Adiciona testes de regressão específicos para recuperação de senha.
-- Atualiza cache da PWA e controle de versão.
+A separação entre `insert` e `update` para perfis solicitantes permanece ativa. O arquivo `supabase/fix-request-save-v44.sql` é mantido apenas como histórico de atualização.
