@@ -4,6 +4,50 @@ export const LEGACY_PROJECT_IDS = Object.freeze({
   tef_elgin: "tef_elgin"
 });
 
+const LEGACY_PROJECT_NAME_ALIASES = Object.freeze({
+  programacao: "programacao",
+  cancelamento: "cancelamento",
+  tef_elgin: "tef_elgin"
+});
+
+function normalizeProjectLookupValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function canonicalLegacyProjectId(value) {
+  const normalized = normalizeProjectLookupValue(value);
+  return Object.prototype.hasOwnProperty.call(LEGACY_PROJECT_IDS, normalized)
+    ? LEGACY_PROJECT_IDS[normalized]
+    : LEGACY_PROJECT_NAME_ALIASES[normalized] || "";
+}
+
+export function resolveCanonicalProjectId(raw = {}) {
+  const source = typeof raw === "string" ? { id: raw } : (raw || {});
+  const documentId = String(source.documentId || "").trim();
+  const storedId = String(source.id || "").trim();
+
+  for (const candidate of [documentId, storedId, source.legacyType, source.name]) {
+    const canonical = canonicalLegacyProjectId(candidate);
+    if (canonical) return canonical;
+  }
+
+  return documentId || storedId || slugifyIdentifier(source.name, "project");
+}
+
+export function resolveProjectLegacyType(projectOrId = {}) {
+  const source = typeof projectOrId === "string" ? { id: projectOrId } : (projectOrId || {});
+  const canonicalId = resolveCanonicalProjectId(source);
+  if (Object.prototype.hasOwnProperty.call(LEGACY_PROJECT_IDS, canonicalId)) return canonicalId;
+  return ["programacao", "cancelamento", "tef_elgin"].includes(source.legacyType)
+    ? source.legacyType
+    : "custom";
+}
+
 export const DEFAULT_PROJECTS = Object.freeze([
   {
     id: "programacao",
@@ -70,28 +114,38 @@ export function slugifyIdentifier(value, prefix = "item") {
 }
 
 export function normalizeProject(raw = {}) {
-  const id = String(raw.id || slugifyIdentifier(raw.name, "project"));
-  const canonicalLegacyType = Object.prototype.hasOwnProperty.call(LEGACY_PROJECT_IDS, id)
-    ? LEGACY_PROJECT_IDS[id]
-    : "";
-  const explicitLegacyType = ["programacao", "cancelamento", "tef_elgin"].includes(raw.legacyType)
-    ? raw.legacyType
-    : "";
-  const project = {
+  const id = resolveCanonicalProjectId(raw);
+  const defaultProject = DEFAULT_PROJECTS.find((project) => project.id === id) || null;
+  const isNativeProject = Boolean(defaultProject);
+
+  return {
     id,
-    name: String(raw.name || "Projeto sem nome").trim().slice(0, 100),
-    description: String(raw.description || "").trim().slice(0, 500),
-    audience: ["admin", "solicitante", "all"].includes(raw.audience) ? raw.audience : "all",
-    status: ["draft", "published", "archived"].includes(raw.status) ? raw.status : "published",
+    name: isNativeProject
+      ? defaultProject.name
+      : String(raw.name || "Projeto sem nome").trim().slice(0, 100),
+    description: isNativeProject
+      ? defaultProject.description
+      : String(raw.description || "").trim().slice(0, 500),
+    audience: ["admin", "solicitante", "all"].includes(raw.audience)
+      ? raw.audience
+      : (defaultProject?.audience || "all"),
+    status: ["draft", "published", "archived"].includes(raw.status)
+      ? raw.status
+      : (defaultProject?.status || "published"),
     active: raw.active !== false,
-    legacyType: canonicalLegacyType || explicitLegacyType || "custom",
-    order: Number.isFinite(Number(raw.order)) ? Number(raw.order) : 100,
-    standardFields: raw.standardFields && typeof raw.standardFields === "object" ? raw.standardFields : {},
-    customFields: Array.isArray(raw.customFields) ? raw.customFields.map(normalizeProjectField) : [],
+    legacyType: isNativeProject ? id : resolveProjectLegacyType(raw),
+    order: Number.isFinite(Number(raw.order))
+      ? Number(raw.order)
+      : (defaultProject?.order || 100),
+    standardFields: isNativeProject
+      ? {}
+      : (raw.standardFields && typeof raw.standardFields === "object" ? raw.standardFields : {}),
+    customFields: isNativeProject
+      ? []
+      : (Array.isArray(raw.customFields) ? raw.customFields.map(normalizeProjectField) : []),
     createdAt: raw.createdAt || null,
     updatedAt: raw.updatedAt || null
   };
-  return project;
 }
 
 export function normalizeProjectField(raw = {}, index = 0) {
@@ -123,7 +177,25 @@ export function normalizeKanbanColumn(raw = {}, index = 0) {
 
 export function mergeProjects(projects = []) {
   const merged = new Map(DEFAULT_PROJECTS.map((project) => [project.id, normalizeProject(project)]));
-  projects.map(normalizeProject).forEach((project) => merged.set(project.id, project));
+
+  projects.forEach((rawProject) => {
+    const project = normalizeProject(rawProject);
+    if (Object.prototype.hasOwnProperty.call(LEGACY_PROJECT_IDS, project.id)) {
+      const base = normalizeProject(DEFAULT_PROJECTS.find((entry) => entry.id === project.id));
+      merged.set(project.id, {
+        ...base,
+        audience: project.audience,
+        status: project.status,
+        active: project.active,
+        order: project.order,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt
+      });
+      return;
+    }
+    merged.set(project.id, project);
+  });
+
   return [...merged.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "pt-BR"));
 }
 
@@ -148,7 +220,12 @@ export function projectAllowsCreation(project, role) {
 }
 
 export function projectForRequest(request, projects = []) {
-  const projectId = String(request?.projectId || request?.type || "programacao");
+  const rawProjectId = String(request?.projectId || request?.type || "programacao");
+  const projectId = resolveCanonicalProjectId({
+    id: rawProjectId,
+    legacyType: request?.type,
+    name: request?.projectName
+  });
   return mergeProjects(projects).find((project) => project.id === projectId)
     || normalizeProject({ id: projectId, name: request?.projectName || projectId, legacyType: request?.type || "custom" });
 }

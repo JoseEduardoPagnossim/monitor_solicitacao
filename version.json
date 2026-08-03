@@ -1,7 +1,7 @@
 {
-  "release": "52",
-  "build": "canonical-project-form-fix",
+  "release": "53",
+  "build": "native-project-routing-fix",
   "commit": "local",
   "builtAt": null,
-  "version": "0.52.0"
+  "version": "0.53.0"
 }

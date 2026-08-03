@@ -52,6 +52,8 @@ import {
   normalizeProject,
   normalizeKanbanColumn,
   normalizeProjectField,
+  resolveCanonicalProjectId,
+  resolveProjectLegacyType,
   projectAllowsCreation,
   projectVisibleToRole,
   projectForRequest,
@@ -585,7 +587,11 @@ function isSolicitante() {
 }
 
 function projectIdForRequest(item = {}) {
-  return String(item.projectId || item.type || "programacao");
+  return resolveCanonicalProjectId({
+    id: item.projectId || item.type || "programacao",
+    legacyType: item.type,
+    name: item.projectName
+  });
 }
 
 function projectById(projectId) {
@@ -630,7 +636,7 @@ function projectLabel(itemOrId) {
 
 function projectLegacyType(projectOrId) {
   const project = typeof projectOrId === "string" ? projectById(projectOrId) : normalizeProject(projectOrId || {});
-  return project.legacyType || (VALID_TYPES.includes(project.id) ? project.id : "custom");
+  return resolveProjectLegacyType(project);
 }
 
 function creatableProjects() {
@@ -1697,11 +1703,18 @@ function renderKanbanStructure() {
 }
 
 function normalizeProjectDocuments(snapshot) {
-  return snapshot.docs.map((documentSnapshot) => normalizeProject({ id: documentSnapshot.id, ...documentSnapshot.data() }));
+  return snapshot.docs.map((documentSnapshot) => normalizeProject({
+    ...documentSnapshot.data(),
+    documentId: documentSnapshot.id,
+    id: documentSnapshot.id
+  }));
 }
 
 function normalizeColumnDocuments(snapshot) {
-  return snapshot.docs.map((documentSnapshot, index) => normalizeKanbanColumn({ id: documentSnapshot.id, ...documentSnapshot.data() }, index));
+  return snapshot.docs.map((documentSnapshot, index) => normalizeKanbanColumn({
+    ...documentSnapshot.data(),
+    id: documentSnapshot.id
+  }, index));
 }
 
 function refreshProjectConfigurationUi() {

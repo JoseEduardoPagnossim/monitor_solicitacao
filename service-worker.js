@@ -1,4 +1,4 @@
-const CACHE_NAME = "painel-solicitacoes-v52";
+const CACHE_NAME = "painel-solicitacoes-v53";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -50,15 +50,17 @@ async function networkFirstNavigation(request) {
   }
 }
 
-async function cacheFirstStatic(request) {
-  const cached = await caches.match(request, { ignoreSearch: true });
-  if (cached) return cached;
-  const response = await fetch(request);
-  if (response.ok) {
-    const cache = await caches.open(CACHE_NAME);
-    await cache.put(request, response.clone());
+async function networkFirstStatic(request) {
+  try {
+    const response = await fetch(request, { cache: "no-store" });
+    if (response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    return (await caches.match(request, { ignoreSearch: true })) || Response.error();
   }
-  return response;
 }
 
 self.addEventListener("fetch", (event) => {
@@ -72,7 +74,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (STATIC_PATHS.has(url.pathname)) {
-    event.respondWith(cacheFirstStatic(event.request));
+    event.respondWith(networkFirstStatic(event.request));
   }
 });
 

@@ -12,8 +12,8 @@ const read = (name) => readFile(path.join(root, name), "utf8");
 test("arquivos obrigatórios da publicação e migração existem", async () => {
   const files = [
     "index.html", "styles.css", "app.js", "project-system.js", "supabase-compat.js", "supabase-config.js", "security-config.js", "legal-config.js",
-    "save-flow.js", "service-worker.js", "manifest.webmanifest", "VERSION", "version.json",
-    "README.md", "PROJETOS_E_KANBAN_V48.md", "MIGRACAO_SUPABASE.md", "SECURITY.md", "SEGURANCA_URGENTE.md", "SEGURANCA_COMPLEMENTAR_V46.md", "POLITICA_E_TERMO_DE_USO.md", "TERMO_DE_USO_V47.md", "legal/termo-uso-confidencialidade-v1.html", "supabase/schema.sql", "supabase/bootstrap-admin.sql", "supabase/security-hardening-v45.sql", "supabase/security-hardening-v46.sql", "supabase/legal-terms-v47.sql", "supabase/projects-kanban-v48.sql",
+    "save-flow.js", "service-worker.js", "manifest.webmanifest", "VERSION", "version.json", "_headers",
+    "README.md", "PROJETOS_E_KANBAN_V48.md", "MIGRACAO_SUPABASE.md", "SECURITY.md", "SEGURANCA_URGENTE.md", "SEGURANCA_COMPLEMENTAR_V46.md", "POLITICA_E_TERMO_DE_USO.md", "TERMO_DE_USO_V47.md", "legal/termo-uso-confidencialidade-v1.html", "supabase/schema.sql", "supabase/bootstrap-admin.sql", "supabase/security-hardening-v45.sql", "supabase/security-hardening-v46.sql", "supabase/legal-terms-v47.sql", "supabase/projects-kanban-v48.sql", "supabase/hotfix-v53-identidade-projetos.sql",
     "scripts/migrate-firestore-to-supabase.mjs", "scripts/import-backup-to-supabase.mjs"
   ];
   await Promise.all(files.map((file) => access(path.join(root, file), fsConstants.R_OK)));
@@ -34,14 +34,14 @@ test("versão está sincronizada nos arquivos principais", async () => {
     read("VERSION"), read("index.html"), read("service-worker.js"), read("version.json"), read("package.json"), read("package-lock.json")
   ]);
   const release = version.trim();
-  assert.equal(release, "52");
+  assert.equal(release, "53");
   assert.match(html, new RegExp(`app\\.js\\?v=${release}\\.0\\.0`));
   assert.match(html, new RegExp(`styles\\.css\\?v=${release}\\.0\\.0`));
   assert.match(serviceWorker, new RegExp(`painel-solicitacoes-v${release}`));
   assert.equal(JSON.parse(versionJson).release, release);
-  assert.equal(JSON.parse(packageJson).version, "0.52.0");
-  assert.equal(JSON.parse(packageLock).version, "0.52.0");
-  assert.equal(JSON.parse(packageLock).packages[""].version, "0.52.0");
+  assert.equal(JSON.parse(packageJson).version, "0.53.0");
+  assert.equal(JSON.parse(packageLock).version, "0.53.0");
+  assert.equal(JSON.parse(packageLock).packages[""].version, "0.53.0");
 });
 
 test("frontend usa Supabase e não carrega SDK do Firebase", async () => {
@@ -85,6 +85,8 @@ test("service worker publica os módulos do Supabase", async () => {
   assert.match(serviceWorker, /\.\/legal-config\.js/);
   assert.match(serviceWorker, /termo-uso-confidencialidade-v1\.html/);
   assert.match(serviceWorker, /\.\/save-flow\.js/);
+  assert.match(serviceWorker, /networkFirstStatic/);
+  assert.match(serviceWorker, /cache:\s*"no-store"/);
   assert.doesNotMatch(serviceWorker, /firebase-config\.js/);
 });
 

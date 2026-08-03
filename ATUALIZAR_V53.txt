@@ -1,0 +1,10 @@
+ATUALIZAÇÃO PARA A VERSÃO 53
+
+1. Substitua os arquivos do projeto pelos arquivos deste pacote.
+2. Execute: npm.cmd test
+3. Execute: npm.cmd run build
+4. Envie para a branch main do GitHub.
+5. Aguarde o deploy verde no Cloudflare Pages.
+6. Execute no Supabase: supabase/hotfix-v53-identidade-projetos.sql
+7. Abra /version.json e confirme release 53.
+8. Feche as abas antigas e atualize o painel.
