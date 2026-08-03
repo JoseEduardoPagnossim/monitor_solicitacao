@@ -1,7 +1,7 @@
 {
-  "release": "50",
-  "build": "field-builder-focus-and-insert",
+  "release": "51",
+  "build": "legacy-project-form-hotfix",
   "commit": "local",
   "builtAt": null,
-  "version": "0.50.0"
+  "version": "0.51.0"
 }

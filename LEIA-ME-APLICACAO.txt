@@ -1,0 +1,17 @@
+HOTFIX V51 - COMO APLICAR
+
+1. No GitHub, envie os arquivos deste pacote mantendo os mesmos caminhos.
+2. Faça um único commit, por exemplo: "Corrigir formulários de Cancelamento e TEF Elgin".
+3. Aguarde o Cloudflare Pages concluir o build e o deploy.
+4. No Supabase > SQL Editor, execute:
+   supabase/hotfix-v51-projetos-legados.sql
+5. Abra o painel com Ctrl+Shift+R.
+6. Teste Programação, Cancelamento e TEF Elgin com admin e solicitante.
+
+Arquivos que não devem ser alterados por este pacote:
+- security-config.js (preserva sua Site Key do Turnstile)
+- supabase-config.js
+- scripts/build-cloudflare.mjs
+- .node-version
+
+O SQL não apaga solicitações, usuários, comentários ou anexos.

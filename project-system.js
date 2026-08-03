@@ -70,14 +70,21 @@ export function slugifyIdentifier(value, prefix = "item") {
 }
 
 export function normalizeProject(raw = {}) {
+  const id = String(raw.id || slugifyIdentifier(raw.name, "project"));
+  const explicitLegacyType = ["programacao", "cancelamento", "tef_elgin"].includes(raw.legacyType)
+    ? raw.legacyType
+    : "";
+  const inferredLegacyType = Object.prototype.hasOwnProperty.call(LEGACY_PROJECT_IDS, id)
+    ? LEGACY_PROJECT_IDS[id]
+    : "custom";
   const project = {
-    id: String(raw.id || slugifyIdentifier(raw.name, "project")),
+    id,
     name: String(raw.name || "Projeto sem nome").trim().slice(0, 100),
     description: String(raw.description || "").trim().slice(0, 500),
     audience: ["admin", "solicitante", "all"].includes(raw.audience) ? raw.audience : "all",
     status: ["draft", "published", "archived"].includes(raw.status) ? raw.status : "published",
     active: raw.active !== false,
-    legacyType: ["programacao", "cancelamento", "tef_elgin"].includes(raw.legacyType) ? raw.legacyType : "custom",
+    legacyType: explicitLegacyType || inferredLegacyType,
     order: Number.isFinite(Number(raw.order)) ? Number(raw.order) : 100,
     standardFields: raw.standardFields && typeof raw.standardFields === "object" ? raw.standardFields : {},
     customFields: Array.isArray(raw.customFields) ? raw.customFields.map(normalizeProjectField) : [],
