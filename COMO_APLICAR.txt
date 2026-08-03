@@ -1,0 +1,17 @@
+PATCH V54 - CORREÇÃO REAL DA TROCA DE PROJETO
+
+CAUSA DO ERRO:
+O seletor de Projeto chamava updateRequestTypeFields diretamente como listener.
+O navegador enviava um evento com type="change" e a aplicação interpretava isso
+como uma solicitação do projeto "change", exibindo o formulário personalizado vazio.
+
+APLICAÇÃO:
+1. Copie o conteúdo desta pasta para a raiz do repositório, substituindo os arquivos.
+2. Preserve a pasta tests na raiz.
+3. Execute: npm.cmd test
+4. Execute: npm.cmd run build
+5. Faça commit e push para a branch main.
+6. Aguarde a publicação verde no Cloudflare Pages.
+7. Confira /version.json: release deve ser 54.
+
+Não é necessário executar SQL no Supabase para esta correção.

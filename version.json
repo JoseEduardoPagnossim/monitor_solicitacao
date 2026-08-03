@@ -1,7 +1,7 @@
 {
-  "release": "53",
-  "build": "native-project-routing-fix",
+  "release": "54",
+  "build": "request-project-change-event-fix",
   "commit": "local",
   "builtAt": null,
-  "version": "0.53.0"
+  "version": "0.54.0"
 }

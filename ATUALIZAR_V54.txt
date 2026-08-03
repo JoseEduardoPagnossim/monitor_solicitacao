@@ -1,0 +1,11 @@
+ATUALIZAÇÃO PARA A VERSÃO 54
+
+1. Copie os arquivos do patch para a raiz do repositório.
+2. Execute: npm.cmd test
+3. Execute: npm.cmd run build
+4. Envie as alterações para a branch main.
+5. Aguarde o deploy verde no Cloudflare Pages.
+6. Abra /version.json e confirme release 54.
+7. Feche as abas antigas e abra o painel novamente.
+
+Não é necessário executar SQL no Supabase para esta correção.

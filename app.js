@@ -3129,8 +3129,17 @@ function buildCustomProjectPayload(project) {
 }
 
 function updateRequestTypeFields(item = null) {
+  // Quando esta função é usada diretamente como listener de "change", o navegador
+  // envia um Event. O Event possui type="change" e não pode ser tratado como uma
+  // solicitação, senão o sistema cria um projeto personalizado chamado "change".
+  const requestItem = item
+    && typeof item === "object"
+    && typeof item.preventDefault === "function"
+    && typeof item.type === "string"
+      ? null
+      : item;
   const projectId = els.requestType.value;
-  const project = item ? projectDefinitionForRequest(item) : projectById(projectId);
+  const project = requestItem ? projectDefinitionForRequest(requestItem) : projectById(projectId);
   const legacyType = projectLegacyType(project);
   const isProgramming = legacyType === "programacao";
   const isCancellation = legacyType === "cancelamento";
@@ -3153,7 +3162,7 @@ function updateRequestTypeFields(item = null) {
 
   if (isProgramming) renderAttachmentList();
   if (isCancellation) renderCancellationItems(state.modalCancellationItems, state.modalEditable);
-  if (isCustom) renderCustomProjectForm(project, item || null);
+  if (isCustom) renderCustomProjectForm(project, requestItem || null);
   updateTefPixFields();
 
   const isExistingRequest = Boolean(els.requestId.value);
@@ -6304,7 +6313,7 @@ function setupEvents() {
   setupPhoneInput(els.tefContactPhone);
 
   els.requestForm.addEventListener("submit", saveRequest);
-  els.requestType.addEventListener("change", updateRequestTypeFields);
+  els.requestType.addEventListener("change", () => updateRequestTypeFields());
   els.requestAttachments.addEventListener("change", handleAttachmentSelection);
   els.addCancellationItem.addEventListener("click", addCancellationItem);
   els.copyRequestButton.addEventListener("click", () => copyRequestById(els.requestId.value));
