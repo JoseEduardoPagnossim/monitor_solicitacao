@@ -37,7 +37,7 @@ jobs:
           CF_PAGES_BUILD_ID: ${{ github.run_number }}
 
       - name: Configurar GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Enviar arquivos para publicacao
         uses: actions/upload-pages-artifact@v4
