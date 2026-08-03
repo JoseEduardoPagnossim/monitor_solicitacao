@@ -22,7 +22,7 @@ jobs:
       - name: Baixar o repositório
         uses: actions/checkout@v5
       - name: Configurar Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           package-manager-cache: false
@@ -42,7 +42,7 @@ jobs:
       - name: Baixar o repositório
         uses: actions/checkout@v5
       - name: Configurar Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           package-manager-cache: false
