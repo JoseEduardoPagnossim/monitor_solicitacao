@@ -1,7 +1,7 @@
 {
-  "release": "51",
-  "build": "legacy-project-form-hotfix",
+  "release": "52",
+  "build": "canonical-project-form-fix",
   "commit": "local",
   "builtAt": null,
-  "version": "0.51.0"
+  "version": "0.52.0"
 }

@@ -1,17 +1,24 @@
-HOTFIX V51 - COMO APLICAR
+CORREÇÃO DEFINITIVA DOS FORMULÁRIOS - VERSÃO 52
 
-1. No GitHub, envie os arquivos deste pacote mantendo os mesmos caminhos.
-2. Faça um único commit, por exemplo: "Corrigir formulários de Cancelamento e TEF Elgin".
-3. Aguarde o Cloudflare Pages concluir o build e o deploy.
-4. No Supabase > SQL Editor, execute:
-   supabase/hotfix-v51-projetos-legados.sql
-5. Abra o painel com Ctrl+Shift+R.
-6. Teste Programação, Cancelamento e TEF Elgin com admin e solicitante.
+1. Envie os arquivos desta pasta para a RAIZ do repositório.
+   Não envie a pasta hotfix_v52_apply como uma subpasta.
 
-Arquivos que não devem ser alterados por este pacote:
-- security-config.js (preserva sua Site Key do Turnstile)
-- supabase-config.js
-- scripts/build-cloudflare.mjs
-- .node-version
+2. Confirme que estes arquivos ficaram na raiz:
+   project-system.js
+   service-worker.js
+   index.html
+   VERSION
+   version.json
 
-O SQL não apaga solicitações, usuários, comentários ou anexos.
+3. Faça commit e aguarde o deploy ficar verde.
+
+4. No Supabase, execute:
+   supabase/hotfix-v52-projetos-padrao.sql
+
+5. Feche todas as abas do painel e abra novamente.
+   Use Ctrl+Shift+R. Se estiver instalado como aplicativo, desinstale/feche e abra de novo.
+
+Resultado esperado:
+- Cancelamento abre a lista de clientes e motivos.
+- TEF Elgin abre os campos específicos do TEF.
+- Programação continua abrindo normalmente.
