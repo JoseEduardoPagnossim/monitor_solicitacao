@@ -1402,10 +1402,16 @@ function loadImage(file) {
   });
 }
 
+function removeControlCharacters(value) {
+  return Array.from(String(value || ""), (character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint <= 31 || codePoint === 127 ? "" : character;
+  }).join("");
+}
+
 function replaceExtension(fileName, extension) {
-  const cleanName = String(fileName || "anexo")
-    .replace(/[\/]/g, "_")
-    .replace(/[\u0000-\u001f\u007f]/g, "")
+  const cleanName = removeControlCharacters(fileName || "anexo")
+    .replaceAll("/", "_")
     .trim()
     .slice(0, 170);
   const base = cleanName.replace(/\.[^.]+$/, "") || "anexo";

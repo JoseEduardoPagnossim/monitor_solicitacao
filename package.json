@@ -1,7 +1,7 @@
 {
   "name": "painel-solicitacoes",
   "private": true,
-  "version": "0.56.0",
+  "version": "0.57.0",
   "type": "module",
   "scripts": {
     "test": "npm run test:unit",
@@ -15,13 +15,14 @@
     "test:unit": "node --test tests/*.test.mjs",
     "lint": "npx --yes eslint@10.8.0 .",
     "lint:fix": "npx --yes eslint@10.8.0 . --fix",
-    "format": "npx --yes prettier@3.9.6 --write . --ignore-unknown",
-    "format:check": "npx --yes prettier@3.9.6 --check . --ignore-unknown",
-    "test:e2e": "npx --yes playwright@1.57.0 test",
-    "test:e2e:headed": "npx --yes playwright@1.57.0 test --headed",
-    "test:e2e:ui": "npx --yes playwright@1.57.0 test --ui",
-    "test:e2e:install": "npx --yes playwright@1.57.0 install chromium",
-    "quality": "npm run lint && npm run format:check && npm run test:unit && npm run build"
+    "format": "npx --yes prettier@3.9.6 --write \"request-forms/**/*.js\" \"e2e/**/*.mjs\" \"playwright.config.mjs\" --ignore-unknown",
+    "format:check": "npx --yes prettier@3.9.6 --check \"request-forms/**/*.js\" \"e2e/**/*.mjs\" \"playwright.config.mjs\" --ignore-unknown",
+    "test:e2e": "npx playwright test",
+    "test:e2e:headed": "npx playwright test --headed",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:install": "npm run test:e2e:setup && npx playwright install chromium",
+    "quality": "npm run lint && npm run format:check && npm run test:unit && npm run build",
+    "test:e2e:setup": "npm install --no-save --package-lock=false @playwright/test@1.57.0"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.8",

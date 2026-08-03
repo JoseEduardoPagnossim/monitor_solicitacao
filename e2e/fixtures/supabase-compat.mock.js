@@ -1,4 +1,4 @@
-const AUTHENTICATED = __AUTHENTICATED__;
+const AUTHENTICATED = "__AUTHENTICATED__" === "true";
 const E2E_USER = {
   uid: "e2e-admin",
   email: "admin.e2e@example.com",

@@ -19,7 +19,7 @@ export const securityConfig = {
 `;
 
 export async function installMockBackend(page, { authenticated = true } = {}) {
-  const mockModule = mockModuleTemplate.replace("__AUTHENTICATED__", JSON.stringify(authenticated));
+  const mockModule = mockModuleTemplate.replace("__AUTHENTICATED__", String(authenticated));
   await page.route("**/supabase-compat.js", async (route) => {
     await route.fulfill({ status: 200, contentType: "text/javascript; charset=utf-8", body: mockModule });
   });

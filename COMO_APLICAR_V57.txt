@@ -1,0 +1,20 @@
+VERSAO 57 - CORRECAO DO FLUXO DE QUALIDADE
+
+1. Copie todo o conteudo desta pasta para a raiz do projeto.
+2. Substitua os arquivos existentes.
+3. Execute:
+   npm.cmd run lint
+   npm.cmd run format:check
+   npm.cmd test
+   npm.cmd run build
+4. Para testar o Playwright localmente pela primeira vez:
+   npm.cmd run test:e2e:install
+   npm.cmd run test:e2e
+5. Envie ao GitHub:
+   git add -A
+   git commit -m "Corrigir verificacoes de qualidade - versao 57"
+   git pull --rebase origin main
+   git push origin main
+
+A URL do GitHub Pages continua compativel e nao foi desativada.
+Nao exige SQL no Supabase.

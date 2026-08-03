@@ -37,10 +37,12 @@ test("v55 adiciona testes Playwright para login e troca de projetos", async () =
     read(".github/workflows/quality.yml")
   ]);
   const packageJson = JSON.parse(packageJsonText);
-  assert.match(packageJson.scripts["test:e2e"], /playwright@1\.57\.0 test/);
+  assert.match(packageJson.scripts["test:e2e"], /playwright test/);
+  assert.match(packageJson.scripts["test:e2e:setup"], /@playwright\/test@1\.57\.0/);
   assert.match(projectSpec, /selectOption\("cancelamento"\)/);
   assert.match(projectSpec, /selectOption\("tef_elgin"\)/);
   assert.match(projectSpec, /custom-project-fields/);
   assert.match(workflow, /Playwright no Chromium/);
+  assert.match(workflow, /@playwright\/test@1\.57\.0/);
   assert.match(workflow, /install --with-deps chromium/);
 });

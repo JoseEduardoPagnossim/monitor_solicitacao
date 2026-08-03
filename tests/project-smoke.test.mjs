@@ -38,14 +38,14 @@ test("versão está sincronizada nos arquivos principais", async () => {
     read("VERSION"), read("index.html"), read("service-worker.js"), read("version.json"), read("package.json"), read("package-lock.json")
   ]);
   const release = version.trim();
-  assert.equal(release, "56");
+  assert.equal(release, "57");
   assert.match(html, new RegExp(`app\\.js\\?v=${release}\\.0\\.0`));
   assert.match(html, new RegExp(`styles\\.css\\?v=${release}\\.0\\.0`));
   assert.match(serviceWorker, new RegExp(`painel-solicitacoes-v${release}`));
   assert.equal(JSON.parse(versionJson).release, release);
-  assert.equal(JSON.parse(packageJson).version, "0.56.0");
-  assert.equal(JSON.parse(packageLock).version, "0.56.0");
-  assert.equal(JSON.parse(packageLock).packages[""].version, "0.56.0");
+  assert.equal(JSON.parse(packageJson).version, "0.57.0");
+  assert.equal(JSON.parse(packageLock).version, "0.57.0");
+  assert.equal(JSON.parse(packageLock).packages[""].version, "0.57.0");
 });
 
 test("frontend usa Supabase e não carrega SDK do Firebase", async () => {

@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { commitWithRetry, OperationTimeoutError, withTimeout } from "../save-flow.js";
 
-const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const wait = (milliseconds) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 
 test("withTimeout devolve o resultado quando a operação termina", async () => {
   const result = await withTimeout(Promise.resolve("salvo"), 50, "teste");

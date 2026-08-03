@@ -1,4 +1,4 @@
-import { expect, test } from "playwright/test";
+import { expect, test } from "@playwright/test";
 import { installMockBackend } from "./support/mock-backend.mjs";
 
 test.beforeEach(async ({ page }) => {

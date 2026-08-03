@@ -46,8 +46,10 @@ jobs:
         with:
           node-version: "22"
           package-manager-cache: false
+      - name: Instalar Playwright Test
+        run: npm install --no-save --package-lock=false @playwright/test@1.57.0
       - name: Instalar navegador do Playwright
-        run: npx --yes playwright@1.57.0 install --with-deps chromium
+        run: npx playwright install --with-deps chromium
       - name: Executar testes E2E
         run: npm run test:e2e
       - name: Anexar relatório em caso de falha

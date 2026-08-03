@@ -105,6 +105,11 @@ export default [
     languageOptions: { globals: nodeGlobals }
   },
   {
+    name: "fixture-e2e-no-navegador",
+    files: ["e2e/fixtures/**/*.js"],
+    languageOptions: { globals: browserGlobals }
+  },
+  {
     name: "legado-gradual",
     files: ["app.js", "supabase-compat.js"],
     rules: { "no-undef": "off", "no-unused-vars": "off", "no-fallthrough": "off" }
