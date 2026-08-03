@@ -339,3 +339,17 @@ npm run quality
 ```
 
 O workflow `.github/workflows/quality.yml` executa essas verificações automaticamente na branch `main` e em pull requests. Os testes E2E utilizam um backend simulado e não leem nem alteram dados reais do Supabase.
+
+## Arquitetura dos formulários — versão 56
+
+Os formulários de **Programação**, **Cancelamento**, **TEF Elgin** e **Projeto personalizado** foram separados em módulos dentro de `request-forms/`.
+
+O `app.js` agora atua como orquestrador e delega a cada formulário:
+
+- exibição e habilitação dos campos;
+- preenchimento de solicitações existentes;
+- validação;
+- montagem do payload;
+- foco inicial.
+
+A publicação do GitHub Pages continua ativa. O workflow utiliza `npm run build` e publica a pasta `_site`, assim como a Cloudflare Pages. Portanto, a URL do GitHub Pages não é alterada por esta versão.

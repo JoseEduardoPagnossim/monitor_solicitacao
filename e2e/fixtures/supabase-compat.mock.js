@@ -5,6 +5,34 @@ const E2E_USER = {
   displayName: "Administrador E2E",
   emailVerified: true
 };
+
+const E2E_CUSTOM_PROJECT = {
+  name: "Acesso remoto",
+  description: "Solicitação personalizada para validar o construtor de formulários.",
+  audience: "all",
+  status: "published",
+  active: true,
+  legacyType: "custom",
+  order: 40,
+  standardFields: {
+    document: { enabled: true, required: true },
+    companyName: { enabled: true, required: true },
+    phone: { enabled: false, required: false },
+    email: { enabled: false, required: false }
+  },
+  customFields: [
+    {
+      id: "motivo",
+      label: "Motivo do acesso",
+      placeholder: "Descreva o motivo do acesso remoto.",
+      required: true,
+      maxLength: 1000,
+      order: 1,
+      active: true
+    }
+  ]
+};
+
 const E2E_PROFILE = {
   name: "Administrador E2E",
   email: E2E_USER.email,
@@ -91,7 +119,12 @@ export async function getDoc(reference) {
 }
 export async function getDocs(reference) {
   const name = collectionName(reference);
-  const docs = name === "users" && AUTHENTICATED ? [existingSnapshot(E2E_USER.uid, E2E_PROFILE)] : [];
+  let docs = [];
+  if (name === "users" && AUTHENTICATED) {
+    docs = [existingSnapshot(E2E_USER.uid, E2E_PROFILE)];
+  } else if (name === "requestProjects" && AUTHENTICATED) {
+    docs = [existingSnapshot("acesso-remoto", E2E_CUSTOM_PROJECT)];
+  }
   return { docs, empty: docs.length === 0, size: docs.length };
 }
 export async function setDoc() {}

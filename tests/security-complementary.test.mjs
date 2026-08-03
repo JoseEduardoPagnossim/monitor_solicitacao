@@ -126,9 +126,13 @@ test("schema de instalação nova também contém a proteção complementar de M
   assert.match(schema, /file_size_limit, allowed_mime_types[\s\S]*716800/);
 });
 
-test("workflow publica a configuração pública de segurança sem arquivos administrativos", async () => {
-  const workflow = await read(".github/workflows/pages.yml");
-  assert.match(workflow, /security-config\.js/);
-  assert.doesNotMatch(workflow, /security-hardening-v46\.sql/);
-  assert.doesNotMatch(workflow, /SEGURANCA_COMPLEMENTAR_V46\.md/);
+test("build público inclui a configuração de segurança sem arquivos administrativos", async () => {
+  const [workflow, buildScript] = await Promise.all([
+    read(".github/workflows/pages.yml"),
+    read("scripts/build-cloudflare.mjs")
+  ]);
+  assert.match(workflow, /run: npm run build/);
+  assert.match(buildScript, /security-config\.js/);
+  assert.doesNotMatch(buildScript, /security-hardening-v46\.sql/);
+  assert.doesNotMatch(buildScript, /SEGURANCA_COMPLEMENTAR_V46\.md/);
 });

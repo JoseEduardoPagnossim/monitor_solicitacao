@@ -62,9 +62,9 @@ import {
   pausedColumnIds,
   slugifyIdentifier,
   validateProjectDefinition,
-  validateDynamicRequest,
   requestSearchText
 } from "./project-system.js";
+import { createRequestFormRegistry } from "./request-forms/index.js";
 
 const STATUS_LABELS = {
   nova: "Nova",
@@ -570,6 +570,109 @@ const els = {
   mobileMenuButton: $("#mobile-menu-button"),
   toastContainer: $("#toast-container")
 };
+
+let requestForms = null;
+
+function buildRequestFormRegistry() {
+  return createRequestFormRegistry({
+    elements: {
+      requestDialog: els.requestDialog,
+      requestType: els.requestType,
+      requestSquad: els.requestSquad,
+      requestPriority: els.requestPriority,
+      priorityField: els.priorityField,
+      requestStatus: els.requestStatus,
+      requestAssignee: els.requestAssignee,
+      programming: {
+        section: els.programmingFields,
+        clientName: els.requestClient,
+        clientCode: els.requestClientCode,
+        contactName: els.requestContactName,
+        contactRole: els.requestContactRole,
+        contactEmail: els.requestContactEmail,
+        contactPhone: els.requestContactPhone,
+        title: els.requestTitle,
+        description: els.requestDescription,
+        currentBehavior: els.requestCurrentBehavior,
+        expectedBehavior: els.requestExpectedBehavior,
+        justification: els.requestJustification,
+        videoLink: els.requestLink
+      },
+      cancellation: {
+        section: els.cancellationFields,
+        entry: els.cancellationEntry,
+        cnpjInput: els.cancellationCnpjInput,
+        clientNameInput: els.cancellationClientNameInput,
+        reasonInput: els.cancellationReasonInput,
+        listCount: els.cancellationListCount,
+        list: els.cancellationList,
+        addButton: els.addCancellationItem,
+        requestError: els.requestError
+      },
+      tefElgin: {
+        section: els.tefFields,
+        cnpj: els.tefCnpj,
+        clientName: els.tefClientName,
+        operatingSystem: els.tefOperatingSystem,
+        ram: els.tefRam,
+        systemUsed: els.tefSystemUsed,
+        establishmentNumber: els.tefEstablishmentNumber,
+        pinpadLogicalNumber: els.tefPinpadLogicalNumber,
+        pinpadModel: els.tefPinpadModel,
+        acquirer: els.tefAcquirer,
+        ownerName: els.tefOwnerName,
+        ownerCpf: els.tefOwnerCpf,
+        contactPhone: els.tefContactPhone,
+        contactEmail: els.tefContactEmail,
+        agreedValue: els.tefAgreedValue,
+        usesPix: els.tefUsesPix,
+        additionalInfoField: els.tefAdditionalInfoField,
+        additionalInfo: els.tefAdditionalInfo,
+        additionalInfoCount: els.tefAdditionalInfoCount
+      },
+      custom: {
+        section: els.customProjectFields,
+        title: els.customProjectTitle,
+        description: els.customProjectDescription,
+        standardFields: els.customStandardFields,
+        customFields: els.customFieldsContainer
+      }
+    },
+    state,
+    maxCancellationItems: MAX_CANCELLATION_ITEMS,
+    helpers: {
+      clearFieldValidation,
+      escapeHtml,
+      formatCnpj,
+      formatCpf,
+      formatCpfCnpj,
+      formatPhone,
+      formatDateTime,
+      isAdmin,
+      isArchived: () => state.modalArchived,
+      isSolicitante,
+      isValidCpfCnpj,
+      isValidPhone,
+      normalizeUrl,
+      projectLegacyType,
+      query: $,
+      queryAll: $$,
+      renderAttachmentList,
+      sanitizeText,
+      setDocumentValidity,
+      setPhoneValidity,
+      setSpecificDocumentValidity,
+      showFormError,
+      showToast,
+      createItemId: createCancellationItemId
+    },
+    callbacks: {
+      cancellationItemsFromRequest,
+      getRequestId: () => els.requestId.value,
+      onToggleCrmStatus: toggleCancellationCrmStatus
+    }
+  });
+}
 
 function isConfigReady() {
   return supabaseConfig.url
@@ -2761,119 +2864,6 @@ function renderUser() {
   setAdminVisibility();
 }
 
-function blankCancellationItem() {
-  return {
-    itemId: createCancellationItemId(),
-    clientName: "",
-    clientCnpj: "",
-    reason: "",
-    crmCancelled: false,
-    crmCancelledAt: null,
-    crmCancelledByUid: "",
-    crmCancelledByName: ""
-  };
-}
-
-function cancellationCrmStatusHtml(item, index) {
-  const checked = item.crmCancelled === true;
-  const canToggle = isAdmin() && Boolean(els.requestId.value) && !state.modalArchived;
-  const statusLabel = checked ? "Cancelado" : "Pendente";
-  const metadata = checked && item.crmCancelledAt
-    ? `<small class="crm-status-meta">${escapeHtml(item.crmCancelledByName || "Administrador")} · ${escapeHtml(formatDateTime(item.crmCancelledAt))}</small>`
-    : "";
-
-  if (!canToggle) {
-    return `<span class="crm-status-badge ${checked ? "complete" : "pending"}">${checked ? "✓" : "○"} ${statusLabel}</span>${metadata}`;
-  }
-
-  return `
-    <label class="crm-status-control ${checked ? "checked" : ""}">
-      <input class="crm-cancellation-checkbox" type="checkbox" data-index="${index}" ${checked ? "checked" : ""}>
-      <span>${checked ? "✓ Cancelado" : "Marcar como cancelado"}</span>
-    </label>
-    ${metadata}`;
-}
-
-function cancellationItemHtml(item, index, editable) {
-  return `
-    <tr class="cancellation-list-row ${item.crmCancelled === true ? "crm-cancelled" : ""}" data-cancellation-index="${index}">
-      <td class="cancellation-row-number" data-label="#">${index + 1}</td>
-      <td data-label="CPF/CNPJ"><strong>${escapeHtml(item.clientCnpj || "—")}</strong></td>
-      <td data-label="Razão Social"><strong>${escapeHtml(item.clientName || "—")}</strong></td>
-      <td class="cancellation-row-reason" data-label="Motivo">${escapeHtml(item.reason || "—")}</td>
-      <td class="cancellation-row-crm" data-label="Cancelado no CRM">${cancellationCrmStatusHtml(item, index)}</td>
-      ${editable ? `<td class="cancellation-row-action" data-label="Ação"><button class="remove-cancellation-item" type="button" data-index="${index}" aria-label="Remover cliente ${index + 1}">✕ Remover</button></td>` : ""}
-    </tr>`;
-}
-
-function updateCancellationListCount() {
-  const total = state.modalCancellationItems.length;
-  els.cancellationListCount.textContent = `${total} ${total === 1 ? "cliente" : "clientes"}`;
-}
-
-function renderCancellationItems(items = state.modalCancellationItems, editable = state.modalEditable) {
-  state.modalCancellationItems = (Array.isArray(items) ? items : [])
-    .slice(0, MAX_CANCELLATION_ITEMS)
-    .map((item, index) => ({
-      itemId: sanitizeText(item.itemId || `legacy-${index}`),
-      clientName: sanitizeText(item.clientName || ""),
-      clientCnpj: sanitizeText(item.clientCnpj || ""),
-      reason: sanitizeText(item.reason || ""),
-      crmCancelled: item.crmCancelled === true,
-      crmCancelledAt: item.crmCancelledAt || null,
-      crmCancelledByUid: sanitizeText(item.crmCancelledByUid || ""),
-      crmCancelledByName: sanitizeText(item.crmCancelledByName || "")
-    }));
-
-  if (!state.modalCancellationItems.length) {
-    els.cancellationList.innerHTML = `
-      <div class="cancellation-empty-state">
-        <strong>A lista está vazia.</strong>
-        <span>Preencha os três campos fixos acima e clique em “Adicionar cliente à lista”.</span>
-      </div>`;
-  } else {
-    els.cancellationList.innerHTML = `
-      <div class="cancellation-table-wrap">
-        <table class="cancellation-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>CPF/CNPJ</th>
-              <th>Razão Social</th>
-              <th>Motivo</th>
-              <th>Cancelado no CRM</th>
-              ${editable ? "<th>Ação</th>" : ""}
-            </tr>
-          </thead>
-          <tbody>
-            ${state.modalCancellationItems.map((item, index) => cancellationItemHtml(item, index, editable)).join("")}
-          </tbody>
-        </table>
-      </div>`;
-  }
-
-  $$(".crm-cancellation-checkbox", els.cancellationList).forEach((checkbox) => {
-    checkbox.addEventListener("change", () => {
-      const index = Number(checkbox.dataset.index);
-      if (Number.isNaN(index)) return;
-      toggleCancellationCrmStatus(index, checkbox.checked, checkbox);
-    });
-  });
-
-  $$(".remove-cancellation-item", els.cancellationList).forEach((button) => {
-    button.addEventListener("click", () => {
-      const index = Number(button.dataset.index);
-      if (Number.isNaN(index)) return;
-      state.modalCancellationItems.splice(index, 1);
-      renderCancellationItems(state.modalCancellationItems, state.modalEditable);
-    });
-  });
-
-  els.cancellationEntry.hidden = !editable;
-  els.addCancellationItem.disabled = !editable || state.modalCancellationItems.length >= MAX_CANCELLATION_ITEMS;
-  updateCancellationListCount();
-}
-
 async function toggleCancellationCrmStatus(index, checked, checkbox) {
   if (!isAdmin()) {
     checkbox.checked = !checked;
@@ -2889,7 +2879,7 @@ async function toggleCancellationCrmStatus(index, checked, checkbox) {
     return;
   }
 
-  const previousItems = state.modalCancellationItems.map((item) => ({ ...item }));
+  const previousItems = requestForms.cancellation.getItems();
   const targetItem = previousItems[index];
   if (!targetItem?.itemId) {
     checkbox.checked = !checked;
@@ -2931,9 +2921,8 @@ async function toggleCancellationCrmStatus(index, checked, checkbox) {
       updatedByUid: state.user.uid,
       updatedByName: state.profile.name || state.user.email
     });
-    state.modalCancellationItems = updatedItems;
+    requestForms.cancellation.setItems(updatedItems, state.modalEditable);
     requestItem.cancellationCrmStatus = updatedTracking;
-    renderCancellationItems(updatedItems, state.modalEditable);
     renderAll();
     const done = updatedItems.filter((item) => item.crmCancelled === true).length;
     await recordHistory(requestItem, "crm", checked ? `Cliente marcado como cancelado no CRM: ${targetItem.clientName || targetItem.clientCnpj}.` : `Cliente reaberto no controle do CRM: ${targetItem.clientName || targetItem.clientCnpj}.`, { itemId: targetItem.itemId, cancelled: checked });
@@ -2942,236 +2931,32 @@ async function toggleCancellationCrmStatus(index, checked, checkbox) {
     console.error(error);
     checkbox.checked = !checked;
     checkbox.disabled = false;
-    state.modalCancellationItems = previousItems;
+    requestForms.cancellation.setItems(previousItems, state.modalEditable);
     requestItem.cancellationCrmStatus = previousTracking;
     showToast(firebaseErrorMessage(error), "error");
   }
 }
 
-function getCancellationItemsFromForm() {
-  return state.modalCancellationItems.map((item) => ({ ...item }));
-}
-
-function getCancellationDraft() {
-  return {
-    itemId: createCancellationItemId(),
-    clientCnpj: sanitizeText(els.cancellationCnpjInput.value),
-    clientName: sanitizeText(els.cancellationClientNameInput.value),
-    reason: sanitizeText(els.cancellationReasonInput.value),
-    crmCancelled: false,
-    crmCancelledAt: null,
-    crmCancelledByUid: "",
-    crmCancelledByName: ""
-  };
-}
-
-function clearCancellationDraft() {
-  els.cancellationCnpjInput.value = "";
-  els.cancellationCnpjInput.setCustomValidity("");
-  els.cancellationCnpjInput.classList.remove("input-invalid", "input-valid");
-  els.cancellationCnpjInput.setAttribute("aria-invalid", "false");
-  const messageElement = document.getElementById(els.cancellationCnpjInput.dataset.validationMessage);
-  if (messageElement) {
-    messageElement.textContent = "";
-    messageElement.hidden = true;
-  }
-  els.cancellationClientNameInput.value = "";
-  els.cancellationReasonInput.value = "";
-}
-
-function addCancellationItem() {
-  if (!state.modalEditable) return;
-  showFormError(els.requestError);
-
-  if (state.modalCancellationItems.length >= MAX_CANCELLATION_ITEMS) {
-    showToast(`É possível adicionar até ${MAX_CANCELLATION_ITEMS} clientes por solicitação.`, "warning");
-    return;
-  }
-
-  const draft = getCancellationDraft();
-  if ((!draft.clientCnpj && !draft.clientName) || !draft.reason) {
-    showFormError(els.requestError, "Informe o CPF/CNPJ ou a Razão Social e preencha o Motivo antes de adicionar o cliente à lista.");
-    if (!draft.clientCnpj && !draft.clientName) els.cancellationCnpjInput.focus();
-    else els.cancellationReasonInput.focus();
-    return;
-  }
-
-  if (draft.clientCnpj && !setDocumentValidity(els.cancellationCnpjInput, { required: false, showMessage: true })) {
-    showFormError(els.requestError, "O CPF/CNPJ informado não é válido.");
-    els.cancellationCnpjInput.focus();
-    return;
-  }
-
-  draft.clientCnpj = draft.clientCnpj ? formatCpfCnpj(draft.clientCnpj) : "";
-  state.modalCancellationItems.push(draft);
-  renderCancellationItems(state.modalCancellationItems, true);
-  clearCancellationDraft();
-  els.cancellationCnpjInput.focus();
-  showToast("Cliente adicionado. Os campos foram limpos para o próximo cadastro.");
-}
-
-function setSectionInputsEnabled(section, enabled) {
-  $$("input, textarea, select, button", section).forEach((control) => {
-    if (control.classList.contains("remove-cancellation-item")) return;
-    control.disabled = !enabled;
-  });
-}
-
-function updateTefPixFields() {
-  const shouldShow = projectLegacyType(els.requestType.value) === "tef_elgin" && els.tefUsesPix.checked;
-  els.tefAdditionalInfoField.hidden = !shouldShow;
-  els.tefAdditionalInfo.disabled = !shouldShow || !state.modalEditable;
-  els.tefAdditionalInfoCount.textContent = String(els.tefAdditionalInfo.value.length);
-}
-
-function dynamicInputId(prefix, key) {
-  return `${prefix}-${String(key || "field").replace(/[^a-zA-Z0-9_-]/g, "-")}`;
-}
-
-function renderCustomProjectForm(project, item = null) {
-  const values = item || {};
-  const standardValues = {
-    document: values.document || values.clientCode || "",
-    companyName: values.companyName || values.clientName || "",
-    phone: values.phone || values.contactPhone || "",
-    email: values.email || values.contactEmail || ""
-  };
-  els.customProjectTitle.textContent = project.name;
-  els.customProjectDescription.textContent = project.description || "Preencha os campos configurados para este projeto.";
-
-  els.customStandardFields.innerHTML = Object.entries(STANDARD_FIELD_DEFINITIONS).map(([key, definition]) => {
-    const config = project.standardFields?.[key];
-    if (!config?.enabled) return "";
-    const required = config.required === true;
-    const id = dynamicInputId("custom-standard", key);
-    const inputType = definition.type === "email" ? "email" : definition.type === "phone" ? "tel" : "text";
-    const inputMode = ["document", "phone"].includes(definition.type) ? ' inputmode="numeric"' : "";
-    const className = definition.type === "document" ? "dynamic-document-input" : definition.type === "phone" ? "dynamic-phone-input" : "";
-    const placeholder = definition.type === "document" ? "CPF ou CNPJ" : definition.type === "phone" ? "(00) 00000-0000" : definition.type === "email" ? "nome@empresa.com.br" : "Razão social ou nome fantasia";
-    return `<label class="field"><span>${escapeHtml(definition.label)}${required ? " *" : ""}</span><input id="${escapeHtml(id)}" data-custom-standard="${escapeHtml(key)}" class="${className}" type="${inputType}"${inputMode} maxlength="${definition.maxLength}" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(standardValues[key] || "")}" ${required ? "required" : ""}></label>`;
-  }).join("");
-
-  const customValues = values.customFieldValues && typeof values.customFieldValues === "object" ? values.customFieldValues : {};
-  els.customFieldsContainer.innerHTML = project.customFields
-    .filter((field) => field.active !== false)
-    .sort((a, b) => a.order - b.order)
-    .map((field) => `<label class="field form-span-2"><span>${escapeHtml(field.label)}${field.required ? " *" : ""}</span><textarea data-custom-field="${escapeHtml(field.id)}" rows="5" maxlength="${field.maxLength || 1000}" placeholder="${escapeHtml(field.placeholder || "Digite as informações solicitadas.")}" ${field.required ? "required" : ""}>${escapeHtml(customValues[field.id] || "")}</textarea><small class="field-counter"><span data-custom-counter="${escapeHtml(field.id)}">${String(customValues[field.id] || "").length}</span>/${field.maxLength || 1000} caracteres</small></label>`).join("");
-
-  $$("[data-custom-field]", els.customFieldsContainer).forEach((textarea) => {
-    textarea.addEventListener("input", () => {
-      const counter = $(`[data-custom-counter="${CSS.escape(textarea.dataset.customField)}"]`, els.customFieldsContainer);
-      if (counter) counter.textContent = String(textarea.value.length);
-    });
-  });
-  $$(".dynamic-document-input", els.customStandardFields).forEach((input) => input.addEventListener("input", () => { input.value = formatCpfCnpj(input.value); }));
-  $$(".dynamic-phone-input", els.customStandardFields).forEach((input) => input.addEventListener("input", () => { input.value = formatPhone(input.value); }));
-  setSectionInputsEnabled(els.customProjectFields, state.modalEditable);
-}
-
-function collectDynamicProjectValues() {
-  const standard = {};
-  const custom = {};
-  $$('[data-custom-standard]', els.customStandardFields).forEach((input) => { standard[input.dataset.customStandard] = input.value; });
-  $$('[data-custom-field]', els.customFieldsContainer).forEach((input) => { custom[input.dataset.customField] = input.value; });
-  return { standard, custom };
-}
-
-function buildCustomProjectPayload(project) {
-  const result = validateDynamicRequest(project, collectDynamicProjectValues(), {
-    isValidDocument: isValidCpfCnpj,
-    isValidPhone,
-    isValidEmail: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ""))
-  });
-  if (!result.valid) return { error: result.errors[0] || "Revise os campos do projeto." };
-  const standard = result.values.standard;
-  const custom = result.values.custom;
-  const firstCustom = project.customFields.find((field) => field.active !== false && custom[field.id]);
-  const identifier = standard.companyName || standard.document || (firstCustom ? custom[firstCustom.id].slice(0, 80) : "Solicitação");
-  const descriptionLines = [
-    standard.document ? `CPF/CNPJ: ${formatCpfCnpj(standard.document)}` : "",
-    standard.companyName ? `Razão Social: ${standard.companyName}` : "",
-    standard.phone ? `Telefone: ${formatPhone(standard.phone)}` : "",
-    standard.email ? `E-mail: ${standard.email}` : "",
-    ...project.customFields
-      .filter((field) => field.active !== false && custom[field.id])
-      .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
-      .map((field) => `${field.label}: ${custom[field.id]}`)
-  ].filter(Boolean);
-  return {
-    data: {
-      priority: "normal",
-      document: standard.document ? formatCpfCnpj(standard.document) : "",
-      companyName: standard.companyName || "",
-      phone: standard.phone ? formatPhone(standard.phone) : "",
-      email: standard.email || "",
-      clientName: standard.companyName || standard.document || project.name,
-      clientCode: standard.document ? formatCpfCnpj(standard.document) : "",
-      contactName: "",
-      contactRole: "",
-      contactEmail: standard.email || "",
-      contactPhone: standard.phone ? formatPhone(standard.phone) : "",
-      title: `${project.name} — ${identifier}`.slice(0, 140),
-      description: descriptionLines.join("\n").slice(0, 3000),
-      currentBehavior: "",
-      expectedBehavior: "",
-      justification: "",
-      videoLink: "",
-      externalLink: "",
-      cancellationItems: [],
-      customFieldValues: custom,
-      projectFormSnapshot: {
-        projectName: project.name,
-        standardFields: project.standardFields || {},
-        customFields: project.customFields.map((field) => ({ id: field.id, label: field.label, required: field.required, maxLength: field.maxLength, order: field.order }))
-      }
-    }
-  };
-}
-
 function updateRequestTypeFields(item = null) {
-  // Quando esta função é usada diretamente como listener de "change", o navegador
-  // envia um Event. O Event possui type="change" e não pode ser tratado como uma
-  // solicitação, senão o sistema cria um projeto personalizado chamado "change".
-  const requestItem = item
-    && typeof item === "object"
-    && typeof item.preventDefault === "function"
-    && typeof item.type === "string"
+  const requestItem =
+    item &&
+    typeof item === "object" &&
+    typeof item.preventDefault === "function" &&
+    typeof item.type === "string"
       ? null
       : item;
   const projectId = els.requestType.value;
-  const project = requestItem ? projectDefinitionForRequest(requestItem) : projectById(projectId);
-  const legacyType = projectLegacyType(project);
-  const isProgramming = legacyType === "programacao";
-  const isCancellation = legacyType === "cancelamento";
-  const isTef = legacyType === "tef_elgin";
-  const isCustom = legacyType === "custom";
+  const project = requestItem
+    ? projectDefinitionForRequest(requestItem)
+    : projectById(projectId);
 
-  els.requestDialog.classList.toggle("request-dialog-cancellation", isCancellation);
-  els.programmingFields.hidden = !isProgramming;
-  els.cancellationFields.hidden = !isCancellation;
-  els.tefFields.hidden = !isTef;
-  els.customProjectFields.hidden = !isCustom;
-  els.priorityField.hidden = !isProgramming;
-
-  setSectionInputsEnabled(els.programmingFields, isProgramming && state.modalEditable);
-  setSectionInputsEnabled(els.cancellationFields, isCancellation && state.modalEditable);
-  setSectionInputsEnabled(els.tefFields, isTef && state.modalEditable);
-  setSectionInputsEnabled(els.customProjectFields, isCustom && state.modalEditable);
-  els.requestPriority.disabled = !isProgramming || !state.modalEditable;
-  els.requestSquad.disabled = !state.modalEditable || (!isAdmin() && isSolicitante());
-
-  if (isProgramming) renderAttachmentList();
-  if (isCancellation) renderCancellationItems(state.modalCancellationItems, state.modalEditable);
-  if (isCustom) renderCustomProjectForm(project, requestItem || null);
-  updateTefPixFields();
-
-  const isExistingRequest = Boolean(els.requestId.value);
-  els.requestType.disabled = !state.modalEditable || isExistingRequest;
-  els.requestType.title = isExistingRequest
-    ? "O projeto da solicitação não pode ser alterado após o primeiro salvamento."
-    : "";
-  els.requestStatus.disabled = !isAdmin() || state.modalArchived;
-  els.requestAssignee.disabled = !isAdmin() || state.modalArchived;
+  return requestForms.activate({
+    project,
+    item: requestItem,
+    editable: state.modalEditable,
+    existingRequest: Boolean(els.requestId.value),
+    archived: state.modalArchived
+  });
 }
 
 function resetRequestForm() {
@@ -3185,15 +2970,9 @@ function resetRequestForm() {
   state.currentComments = [];
   state.currentHistory = [];
   state.modalArchived = false;
-  els.requestForm.reset();
-  clearFieldValidation(els.requestClientCode);
-  clearFieldValidation(els.requestContactPhone);
-  clearFieldValidation(els.tefCnpj);
-  clearFieldValidation(els.tefOwnerCpf);
-  clearFieldValidation(els.tefContactPhone);
-  els.tefUsesPix.checked = false;
-  els.tefAdditionalInfo.value = "";
   state.modalEditable = true;
+  els.requestForm.reset();
+  requestForms.reset();
   els.requestId.value = "";
   const defaultProject = creatableProjects()[0] || state.projects[0] || DEFAULT_PROJECTS[0];
   els.requestType.value = defaultProject?.id || "programacao";
@@ -3218,13 +2997,10 @@ function resetRequestForm() {
   renderRequestComments();
   renderRequestHistory();
   els.requestAudit.hidden = true;
-  state.modalCancellationItems = [];
   state.modalExistingAttachments = [];
   state.modalNewAttachments = [];
   state.modalRemovedAttachmentKeys = [];
   els.requestAttachments.value = "";
-  clearCancellationDraft();
-  renderCancellationItems([], true);
   renderAttachmentList();
   showFormError(els.requestError);
   updateRequestTypeFields();
@@ -3242,11 +3018,7 @@ function openNewRequestModal(projectId = "") {
   updateRequestTypeFields();
   els.requestDialog.showModal();
   window.setTimeout(() => {
-    const legacyType = projectLegacyType(selected);
-    if (legacyType === "programacao") els.requestClient.focus();
-    else if (legacyType === "cancelamento") els.cancellationCnpjInput.focus();
-    else if (legacyType === "tef_elgin") els.tefCnpj.focus();
-    else $("input, textarea", els.customProjectFields)?.focus();
+    requestForms.focus(selected);
   }, 50);
 }
 
@@ -3285,60 +3057,6 @@ function openRequestModal(id, source = "active") {
   els.requestType.value = currentProjectId;
   els.requestSquad.value = VALID_SQUADS.includes(item.squad) ? item.squad : "";
   els.requestPriority.value = item.priority || "normal";
-  els.requestClient.value = item.clientName || "";
-  els.requestClientCode.value = formatCpfCnpj(item.clientCode || "");
-  els.requestContactName.value = item.contactName || "";
-  els.requestContactRole.value = item.contactRole || "";
-  els.requestContactEmail.value = item.contactEmail || "";
-  els.requestContactPhone.value = formatPhone(item.contactPhone || "");
-  els.requestTitle.value = item.title || "";
-  els.requestDescription.value = itemLegacyType === "cancelamento" ? "" : item.description || "";
-  els.requestCurrentBehavior.value = item.currentBehavior || "";
-  els.requestExpectedBehavior.value = item.expectedBehavior || "";
-  els.requestJustification.value = item.justification || "";
-  els.requestLink.value = item.videoLink || item.externalLink || "";
-  els.tefCnpj.value = formatCnpj(item.tefCnpj || (itemLegacyType === "tef_elgin" ? item.clientCode : ""));
-  const legacyTefClientName = itemLegacyType === "tef_elgin"
-    && item.clientName
-    && item.clientName !== item.tefCnpj
-    && item.clientName !== item.clientCode
-      ? item.clientName
-      : "";
-  els.tefClientName.value = item.tefClientName || legacyTefClientName;
-  els.tefOperatingSystem.value = item.tefOperatingSystem || "";
-  els.tefRam.value = item.tefRam || "";
-  els.tefSystemUsed.value = item.tefSystemUsed || "";
-  els.tefEstablishmentNumber.value = item.tefEstablishmentNumber || "";
-  els.tefPinpadLogicalNumber.value = item.tefPinpadLogicalNumber || "";
-  els.tefPinpadModel.value = item.tefPinpadModel || "";
-  els.tefAcquirer.value = item.tefAcquirer || "";
-  els.tefOwnerName.value = item.tefOwnerName || "";
-  els.tefOwnerCpf.value = formatCpf(item.tefOwnerCpf || "");
-  els.tefContactPhone.value = formatPhone(item.tefContactPhone || "");
-  els.tefContactEmail.value = item.tefContactEmail || "";
-  els.tefAgreedValue.value = item.tefAgreedValue || "";
-  els.tefUsesPix.checked = item.tefUsesPix === true;
-  els.tefAdditionalInfo.value = item.tefAdditionalInfo || "";
-
-  // Valores preenchidos por código não disparam eventos input/blur.
-  // Recalcula a validade para evitar mensagens incorretas no primeiro salvamento.
-  if (itemLegacyType === "programacao") {
-    setSpecificDocumentValidity(els.requestClientCode, "cnpj", { required: true, showMessage: false });
-    setPhoneValidity(els.requestContactPhone, { showMessage: false });
-  } else {
-    clearFieldValidation(els.requestClientCode);
-    clearFieldValidation(els.requestContactPhone);
-  }
-  if (itemLegacyType === "tef_elgin") {
-    setSpecificDocumentValidity(els.tefCnpj, "cnpj", { required: true, showMessage: false });
-    setSpecificDocumentValidity(els.tefOwnerCpf, "cpf", { required: true, showMessage: false });
-    setPhoneValidity(els.tefContactPhone, { showMessage: false });
-  } else {
-    clearFieldValidation(els.tefCnpj);
-    clearFieldValidation(els.tefOwnerCpf);
-    clearFieldValidation(els.tefContactPhone);
-  }
-
   state.modalExistingAttachments = Array.isArray(item.attachments)
     ? item.attachments.map(normalizeAttachment)
     : [];
@@ -3347,11 +3065,6 @@ function openRequestModal(id, source = "active") {
   renderAttachmentList();
   els.requestStatus.value = validStatusIds().includes(item.status) ? item.status : initialStatusId();
   els.requestAssignee.value = item.assigneeUid || "";
-  renderCancellationItems(
-    itemLegacyType === "cancelamento" ? cancellationItemsFromRequest(item) : [],
-    editable
-  );
-
   els.requestModalTitle.textContent = archived ? "Solicitação arquivada" : "Detalhes da solicitação";
   els.saveRequestButton.textContent = "Salvar alterações";
   els.saveRequestButton.hidden = !editable;
@@ -3378,207 +3091,6 @@ function openRequestModal(id, source = "active") {
   els.requestDialog.showModal();
 }
 
-function buildProgrammingPayload() {
-  const externalLinkRaw = els.requestLink.value.trim();
-  const videoLink = normalizeUrl(externalLinkRaw);
-  if (externalLinkRaw && !videoLink) {
-    return { error: "Informe um link de vídeo válido iniciado por http:// ou https://." };
-  }
-
-  const data = {
-    clientName: sanitizeText(els.requestClient.value),
-    clientCode: formatCnpj(els.requestClientCode.value),
-    contactName: sanitizeText(els.requestContactName.value),
-    contactRole: sanitizeText(els.requestContactRole.value),
-    contactEmail: sanitizeText(els.requestContactEmail.value),
-    contactPhone: formatPhone(els.requestContactPhone.value),
-    title: sanitizeText(els.requestTitle.value),
-    description: sanitizeText(els.requestDescription.value),
-    currentBehavior: sanitizeText(els.requestCurrentBehavior.value),
-    expectedBehavior: sanitizeText(els.requestExpectedBehavior.value),
-    justification: sanitizeText(els.requestJustification.value),
-    videoLink,
-    externalLink: videoLink,
-    cancellationItems: []
-  };
-
-  if (!setSpecificDocumentValidity(els.requestClientCode, "cnpj", { required: true, showMessage: true })) {
-    els.requestClientCode.focus();
-    return { error: "Informe um CNPJ válido para o cliente." };
-  }
-
-  if (!setPhoneValidity(els.requestContactPhone, { showMessage: true })) {
-    els.requestContactPhone.focus();
-    return { error: "Informe um telefone fixo ou celular com DDD válido." };
-  }
-
-  if (!data.clientName
-    || !data.clientCode
-    || !data.contactName
-    || !data.contactRole
-    || !data.contactEmail
-    || !data.contactPhone
-    || !data.title
-    || !data.description
-    || !data.currentBehavior
-    || !data.expectedBehavior
-    || !data.justification) {
-    return { error: "Preencha todos os campos obrigatórios da solicitação de programação." };
-  }
-
-  return { data };
-}
-
-function buildCancellationPayload() {
-  const draft = getCancellationDraft();
-  const hasDraftContent = draft.clientName || draft.clientCnpj || draft.reason;
-  if (hasDraftContent) {
-    return { error: "Há dados preenchidos que ainda não foram adicionados. Clique em Adicionar à lista antes de salvar." };
-  }
-
-  const cancellationItems = getCancellationItemsFromForm().map((entry) => ({
-    itemId: entry.itemId || createCancellationItemId(),
-    clientName: entry.clientName || "",
-    clientCnpj: entry.clientCnpj || "",
-    reason: entry.reason || ""
-  }));
-  if (!cancellationItems.length) {
-    return { error: "Adicione pelo menos um cliente para cancelamento." };
-  }
-
-  const incompleteIndex = cancellationItems.findIndex((entry) => (!entry.clientName && !entry.clientCnpj) || !entry.reason);
-  if (incompleteIndex >= 0) {
-    return { error: `Informe CPF/CNPJ ou Razão Social e o Motivo do cliente ${incompleteIndex + 1}.` };
-  }
-
-  const invalidDocumentIndex = cancellationItems.findIndex((entry) => entry.clientCnpj && !isValidCpfCnpj(entry.clientCnpj));
-  if (invalidDocumentIndex >= 0) {
-    return { error: `O CPF/CNPJ do cliente ${invalidDocumentIndex + 1} é inválido.` };
-  }
-
-  cancellationItems.forEach((entry) => {
-    entry.clientCnpj = entry.clientCnpj ? formatCpfCnpj(entry.clientCnpj) : "";
-  });
-
-  const first = cancellationItems[0];
-  const firstIdentifier = first.clientName || first.clientCnpj;
-  const title = cancellationItems.length === 1
-    ? `Cancelamento — ${firstIdentifier}`
-    : `Cancelamentos — ${cancellationItems.length} clientes`;
-  const description = cancellationItems
-    .map((entry, index) => `${index + 1}. ${entry.clientName || entry.clientCnpj}: ${entry.reason}`)
-    .join("\n")
-    .slice(0, 3000);
-
-  return {
-    data: {
-      priority: "normal",
-      clientName: first.clientName || first.clientCnpj,
-      clientCode: first.clientCnpj,
-      title: title.slice(0, 140),
-      description: description || "Solicitação de cancelamento.",
-      contactName: "",
-      contactRole: "",
-      contactEmail: "",
-      contactPhone: "",
-      currentBehavior: "",
-      expectedBehavior: "",
-      justification: "",
-      videoLink: "",
-      externalLink: "",
-      cancellationItems
-    }
-  };
-}
-
-function buildTefPayload() {
-  const usesPix = els.tefUsesPix.checked;
-  const data = {
-    tefCnpj: formatCnpj(els.tefCnpj.value),
-    tefClientName: sanitizeText(els.tefClientName.value),
-    tefOperatingSystem: sanitizeText(els.tefOperatingSystem.value),
-    tefRam: sanitizeText(els.tefRam.value),
-    tefSystemUsed: sanitizeText(els.tefSystemUsed.value),
-    tefEstablishmentNumber: sanitizeText(els.tefEstablishmentNumber.value),
-    tefPinpadLogicalNumber: sanitizeText(els.tefPinpadLogicalNumber.value),
-    tefPinpadModel: sanitizeText(els.tefPinpadModel.value),
-    tefAcquirer: sanitizeText(els.tefAcquirer.value),
-    tefOwnerName: sanitizeText(els.tefOwnerName.value),
-    tefOwnerCpf: formatCpf(els.tefOwnerCpf.value),
-    tefContactPhone: formatPhone(els.tefContactPhone.value),
-    tefContactEmail: sanitizeText(els.tefContactEmail.value),
-    tefAgreedValue: sanitizeText(els.tefAgreedValue.value),
-    tefUsesPix: usesPix,
-    tefAdditionalInfo: usesPix ? sanitizeText(els.tefAdditionalInfo.value) : ""
-  };
-
-  if (!setSpecificDocumentValidity(els.tefCnpj, "cnpj", { required: true, showMessage: true })) {
-    els.tefCnpj.focus();
-    return { error: "Informe um CNPJ válido para a solicitação TEF." };
-  }
-  if (!setSpecificDocumentValidity(els.tefOwnerCpf, "cpf", { required: true, showMessage: true })) {
-    els.tefOwnerCpf.focus();
-    return { error: "Informe um CPF válido para o proprietário." };
-  }
-  if (!setPhoneValidity(els.tefContactPhone, { showMessage: true })) {
-    els.tefContactPhone.focus();
-    return { error: "Informe um telefone fixo ou celular com DDD válido." };
-  }
-
-  const requiredValues = [
-    data.tefCnpj,
-    data.tefClientName,
-    data.tefOperatingSystem,
-    data.tefRam,
-    data.tefSystemUsed,
-    data.tefEstablishmentNumber,
-    data.tefPinpadLogicalNumber,
-    data.tefPinpadModel,
-    data.tefAcquirer,
-    data.tefOwnerName,
-    data.tefOwnerCpf,
-    data.tefContactPhone,
-    data.tefContactEmail,
-    data.tefAgreedValue
-  ];
-  if (requiredValues.some((value) => !value)) {
-    return { error: "Preencha todos os campos obrigatórios da solicitação TEF Elgin." };
-  }
-
-  const title = `TEF Elgin — ${data.tefClientName}`;
-  const description = [
-    `CNPJ: ${data.tefCnpj}`,
-    `Sistema operacional: ${data.tefOperatingSystem}`,
-    `Memória RAM: ${data.tefRam}`,
-    `Sistema utilizado: ${data.tefSystemUsed}`,
-    `Adquirente: ${data.tefAcquirer}`,
-    `Proprietário: ${data.tefOwnerName}`,
-    `Utiliza PIX: ${data.tefUsesPix ? "Sim" : "Não"}`,
-    data.tefUsesPix && data.tefAdditionalInfo ? `Informações adicionais do PIX: ${data.tefAdditionalInfo}` : ""
-  ].filter(Boolean).join("\n");
-
-  return {
-    data: {
-      priority: "normal",
-      clientName: data.tefClientName,
-      clientCode: data.tefCnpj,
-      contactName: data.tefOwnerName,
-      contactRole: "Proprietário",
-      contactEmail: data.tefContactEmail,
-      contactPhone: data.tefContactPhone,
-      title: title.slice(0, 140),
-      description: description.slice(0, 3000),
-      currentBehavior: "",
-      expectedBehavior: "",
-      justification: "",
-      videoLink: "",
-      externalLink: "",
-      cancellationItems: [],
-      ...data
-    }
-  };
-}
-
 async function saveRequest(event) {
   event.preventDefault();
   if (state.requestSaveInProgress) return;
@@ -3592,14 +3104,8 @@ async function saveRequest(event) {
     showFormError(els.requestError, "O projeto selecionado não está publicado para o seu perfil.");
     return;
   }
-  const type = projectLegacyType(project);
-  const typeResult = type === "programacao"
-    ? buildProgrammingPayload()
-    : type === "cancelamento"
-      ? buildCancellationPayload()
-      : type === "tef_elgin"
-        ? buildTefPayload()
-        : buildCustomProjectPayload(project);
+  const type = requestForms.typeForProject(project);
+  const typeResult = requestForms.buildPayload(project);
 
   if (typeResult.error) {
     showFormError(els.requestError, typeResult.error);
@@ -6315,10 +5821,8 @@ function setupEvents() {
   els.requestForm.addEventListener("submit", saveRequest);
   els.requestType.addEventListener("change", () => updateRequestTypeFields());
   els.requestAttachments.addEventListener("change", handleAttachmentSelection);
-  els.addCancellationItem.addEventListener("click", addCancellationItem);
+  requestForms.bindEvents();
   els.copyRequestButton.addEventListener("click", () => copyRequestById(els.requestId.value));
-  els.tefUsesPix.addEventListener("change", updateTefPixFields);
-  els.tefAdditionalInfo.addEventListener("input", updateTefPixFields);
   els.requestDetailsTab.addEventListener("click", () => switchRequestTab("details"));
   els.requestCommentsTab.addEventListener("click", () => switchRequestTab("comments"));
   els.requestHistoryTab.addEventListener("click", () => switchRequestTab("history"));
@@ -6753,6 +6257,8 @@ async function loadAppVersion() {
     card.title = "Informações da versão indisponíveis";
   }
 }
+
+requestForms = buildRequestFormRegistry();
 
 applyTheme(localStorage.getItem("painel-theme") || (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
 setupPwa();

@@ -13,6 +13,8 @@ test("arquivos obrigatórios da publicação e migração existem", async () => 
   const files = [
     "index.html", "styles.css", "app.js", "project-system.js", "supabase-compat.js", "supabase-config.js", "security-config.js", "legal-config.js",
     "save-flow.js", "service-worker.js", "manifest.webmanifest", "VERSION", "version.json", "_headers",
+    "request-forms/index.js", "request-forms/shared.js", "request-forms/programming-form.js",
+    "request-forms/cancellation-form.js", "request-forms/tef-elgin-form.js", "request-forms/custom-project-form.js",
     "README.md", "PROJETOS_E_KANBAN_V48.md", "MIGRACAO_SUPABASE.md", "SECURITY.md", "SEGURANCA_URGENTE.md", "SEGURANCA_COMPLEMENTAR_V46.md", "POLITICA_E_TERMO_DE_USO.md", "TERMO_DE_USO_V47.md", "legal/termo-uso-confidencialidade-v1.html", "supabase/schema.sql", "supabase/bootstrap-admin.sql", "supabase/security-hardening-v45.sql", "supabase/security-hardening-v46.sql", "supabase/legal-terms-v47.sql", "supabase/projects-kanban-v48.sql", "supabase/hotfix-v53-identidade-projetos.sql",
     "scripts/migrate-firestore-to-supabase.mjs", "scripts/import-backup-to-supabase.mjs"
   ];
@@ -22,6 +24,8 @@ test("arquivos obrigatórios da publicação e migração existem", async () => 
 test("JavaScript publicado e scripts de migração possuem sintaxe válida", () => {
   for (const file of [
     "app.js", "project-system.js", "supabase-compat.js", "save-flow.js", "service-worker.js",
+    "request-forms/index.js", "request-forms/shared.js", "request-forms/programming-form.js",
+    "request-forms/cancellation-form.js", "request-forms/tef-elgin-form.js", "request-forms/custom-project-form.js",
     "scripts/migration-common.mjs", "scripts/migrate-firestore-to-supabase.mjs",
     "scripts/import-backup-to-supabase.mjs"
   ]) {
@@ -34,14 +38,14 @@ test("versão está sincronizada nos arquivos principais", async () => {
     read("VERSION"), read("index.html"), read("service-worker.js"), read("version.json"), read("package.json"), read("package-lock.json")
   ]);
   const release = version.trim();
-  assert.equal(release, "55");
+  assert.equal(release, "56");
   assert.match(html, new RegExp(`app\\.js\\?v=${release}\\.0\\.0`));
   assert.match(html, new RegExp(`styles\\.css\\?v=${release}\\.0\\.0`));
   assert.match(serviceWorker, new RegExp(`painel-solicitacoes-v${release}`));
   assert.equal(JSON.parse(versionJson).release, release);
-  assert.equal(JSON.parse(packageJson).version, "0.55.0");
-  assert.equal(JSON.parse(packageLock).version, "0.55.0");
-  assert.equal(JSON.parse(packageLock).packages[""].version, "0.55.0");
+  assert.equal(JSON.parse(packageJson).version, "0.56.0");
+  assert.equal(JSON.parse(packageLock).version, "0.56.0");
+  assert.equal(JSON.parse(packageLock).packages[""].version, "0.56.0");
 });
 
 test("frontend usa Supabase e não carrega SDK do Firebase", async () => {
@@ -85,25 +89,34 @@ test("service worker publica os módulos do Supabase", async () => {
   assert.match(serviceWorker, /\.\/legal-config\.js/);
   assert.match(serviceWorker, /termo-uso-confidencialidade-v1\.html/);
   assert.match(serviceWorker, /\.\/save-flow\.js/);
+  assert.match(serviceWorker, /\.\/request-forms\/index\.js/);
+  assert.match(serviceWorker, /\.\/request-forms\/programming-form\.js/);
+  assert.match(serviceWorker, /\.\/request-forms\/cancellation-form\.js/);
+  assert.match(serviceWorker, /\.\/request-forms\/tef-elgin-form\.js/);
+  assert.match(serviceWorker, /\.\/request-forms\/custom-project-form\.js/);
   assert.match(serviceWorker, /networkFirstStatic/);
   assert.match(serviceWorker, /cache:\s*"no-store"/);
   assert.doesNotMatch(serviceWorker, /firebase-config\.js/);
 });
 
-test("workflow testa antes do deploy e não publica arquivos administrativos", async () => {
-  const workflow = await read(".github/workflows/pages.yml");
+test("workflow testa e usa o mesmo build estático no GitHub Pages e Cloudflare", async () => {
+  const [workflow, buildScript] = await Promise.all([
+    read(".github/workflows/pages.yml"),
+    read("scripts/build-cloudflare.mjs")
+  ]);
   assert.match(workflow, /actions\/checkout@v5/);
   assert.match(workflow, /actions\/setup-node@v6/);
   assert.match(workflow, /run: npm test/);
+  assert.match(workflow, /run: npm run build/);
+  assert.match(workflow, /path: _site/);
   assert.match(workflow, /needs: build/);
-  assert.match(workflow, /PUBLIC_FILES=\(/);
-  assert.match(workflow, /project-system\.js/);
-  assert.match(workflow, /supabase-config\.js/);
-  assert.match(workflow, /security-config\.js/);
-  assert.match(workflow, /legal-config\.js/);
-  assert.match(workflow, /termo-uso-confidencialidade-v1\.html/);
-  assert.doesNotMatch(workflow, /cp[^\n]*(migration-report|firebase-service-account|node_modules)/i);
-  assert.doesNotMatch(workflow, /rsync -av/);
+  assert.match(buildScript, /project-system\.js/);
+  assert.match(buildScript, /supabase-config\.js/);
+  assert.match(buildScript, /security-config\.js/);
+  assert.match(buildScript, /legal-config\.js/);
+  assert.match(buildScript, /termo-uso-confidencialidade-v1\.html/);
+  assert.match(buildScript, /cp\("request-forms"[\s\S]*recursive: true/);
+  assert.doesNotMatch(buildScript, /migration-report|firebase-service-account|node_modules/i);
 });
 
 

@@ -1,0 +1,15 @@
+ATUALIZAÇÃO PARA A VERSÃO 56
+
+1. Copie todo o conteúdo do patch para a raiz do repositório.
+2. Confirme que a nova pasta request-forms está na raiz, ao lado de app.js.
+3. Execute:
+   npm.cmd test
+   npm.cmd run build
+4. Faça commit e push na branch main.
+5. Aguarde as verificações do GitHub e a publicação do GitHub Pages.
+6. Acesse /version.json e confirme release 56.
+
+IMPORTANTE:
+- A URL do GitHub Pages continua funcionando.
+- O workflow do GitHub Pages foi mantido e agora usa o mesmo build da Cloudflare.
+- Não é necessário executar SQL no Supabase.

@@ -1,7 +1,7 @@
 const readonlyGlobals = (names) => Object.fromEntries(names.map((name) => [name, "readonly"]));
 
 const browserGlobals = readonlyGlobals([
-  "AbortController", "Blob", "CustomEvent", "Document", "Element", "Event", "File", "FileReader",
+  "AbortController", "Blob", "CSS", "CustomEvent", "Document", "Element", "Event", "File", "FileReader",
   "FormData", "HTMLDialogElement", "HTMLElement", "Image", "KeyboardEvent", "MutationObserver",
   "Notification", "ResizeObserver", "URL", "URLSearchParams", "WebSocket", "Window", "alert", "atob",
   "btoa", "clearInterval", "clearTimeout", "confirm", "console", "crypto", "document", "fetch", "history",
@@ -90,7 +90,7 @@ export default [
     name: "navegador",
     files: [
       "app.js", "project-system.js", "save-flow.js", "supabase-compat.js", "supabase-config.js",
-      "security-config.js", "legal-config.js"
+      "security-config.js", "legal-config.js", "request-forms/**/*.js"
     ],
     languageOptions: { globals: browserGlobals }
   },

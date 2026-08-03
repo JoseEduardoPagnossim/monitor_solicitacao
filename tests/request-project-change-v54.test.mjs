@@ -20,7 +20,7 @@ test("v54 não envia o evento change como se fosse uma solicitação", () => {
 
 test("v54 ignora objetos Event recebidos por updateRequestTypeFields", () => {
   assert.match(app, /typeof item\.preventDefault === "function"/);
-  assert.match(app, /const requestItem = item/);
-  assert.match(app, /requestItem \? projectDefinitionForRequest\(requestItem\) : projectById\(projectId\)/);
-  assert.match(app, /renderCustomProjectForm\(project, requestItem \|\| null\)/);
+  assert.match(app, /const requestItem =[\s\S]*typeof item\.preventDefault/);
+  assert.match(app, /requestItem[\s\S]*projectDefinitionForRequest\(requestItem\)[\s\S]*projectById\(projectId\)/);
+  assert.match(app, /requestForms\.activate\(\{/);
 });

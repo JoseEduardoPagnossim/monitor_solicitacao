@@ -1,12 +1,12 @@
 {
   "name": "painel-solicitacoes",
   "private": true,
-  "version": "0.55.0",
+  "version": "0.56.0",
   "type": "module",
   "scripts": {
     "test": "npm run test:unit",
     "build": "node scripts/build-cloudflare.mjs",
-    "test:syntax": "node --check app.js && node --check project-system.js && node --check supabase-compat.js && node --check save-flow.js && node --check service-worker.js",
+    "test:syntax": "node --check app.js && node --check project-system.js && node --check supabase-compat.js && node --check save-flow.js && node --check service-worker.js && node --check request-forms/index.js && node --check request-forms/shared.js && node --check request-forms/programming-form.js && node --check request-forms/cancellation-form.js && node --check request-forms/tef-elgin-form.js && node --check request-forms/custom-project-form.js",
     "migrate:firebase": "node scripts/migrate-firestore-to-supabase.mjs",
     "migrate:firebase:dry": "node scripts/migrate-firestore-to-supabase.mjs --dry-run",
     "import:backup": "node scripts/import-backup-to-supabase.mjs",

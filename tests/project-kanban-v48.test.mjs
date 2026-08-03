@@ -127,8 +127,12 @@ test("busca inclui projeto, dados padrão e respostas personalizadas", () => {
 });
 
 test("interface v48 possui Kanban único e administração de projetos e colunas", async () => {
-  const [html, app, worker, workflow] = await Promise.all([
-    read("index.html"), read("app.js"), read("service-worker.js"), read(".github/workflows/pages.yml")
+  const [html, app, worker, workflow, buildScript] = await Promise.all([
+    read("index.html"),
+    read("app.js"),
+    read("service-worker.js"),
+    read(".github/workflows/pages.yml"),
+    read("scripts/build-cloudflare.mjs")
   ]);
   assert.match(html, /id="projects-view"/);
   assert.match(html, /id="columns-view"/);
@@ -139,9 +143,11 @@ test("interface v48 possui Kanban único e administração de projetos e colunas
   assert.match(app, /collection\(db, "requestProjects"\)/);
   assert.match(app, /collection\(db, "kanbanColumns"\)/);
   assert.match(app, /renderKanbanStructure/);
-  assert.match(app, /validateDynamicRequest/);
+  assert.match(app, /createRequestFormRegistry/);
   assert.match(worker, /\.\/project-system\.js/);
-  assert.match(workflow, /project-system\.js/);
+  assert.match(workflow, /run: npm run build/);
+  assert.match(buildScript, /project-system/);
+  assert.match(buildScript, /request-forms/);
 });
 
 test("patch v48 cria, migra e protege projetos, colunas e formulários", async () => {

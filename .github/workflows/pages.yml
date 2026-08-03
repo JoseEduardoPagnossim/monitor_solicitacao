@@ -31,53 +31,10 @@ jobs:
         run: npm test
 
       - name: Preparar os arquivos publicados
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf _site
-          mkdir -p _site
-
-          PUBLIC_FILES=(
-            index.html
-            styles.css
-            app.js
-            project-system.js
-            supabase-compat.js
-            supabase-config.js
-            security-config.js
-            legal-config.js
-            save-flow.js
-            service-worker.js
-            manifest.webmanifest
-            logo-soften.png
-            favicon.png
-            icon-192.png
-            icon-512.png
-          )
-
-          for file in "${PUBLIC_FILES[@]}"; do
-            test -f "$file"
-            cp "$file" _site/
-          done
-
-          test -f legal/termo-uso-confidencialidade-v1.html
-          mkdir -p _site/legal
-          cp legal/termo-uso-confidencialidade-v1.html _site/legal/
-
-          RELEASE="$(tr -d '[:space:]' < VERSION)"
-          SHORT_SHA="${GITHUB_SHA::7}"
-          BUILT_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-
-          cat > _site/version.json <<EOF_VERSION
-          {
-            "release": "${RELEASE}",
-            "build": "${GITHUB_RUN_NUMBER}",
-            "commit": "${SHORT_SHA}",
-            "builtAt": "${BUILT_AT}"
-          }
-          EOF_VERSION
-
-          touch _site/.nojekyll
+        run: npm run build
+        env:
+          CF_PAGES_COMMIT_SHA: ${{ github.sha }}
+          CF_PAGES_BUILD_ID: ${{ github.run_number }}
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5

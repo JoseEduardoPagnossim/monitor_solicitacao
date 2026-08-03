@@ -41,6 +41,17 @@ test("alterna entre os formulários nativos sem abrir o formulário personalizad
   await expect(cancellation).toBeHidden();
   await expect(tef).toBeHidden();
   await expect(custom).toBeHidden();
+
+  await project.selectOption("acesso-remoto");
+  await expect(custom).toBeVisible();
+  await expect(programming).toBeHidden();
+  await expect(cancellation).toBeHidden();
+  await expect(tef).toBeHidden();
+  await expect(page.locator("#custom-project-title")).toHaveText("Acesso remoto");
+  await expect(page.locator('[data-custom-field="motivo"]')).toHaveAttribute(
+    "placeholder",
+    "Descreva o motivo do acesso remoto."
+  );
 });
 
 test("fecha e reabre a nova solicitação sem prender o modal", async ({ page }) => {

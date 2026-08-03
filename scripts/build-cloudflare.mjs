@@ -41,6 +41,10 @@ for (const file of publicFiles) {
   await cp(file, path.join(outputDirectory, file));
 }
 
+await cp("request-forms", path.join(outputDirectory, "request-forms"), {
+  recursive: true
+});
+
 await cp(
   "legal/termo-uso-confidencialidade-v1.html",
   path.join(
