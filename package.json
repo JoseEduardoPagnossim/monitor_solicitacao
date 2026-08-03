@@ -1,17 +1,27 @@
 {
   "name": "painel-solicitacoes",
   "private": true,
-  "version": "0.54.0",
+  "version": "0.55.0",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
+    "test": "npm run test:unit",
     "build": "node scripts/build-cloudflare.mjs",
     "test:syntax": "node --check app.js && node --check project-system.js && node --check supabase-compat.js && node --check save-flow.js && node --check service-worker.js",
     "migrate:firebase": "node scripts/migrate-firestore-to-supabase.mjs",
     "migrate:firebase:dry": "node scripts/migrate-firestore-to-supabase.mjs --dry-run",
     "import:backup": "node scripts/import-backup-to-supabase.mjs",
     "migrate:firebase:create-users": "node scripts/migrate-firestore-to-supabase.mjs --create-missing-users",
-    "import:backup:create-users": "node scripts/import-backup-to-supabase.mjs --create-missing-users"
+    "import:backup:create-users": "node scripts/import-backup-to-supabase.mjs --create-missing-users",
+    "test:unit": "node --test tests/*.test.mjs",
+    "lint": "npx --yes eslint@10.8.0 .",
+    "lint:fix": "npx --yes eslint@10.8.0 . --fix",
+    "format": "npx --yes prettier@3.9.6 --write . --ignore-unknown",
+    "format:check": "npx --yes prettier@3.9.6 --check . --ignore-unknown",
+    "test:e2e": "npx --yes playwright@1.57.0 test",
+    "test:e2e:headed": "npx --yes playwright@1.57.0 test --headed",
+    "test:e2e:ui": "npx --yes playwright@1.57.0 test --ui",
+    "test:e2e:install": "npx --yes playwright@1.57.0 install chromium",
+    "quality": "npm run lint && npm run format:check && npm run test:unit && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.8",

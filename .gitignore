@@ -31,3 +31,8 @@ Thumbs.db
 
 # supabase-config.js é público por projeto: somente URL e sb_publishable_.
 # Nunca inclua sb_secret_, service_role, senha SMTP ou senha do banco.
+
+# Relatórios de qualidade e testes de navegador
+playwright-report/
+test-results/
+blob-report/

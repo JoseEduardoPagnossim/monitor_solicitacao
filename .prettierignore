@@ -1,0 +1,23 @@
+.git/
+node_modules/
+_site/
+coverage/
+playwright-report/
+test-results/
+package-lock.json
+*.png
+*.zip
+*.sql
+
+# Adoção gradual: os arquivos legados maiores serão formatados quando forem
+# separados em módulos, evitando um diff massivo sem mudança funcional.
+app.js
+index.html
+styles.css
+supabase-compat.js
+project-system.js
+service-worker.js
+save-flow.js
+legal/*.html
+*.md
+*.txt

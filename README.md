@@ -314,3 +314,28 @@ Não refaça a migração e não execute novamente o `schema.sql` completo. A au
 ## Correção mantida da versão 44
 
 A separação entre `insert` e `update` para perfis solicitantes permanece ativa. O arquivo `supabase/fix-request-save-v44.sql` é mantido apenas como histórico de atualização.
+
+## Qualidade de código — versão 55
+
+A validação do projeto está dividida em quatro camadas:
+
+```bash
+npm run lint
+npm run format:check
+npm run test:unit
+npm run test:e2e
+```
+
+Na primeira execução local do Playwright, instale o Chromium:
+
+```bash
+npm run test:e2e:install
+```
+
+Para executar as validações estáticas e o build em sequência:
+
+```bash
+npm run quality
+```
+
+O workflow `.github/workflows/quality.yml` executa essas verificações automaticamente na branch `main` e em pull requests. Os testes E2E utilizam um backend simulado e não leem nem alteram dados reais do Supabase.

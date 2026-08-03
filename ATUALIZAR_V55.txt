@@ -1,0 +1,26 @@
+VERSÃO 55 — ESLINT, PRETTIER E PLAYWRIGHT
+
+1. Substitua os arquivos do patch na raiz do repositório.
+2. Envie as alterações ao GitHub.
+3. A Cloudflare Pages continua usando:
+   Build command: npm test && npm run build
+   Build output directory: _site
+4. O novo workflow do GitHub executará ESLint, Prettier, testes unitários e Playwright.
+
+COMANDOS LOCAIS
+
+npm run lint
+npm run lint:fix
+npm run format
+npm run format:check
+npm run test:unit
+npm run test:e2e:install
+npm run test:e2e
+npm run quality
+
+OBSERVAÇÕES
+
+- Na primeira execução local do Playwright, execute npm run test:e2e:install.
+- Os testes E2E usam um backend simulado e não acessam dados reais do Supabase.
+- Não é necessário executar SQL no Supabase.
+- Os arquivos legados maiores foram temporariamente ignorados pelo Prettier para evitar uma alteração massiva antes da modularização.
