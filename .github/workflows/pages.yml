@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Baixar os arquivos do repositorio
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Configurar Node.js
         uses: actions/setup-node@v6
