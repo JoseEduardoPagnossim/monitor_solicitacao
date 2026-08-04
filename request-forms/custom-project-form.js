@@ -3,15 +3,7 @@ import { dynamicInputId, setSectionInputsEnabled } from "./shared.js";
 
 export function createCustomProjectRequestForm({ elements, helpers }) {
   const { section, title, description, standardFields, customFields } = elements;
-  const {
-    escapeHtml,
-    formatCpfCnpj,
-    formatPhone,
-    isValidCpfCnpj,
-    isValidPhone,
-    query,
-    queryAll
-  } = helpers;
+  const { escapeHtml, formatCpfCnpj, formatPhone, isValidCpfCnpj, isValidPhone, query, queryAll } = helpers;
 
   let currentProject = null;
 
@@ -39,8 +31,7 @@ export function createCustomProjectRequestForm({ elements, helpers }) {
     };
 
     title.textContent = project.name;
-    description.textContent =
-      project.description || "Preencha os campos configurados para este projeto.";
+    description.textContent = project.description || "Preencha os campos configurados para este projeto.";
 
     standardFields.innerHTML = Object.entries(STANDARD_FIELD_DEFINITIONS)
       .map(([key, definition]) => {
@@ -48,15 +39,8 @@ export function createCustomProjectRequestForm({ elements, helpers }) {
         if (!config?.enabled) return "";
         const required = config.required === true;
         const id = dynamicInputId("custom-standard", key);
-        const inputType =
-          definition.type === "email"
-            ? "email"
-            : definition.type === "phone"
-              ? "tel"
-              : "text";
-        const inputMode = ["document", "phone"].includes(definition.type)
-          ? ' inputmode="numeric"'
-          : "";
+        const inputType = definition.type === "email" ? "email" : definition.type === "phone" ? "tel" : "text";
+        const inputMode = ["document", "phone"].includes(definition.type) ? ' inputmode="numeric"' : "";
         const className =
           definition.type === "document"
             ? "dynamic-document-input"
@@ -76,9 +60,7 @@ export function createCustomProjectRequestForm({ elements, helpers }) {
       .join("");
 
     const customValues =
-      values.customFieldValues && typeof values.customFieldValues === "object"
-        ? values.customFieldValues
-        : {};
+      values.customFieldValues && typeof values.customFieldValues === "object" ? values.customFieldValues : {};
     customFields.innerHTML = project.customFields
       .filter((field) => field.active !== false)
       .sort((first, second) => first.order - second.order)
@@ -90,10 +72,7 @@ export function createCustomProjectRequestForm({ elements, helpers }) {
 
     queryAll("[data-custom-field]", customFields).forEach((textarea) => {
       textarea.addEventListener("input", () => {
-        const counter = query(
-          `[data-custom-counter="${CSS.escape(textarea.dataset.customField)}"]`,
-          customFields
-        );
+        const counter = query(`[data-custom-counter="${CSS.escape(textarea.dataset.customField)}"]`, customFields);
         if (counter) counter.textContent = String(textarea.value.length);
       });
     });
@@ -135,13 +114,9 @@ export function createCustomProjectRequestForm({ elements, helpers }) {
 
     const standard = result.values.standard;
     const custom = result.values.custom;
-    const firstCustom = project.customFields.find(
-      (field) => field.active !== false && custom[field.id]
-    );
+    const firstCustom = project.customFields.find((field) => field.active !== false && custom[field.id]);
     const identifier =
-      standard.companyName ||
-      standard.document ||
-      (firstCustom ? custom[firstCustom.id].slice(0, 80) : "Solicitação");
+      standard.companyName || standard.document || (firstCustom ? custom[firstCustom.id].slice(0, 80) : "Solicitação");
     const descriptionLines = [
       standard.document ? `CPF/CNPJ: ${formatCpfCnpj(standard.document)}` : "",
       standard.companyName ? `Razão Social: ${standard.companyName}` : "",

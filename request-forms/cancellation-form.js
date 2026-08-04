@@ -1,17 +1,8 @@
 import { setSectionInputsEnabled } from "./shared.js";
 
 export function createCancellationRequestForm({ elements, state, helpers, callbacks, maxItems }) {
-  const {
-    section,
-    entry,
-    cnpjInput,
-    clientNameInput,
-    reasonInput,
-    listCount,
-    list,
-    addButton,
-    requestError
-  } = elements;
+  const { section, entry, cnpjInput, clientNameInput, reasonInput, listCount, list, addButton, requestError } =
+    elements;
 
   const {
     createItemId,
@@ -184,10 +175,7 @@ export function createCancellationRequestForm({ elements, state, helpers, callba
       return;
     }
 
-    if (
-      draft.clientCnpj &&
-      !setDocumentValidity(cnpjInput, { required: false, showMessage: true })
-    ) {
+    if (draft.clientCnpj && !setDocumentValidity(cnpjInput, { required: false, showMessage: true })) {
       showFormError(requestError, "O CPF/CNPJ informado não é válido.");
       cnpjInput.focus();
       return;
@@ -222,8 +210,7 @@ export function createCancellationRequestForm({ elements, state, helpers, callba
     const hasDraftContent = draft.clientName || draft.clientCnpj || draft.reason;
     if (hasDraftContent) {
       return {
-        error:
-          "Há dados preenchidos que ainda não foram adicionados. Clique em Adicionar à lista antes de salvar."
+        error: "Há dados preenchidos que ainda não foram adicionados. Clique em Adicionar à lista antes de salvar."
       };
     }
 

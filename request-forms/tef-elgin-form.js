@@ -63,9 +63,7 @@ export function createTefElginRequestForm({ elements, helpers }) {
   function populate(item = {}) {
     cnpj.value = formatCnpj(item.tefCnpj || item.clientCode || "");
     const legacyClientName =
-      item.clientName && item.clientName !== item.tefCnpj && item.clientName !== item.clientCode
-        ? item.clientName
-        : "";
+      item.clientName && item.clientName !== item.tefCnpj && item.clientName !== item.clientCode ? item.clientName : "";
     clientName.value = item.tefClientName || legacyClientName;
     operatingSystem.value = item.tefOperatingSystem || "";
     ram.value = item.tefRam || "";
@@ -171,9 +169,7 @@ export function createTefElginRequestForm({ elements, helpers }) {
       `Adquirente: ${data.tefAcquirer}`,
       `Proprietário: ${data.tefOwnerName}`,
       `Utiliza PIX: ${data.tefUsesPix ? "Sim" : "Não"}`,
-      data.tefUsesPix && data.tefAdditionalInfo
-        ? `Informações adicionais do PIX: ${data.tefAdditionalInfo}`
-        : ""
+      data.tefUsesPix && data.tefAdditionalInfo ? `Informações adicionais do PIX: ${data.tefAdditionalInfo}` : ""
     ]
       .filter(Boolean)
       .join("\n");
