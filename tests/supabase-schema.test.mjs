@@ -31,6 +31,17 @@ test("convite público é lido por função controlada", () => {
   assert.match(sql, /grant execute on function public\.get_public_invite\(text\) to anon, authenticated/i);
 });
 
+
+test("v58 finaliza cadastro por convite em uma transação controlada", async () => {
+  const migration = await readFile(path.join(root, "supabase/invite-onboarding-v58.sql"), "utf8");
+  assert.match(sql, /function public\.accept_user_invite\(p_token text\)/i);
+  assert.match(migration, /security definer/i);
+  assert.match(migration, /from public\.user_invites[\s\S]*for update/i);
+  assert.match(migration, /insert into public\.profiles/i);
+  assert.match(migration, /update public\.user_invites[\s\S]*'accepted'/i);
+  assert.match(migration, /grant execute on function public\.accept_user_invite\(text\) to authenticated/i);
+});
+
 test("Storage usa políticas de leitura e gravação", () => {
   assert.match(sql, /attachment_select/i);
   assert.match(sql, /attachment_insert/i);

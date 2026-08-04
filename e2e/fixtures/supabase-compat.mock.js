@@ -50,6 +50,7 @@ export function getFirestore(app) { return { app }; }
 export async function setPersistence() {}
 export async function signInWithEmailAndPassword() { return { user: E2E_USER }; }
 export async function createUserWithEmailAndPassword() { return { user: E2E_USER }; }
+export async function acceptUserInvite() { return { uid: E2E_USER.uid }; }
 export async function deleteUser() {}
 export async function signOut(auth) { auth.currentUser = null; }
 export async function sendPasswordResetEmail() {}

@@ -4,6 +4,7 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  acceptUserInvite,
   deleteUser,
   signOut,
   sendPasswordResetEmail,
@@ -1673,7 +1674,14 @@ function firebaseErrorMessage(error) {
     "aborted": "A gravação foi interrompida. Tente novamente.",
     "operation-timeout": "O Supabase demorou além do esperado para confirmar o salvamento. Verifique sua conexão e tente novamente; o formulário foi mantido aberto.",
     "auth/email-not-confirmed": "Confirme o e-mail antes de entrar ou desative a confirmação de e-mail no Supabase para este painel interno.",
-    "auth/email-confirmation-required": "Desative a opção Confirm email no Supabase antes de usar os convites internos.",
+    "auth/email-confirmation-required": "No Supabase, desative Confirm email para este fluxo de convite. O usuário foi criado no Auth sem sessão e deve ser removido em Authentication > Users antes de tentar novamente.",
+    "auth/signup-disabled": "No Supabase, ative Allow new users to sign up em Authentication > Sign In / Providers > Email. Os convites internos dependem dessa opção.",
+    "auth/captcha-failed": "A verificação do Cloudflare Turnstile falhou ou expirou. Refaça o CAPTCHA e tente novamente.",
+    "auth/validation-failed": "O Supabase recusou os dados do cadastro. Confira a política de senha configurada no Auth.",
+    "auth/unexpected-failure": "O Supabase não conseguiu criar o usuário. Consulte Authentication > Logs para identificar uma configuração ou trigger com erro.",
+    "invite-onboarding-not-installed": "A finalização segura de convites ainda não foi instalada. Execute o arquivo supabase/invite-onboarding-v58.sql no SQL Editor.",
+    "invite-email-mismatch": "O convite pertence a outro e-mail. Gere um novo convite para o endereço correto.",
+    "profile-already-exists": "Este acesso já possui perfil cadastrado. Cancele o convite e use a redefinição de senha.",
     "legal-document-not-configured": "A política de uso ainda não foi configurada no Supabase.",
     "legal-document-outdated": "A política foi atualizada. Recarregue a página e leia a versão vigente.",
     "mfa-required": "Conclua a autenticação em duas etapas antes de aceitar o termo."
@@ -4325,36 +4333,22 @@ async function registerFromInvite(event) {
   setButtonLoading(els.inviteRegistrationButton, true, "Criando acesso...");
   state.inviteRegistrationInProgress = true;
   let createdUser = null;
+  let registrationStage = "auth-signup";
   try {
     await setPersistence(auth, browserLocalPersistence);
     const credential = await createUserWithEmailAndPassword(auth, invite.email, password, captchaToken);
     createdUser = credential.user;
-    const batch = writeBatch(db);
-    batch.set(doc(db, "users", createdUser.uid), {
-      name: invite.name,
-      email: invite.email,
-      role: invite.role,
-      squad: invite.role === "solicitante" ? invite.squad : "",
-      active: true,
-      inviteToken: state.inviteToken,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-    batch.update(doc(db, "userInvites", state.inviteToken), {
-      status: "accepted",
-      acceptedAt: serverTimestamp(),
-      acceptedUid: createdUser.uid
-    });
-    await batch.commit();
+    registrationStage = "invite-acceptance";
+    await acceptUserInvite(auth, state.inviteToken);
 
     removeInviteFromUrl();
     state.inviteRegistrationInProgress = false;
     showToast("Acesso criado com sucesso.");
     await handleAuthenticated(createdUser);
   } catch (error) {
-    console.error(error);
+    console.error(`Falha no cadastro por convite durante ${registrationStage}.`, error);
     if (createdUser) {
-      try { await deleteUser(createdUser); } catch (cleanupError) { console.error(cleanupError); }
+      try { await deleteUser(createdUser); } catch (cleanupError) { console.error("Falha ao remover usuário incompleto.", cleanupError); }
     }
     state.inviteRegistrationInProgress = false;
     showFormError(els.inviteRegistrationError, firebaseErrorMessage(error));

@@ -115,11 +115,25 @@ function mapUser(user) {
 function mapAuthError(error) {
   if (!error) return null;
   const message = String(error.message || "").toLowerCase();
-  let code = error.code || error.name || "supabase/error";
+  const rawCode = String(error.code || error.name || "").toLowerCase();
+  const codeMap = {
+    captcha_failed: "auth/captcha-failed",
+    email_exists: "auth/email-already-in-use",
+    user_already_exists: "auth/email-already-in-use",
+    signup_disabled: "auth/signup-disabled",
+    weak_password: "auth/weak-password",
+    over_request_rate_limit: "auth/too-many-requests",
+    over_email_send_rate_limit: "auth/too-many-requests",
+    validation_failed: "auth/validation-failed",
+    unexpected_failure: "auth/unexpected-failure"
+  };
+  let code = codeMap[rawCode] || error.code || error.name || "supabase/error";
   if (message.includes("invalid login credentials")) code = "auth/invalid-credential";
   else if (message.includes("email not confirmed")) code = "auth/email-not-confirmed";
-  else if (message.includes("user already registered")) code = "auth/email-already-in-use";
-  else if (message.includes("password should be at least")) code = "auth/weak-password";
+  else if (message.includes("user already registered") || message.includes("already been registered")) code = "auth/email-already-in-use";
+  else if (message.includes("password should") || message.includes("weak password") || message.includes("password is known to be weak")) code = "auth/weak-password";
+  else if (message.includes("captcha")) code = "auth/captcha-failed";
+  else if (message.includes("signups not allowed") || message.includes("signup is disabled")) code = "auth/signup-disabled";
   else if (message.includes("rate limit") || message.includes("too many requests")) code = "auth/too-many-requests";
   else if (message.includes("network") || message.includes("fetch")) code = "auth/network-request-failed";
   const mapped = new Error(error.message || "Erro no Supabase.");
@@ -164,6 +178,14 @@ export async function createUserWithEmailAndPassword(auth, email, password, capt
   }
   auth.currentUser = mapUser(data.user);
   return { user: auth.currentUser };
+}
+
+export async function acceptUserInvite(auth, token) {
+  const { data, error } = await auth.client.rpc("accept_user_invite", {
+    p_token: String(token || "")
+  });
+  if (error) throw normalizeDatabaseError(error);
+  return data;
 }
 
 export async function deleteUser(user) {
@@ -445,10 +467,25 @@ function normalizeDatabaseError(error) {
   if (!error) return null;
   const message = String(error.message || "").toLowerCase();
   let code = error.code || "supabase/database-error";
-  if (code === "42501" || message.includes("row-level security") || message.includes("permission")) code = "permission-denied";
-  else if (code === "23505") code = "already-exists";
-  else if (code === "PGRST116") code = "not-found";
-  else if (message.includes("failed to fetch") || message.includes("network")) code = "unavailable";
+  if (message.includes("accept_user_invite") && (code === "PGRST202" || message.includes("could not find the function"))) {
+    code = "invite-onboarding-not-installed";
+  } else if (message.includes("invite-invalid")) {
+    code = "invite-invalid";
+  } else if (message.includes("invite-expired")) {
+    code = "invite-expired";
+  } else if (message.includes("invite-email-mismatch")) {
+    code = "invite-email-mismatch";
+  } else if (message.includes("profile-already-exists")) {
+    code = "profile-already-exists";
+  } else if (code === "42501" || message.includes("row-level security") || message.includes("permission")) {
+    code = "permission-denied";
+  } else if (code === "23505") {
+    code = "already-exists";
+  } else if (code === "PGRST116") {
+    code = "not-found";
+  } else if (message.includes("failed to fetch") || message.includes("network")) {
+    code = "unavailable";
+  }
   const mapped = new Error(error.message || "Erro ao acessar o Supabase.");
   mapped.code = code;
   mapped.details = error.details;

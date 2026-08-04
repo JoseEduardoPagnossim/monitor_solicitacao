@@ -1,0 +1,18 @@
+PAINEL DE SOLICITAÇÕES - ATUALIZAÇÃO V58
+
+1. Copie os arquivos do patch para a raiz do projeto.
+2. Execute no Supabase SQL Editor:
+   supabase/invite-onboarding-v58.sql
+3. No Supabase, confira:
+   Authentication > Sign In / Providers > Email
+   - Allow new users to sign up: ATIVADO
+   - Confirm email: DESATIVADO
+4. Se uma tentativa anterior criou um usuário incompleto, remova-o em:
+   Authentication > Users
+   Depois gere um novo convite.
+5. Execute:
+   npm.cmd test
+   npm.cmd run build
+6. Envie ao GitHub e aguarde o GitHub Pages concluir a publicação.
+
+A URL do GitHub Pages continua compatível com esta versão.

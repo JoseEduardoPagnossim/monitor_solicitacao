@@ -32,6 +32,17 @@ test("CAPTCHA é opcional, público e integrado aos fluxos de autenticação", a
   assert.match(html, /frame-src[^;]*https:\/\/challenges\.cloudflare\.com/);
 });
 
+
+test("v58 usa RPC atômica e apresenta erros específicos no cadastro por convite", async () => {
+  const [app, compat] = await Promise.all([read("app.js"), read("supabase-compat.js")]);
+  assert.match(app, /acceptUserInvite\(auth, state\.inviteToken\)/);
+  assert.doesNotMatch(app, /batch\.set\(doc\(db, "users", createdUser\.uid\)/);
+  assert.match(compat, /auth\.client\.rpc\("accept_user_invite"/);
+  assert.match(compat, /signup_disabled:\s*"auth\/signup-disabled"/);
+  assert.match(compat, /captcha_failed:\s*"auth\/captcha-failed"/);
+  assert.match(app, /invite-onboarding-v58\.sql/);
+});
+
 test("MFA TOTP possui cadastro, desafio no login e remoção protegida", async () => {
   const [app, compat, html] = await Promise.all([read("app.js"), read("supabase-compat.js"), read("index.html")]);
   assert.match(compat, /mfa\.enroll/);
