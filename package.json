@@ -25,7 +25,7 @@
     "test:e2e:setup": "npm install --no-save --package-lock=false @playwright/test@1.57.0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.110.8",
+    "@supabase/supabase-js": "2.111.0",
     "firebase-admin": "14.2.0"
   },
   "engines": {
