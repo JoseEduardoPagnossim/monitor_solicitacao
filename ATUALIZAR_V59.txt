@@ -1,0 +1,14 @@
+ATUALIZAÇÃO V59 - FILTROS E DUPLICAÇÃO DE SOLICITAÇÃO
+
+1. Envie os arquivos desta pasta para o mesmo repositório do GitHub usado atualmente.
+2. Faça commit e push normalmente.
+3. Aguarde a publicação automática do GitHub Pages ou Cloudflare Pages.
+4. Atualize a página no navegador. O cache do aplicativo foi alterado para a versão 59.
+
+Não é necessário executar SQL no Supabase para esta atualização.
+
+ALTERAÇÕES
+- Projetos inativos, arquivados ou em rascunho não aparecem mais nos filtros.
+- A tela de detalhes agora possui o botão "Duplicar solicitação".
+- A cópia abre preenchida para revisão e é salva como uma nova solicitação.
+- Não são duplicados: anexos, comentários, histórico, status, responsável e controle de CRM.

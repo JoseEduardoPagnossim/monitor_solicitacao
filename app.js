@@ -548,6 +548,7 @@ const els = {
   requestAudit: $("#request-audit"),
   requestError: $("#request-error"),
   saveRequestButton: $("#save-request-button"),
+  duplicateRequestButton: $("#duplicate-request-button"),
   copyRequestButton: $("#copy-request-button"),
   archiveRequestButton: $("#archive-request-button"),
   deleteRequestButton: $("#delete-request-button"),
@@ -749,10 +750,8 @@ function creatableProjects() {
 }
 
 function filterableProjects() {
-  if (isAdmin()) return [...state.projects];
   const role = state.profile?.role || "solicitante";
-  const usedProjectIds = new Set([...state.requests, ...state.archivedRequests].map(projectIdForRequest));
-  return state.projects.filter((project) => projectVisibleToRole(project, role) || usedProjectIds.has(project.id));
+  return state.projects.filter((project) => projectVisibleToRole(project, role));
 }
 
 function activeKanbanColumns() {
@@ -801,6 +800,12 @@ function buildSelectOptions(items, selected = "", emptyLabel = "") {
 function canCopyRequest(item) {
   if (!item) return false;
   return isAdmin() || (isSolicitante() && projectLegacyType(projectForItem(item)) === "programacao" && requestIsAccessible(item));
+}
+
+function canDuplicateRequest(item) {
+  if (!item || !requestIsAccessible(item)) return false;
+  const project = state.projects.find((entry) => entry.id === projectIdForRequest(item)) || projectForItem(item);
+  return projectAllowsCreation(project, state.profile?.role || "solicitante");
 }
 
 function squadVisibilityGroup(squad) {
@@ -2997,6 +3002,7 @@ function resetRequestForm() {
   els.requestModalTitle.textContent = "Nova solicitação";
   els.saveRequestButton.textContent = "Salvar solicitação";
   els.saveRequestButton.hidden = false;
+  els.duplicateRequestButton.hidden = true;
   els.copyRequestButton.hidden = true;
   els.archiveRequestButton.hidden = true;
   els.deleteRequestButton.hidden = true;
@@ -3082,6 +3088,7 @@ function openRequestModal(id, source = "active") {
   els.requestModalTitle.textContent = archived ? "Solicitação arquivada" : "Detalhes da solicitação";
   els.saveRequestButton.textContent = "Salvar alterações";
   els.saveRequestButton.hidden = !editable;
+  els.duplicateRequestButton.hidden = !canDuplicateRequest(item);
   els.copyRequestButton.hidden = !canCopyRequest(item);
   els.deleteRequestButton.hidden = !isAdmin() || archived;
   els.archiveRequestButton.hidden = !isAdmin() || (!archived && !isCompletedStatus(item.status));
@@ -3103,6 +3110,72 @@ function openRequestModal(id, source = "active") {
   subscribeRequestComments(item.id, archived);
   subscribeRequestHistory(item.id);
   els.requestDialog.showModal();
+}
+
+function duplicateRequestDraft(item) {
+  const draft = {
+    ...item,
+    attachments: [],
+    cancellationCrmStatus: {}
+  };
+
+  if (projectLegacyType(projectForItem(item)) === "cancelamento") {
+    draft.cancellationItems = cancellationItemsFromRequest(item).map((entry) => ({
+      ...entry,
+      itemId: createCancellationItemId(),
+      crmCancelled: false,
+      crmCancelledAt: null,
+      crmCancelledByUid: "",
+      crmCancelledByName: ""
+    }));
+  }
+
+  return draft;
+}
+
+function duplicateRequestById(id) {
+  const item = state.requests.find((request) => request.id === id)
+    || state.archivedRequests.find((request) => request.id === id);
+
+  if (!item) return;
+  if (!canDuplicateRequest(item)) {
+    showToast("Este projeto está inativo ou não permite novas solicitações para o seu perfil.", "warning");
+    return;
+  }
+
+  const project = state.projects.find((entry) => entry.id === projectIdForRequest(item)) || projectForItem(item);
+  const draft = duplicateRequestDraft(item);
+  const hadAttachments = Array.isArray(item.attachments) && item.attachments.length > 0;
+
+  resetRequestForm();
+  els.requestType.value = project.id;
+  els.requestSquad.value = isSolicitante() && VALID_SQUADS.includes(state.profile?.squad)
+    ? state.profile.squad
+    : VALID_SQUADS.includes(item.squad)
+      ? item.squad
+      : "";
+  els.requestPriority.value = VALID_PRIORITIES.includes(item.priority) ? item.priority : "normal";
+
+  requestForms.activate({
+    project,
+    item: draft,
+    editable: true,
+    existingRequest: false,
+    archived: false
+  });
+
+  els.requestModalTitle.textContent = "Duplicar solicitação";
+  els.saveRequestButton.textContent = "Criar cópia";
+  els.duplicateRequestButton.hidden = true;
+  els.copyRequestButton.hidden = true;
+  els.requestAudit.hidden = true;
+  switchRequestTab("details");
+
+  if (!els.requestDialog.open) els.requestDialog.showModal();
+  window.setTimeout(() => requestForms.focus(project), 50);
+  showToast(hadAttachments
+    ? "Cópia preparada para revisão. Os anexos não foram duplicados por segurança."
+    : "Cópia preparada para revisão antes de salvar.");
 }
 
 async function saveRequest(event) {
@@ -5822,6 +5895,7 @@ function setupEvents() {
   els.requestType.addEventListener("change", () => updateRequestTypeFields());
   els.requestAttachments.addEventListener("change", handleAttachmentSelection);
   requestForms.bindEvents();
+  els.duplicateRequestButton.addEventListener("click", () => duplicateRequestById(els.requestId.value));
   els.copyRequestButton.addEventListener("click", () => copyRequestById(els.requestId.value));
   els.requestDetailsTab.addEventListener("click", () => switchRequestTab("details"));
   els.requestCommentsTab.addEventListener("click", () => switchRequestTab("comments"));

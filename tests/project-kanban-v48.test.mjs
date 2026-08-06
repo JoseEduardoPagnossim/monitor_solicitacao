@@ -182,10 +182,11 @@ test("Supabase usa o esquema oficial do projeto e não confia no esquema enviado
   assert.match(sql, /collection_name = 'archivedRequests'/);
 });
 
-test("configurações arquivadas continuam legíveis para preservar nomes e histórico", async () => {
+test("configurações arquivadas continuam legíveis, mas projetos inativos não aparecem nos filtros", async () => {
   const [sql, app] = await Promise.all([read("supabase/projects-kanban-v48.sql"), read("app.js")]);
   assert.match(sql, /collection_name in \('requestProjects','kanbanColumns'\)/);
   assert.match(app, /function filterableProjects/);
-  assert.match(app, /usedProjectIds\.has\(project\.id\)/);
+  assert.match(app, /state\.projects\.filter\(\(project\) => projectVisibleToRole\(project, role\)\)/);
+  assert.doesNotMatch(app, /usedProjectIds\.has\(project\.id\)/);
   assert.match(app, /Mova todas as solicitações ativas desta coluna/);
 });

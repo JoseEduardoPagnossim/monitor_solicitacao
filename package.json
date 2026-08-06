@@ -1,7 +1,7 @@
 {
   "name": "painel-solicitacoes",
   "private": true,
-  "version": "0.58.0",
+  "version": "0.59.0",
   "type": "module",
   "scripts": {
     "test": "npm run test:unit",
